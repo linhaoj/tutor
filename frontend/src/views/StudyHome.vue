@@ -111,14 +111,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useStudentsStore } from '@/stores/students'
+import { useWordsStore } from '@/stores/words'
+import { useLearningProgressStore } from '@/stores/learningProgress'
 
 const route = useRoute()
 const router = useRouter()
 const studentsStore = useStudentsStore()
+const wordsStore = useWordsStore()
+const progressStore = useLearningProgressStore()
 
 // Props
 const studentId = ref<number>(parseInt(route.params.studentId as string))
@@ -129,17 +133,17 @@ const currentWordSet = ref<string>('')
 const selectedWordsCount = ref(10)
 const customWordsCount = ref(10)
 
-// 模拟九宫格数据
+// 真实的九宫格数据（基于学习进度）
 const gridStats = ref({
-  grid_0: 45,  // 未学
-  grid_1: 12,  // 需复习
-  grid_2: 8,
-  grid_3: 5,
-  grid_4: 3,
-  grid_5: 2,
-  grid_6: 1,
-  grid_7: 1,
-  grid_8: 23   // 已掌握
+  grid_0: 0,  // 未学习
+  grid_1: 0,  // 阶段1
+  grid_2: 0,  // 阶段2
+  grid_3: 0,  // 阶段3
+  grid_4: 0,  // 阶段4
+  grid_5: 0,  // 阶段5
+  grid_6: 0,  // 阶段6
+  grid_7: 0,  // 阶段7
+  grid_8: 0   // 已掌握（预留）
 })
 
 // 计算属性
@@ -212,6 +216,49 @@ const goBack = () => {
   router.push('/')
 }
 
+// 加载真实的九宫格统计数据
+const loadRealGridStats = async () => {
+  if (!studentId.value || !currentWordSet.value) {
+    console.warn('缺少学生ID或单词集信息')
+    return
+  }
+  
+  try {
+    // 获取当前单词集的所有单词
+    const wordSet = wordsStore.wordSets.find(ws => ws.name === currentWordSet.value)
+    if (!wordSet || !wordSet.words) {
+      console.warn('找不到单词集:', currentWordSet.value)
+      return
+    }
+    
+    // 初始化统计数据
+    const stats = {
+      grid_0: 0, grid_1: 0, grid_2: 0, grid_3: 0, grid_4: 0,
+      grid_5: 0, grid_6: 0, grid_7: 0, grid_8: 0
+    }
+    
+    // 遍历所有单词，统计每个阶段的单词数量
+    wordSet.words.forEach((word, index) => {
+      const wordProgress = progressStore.getWordProgress(studentId.value, currentWordSet.value, index)
+      const stage = wordProgress ? wordProgress.currentStage : 0
+      
+      // 阶段0-7对应grid_0到grid_7
+      if (stage >= 0 && stage <= 7) {
+        stats[`grid_${stage}` as keyof typeof stats]++
+      }
+    })
+    
+    // 更新响应式数据
+    gridStats.value = stats
+    
+    console.log('九宫格统计数据已更新:', stats)
+    
+  } catch (error) {
+    console.error('加载九宫格统计数据失败:', error)
+    ElMessage.error('加载学习进度数据失败')
+  }
+}
+
 // 生命周期
 onMounted(async () => {
   try {
@@ -224,13 +271,20 @@ onMounted(async () => {
     // 获取单词集信息
     currentWordSet.value = route.query.wordSet as string || ''
     
-    // TODO: 根据学生ID和单词集获取真实的九宫格统计数据
-    // const stats = await learningAPI.getGridStats(studentId.value)
-    // gridStats.value = stats
+    // 获取真实的九宫格统计数据
+    await loadRealGridStats()
     
   } catch (error) {
     ElMessage.error('加载学习数据失败')
     console.error(error)
+  }
+})
+
+// 监听refresh参数，如果有变化则重新加载数据
+watch(() => route.query.refresh, async (newRefresh) => {
+  if (newRefresh) {
+    console.log('检测到refresh参数，重新加载九宫格数据')
+    await loadRealGridStats()
   }
 })
 </script>

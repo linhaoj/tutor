@@ -11,6 +11,7 @@ import WordStudy from '@/views/WordStudy.vue'
 import SimpleWordStudy from '@/views/SimpleWordStudy.vue'
 import WordCheckTask from '@/views/WordCheckTask.vue'
 import MixedGroupTest from '@/views/MixedGroupTest.vue'
+import PostLearningTest from '@/views/PostLearningTest.vue'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -71,6 +72,13 @@ const routes: RouteRecordRaw[] = [
     name: 'MixedGroupTest',
     component: MixedGroupTest,
     meta: { title: '混组检测' },
+    props: true
+  },
+  {
+    path: '/post-test/:studentId',
+    name: 'PostLearningTest',
+    component: PostLearningTest,
+    meta: { title: '训后检测' },
     props: true
   },
   {

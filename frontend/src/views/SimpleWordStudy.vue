@@ -47,10 +47,16 @@
             学完了
           </el-button>
           
-          <!-- 预留按钮位置 -->
-          <div class="reserved-button">
-            <!-- 预留给未来功能 -->
-          </div>
+          <!-- 发音按钮 -->
+          <el-button 
+            type="primary" 
+            :icon="VideoPlay"
+            size="large"
+            @click="speakWord(word.english)"
+            class="speak-button"
+          >
+            发音
+          </el-button>
         </div>
         
         <!-- 已学完标识 -->
@@ -100,7 +106,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, Box } from '@element-plus/icons-vue'
+import { ArrowDown, Box, VideoPlay } from '@element-plus/icons-vue'
 import { useWordsStore } from '@/stores/words'
 import { useStudentsStore } from '@/stores/students'
 import { useLearningProgressStore } from '@/stores/learningProgress'
@@ -196,19 +202,52 @@ const moveBackToCard = (word: StudyWord) => {
     originalWord.showChinese = false
   }
   
-  // 如果显示区域还有空位，重新添加到显示区域
-  if (displayWords.value.length < 5) {
-    displayWords.value.push({
-      ...word,
-      movedToBox: false,
-      showChinese: false
-    })
+  // 找到displayWords中对应的单词并恢复状态
+  const displayIndex = displayWords.value.findIndex(w => w.id === word.id)
+  if (displayIndex !== -1) {
+    displayWords.value[displayIndex].movedToBox = false
+    displayWords.value[displayIndex].showChinese = false
+  } else {
+    // 如果不在displayWords中，检查是否有空位可以添加
+    const activeWordsInDisplay = displayWords.value.filter(w => !w.movedToBox).length
+    if (activeWordsInDisplay < 5) {
+      displayWords.value.push({
+        ...word,
+        movedToBox: false,
+        showChinese: false
+      })
+    }
   }
   
   // 更新完成数量
   completedWords.value--
   
   ElMessage.info(`"${word.english}" 已移回卡片区域`)
+}
+
+const speakWord = (text: string) => {
+  if ('speechSynthesis' in window) {
+    // 停止当前正在播放的语音
+    window.speechSynthesis.cancel()
+    
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = 'en-US' // 设置为英语
+    utterance.rate = 0.8 // 语速稍慢一些，便于学习
+    utterance.volume = 1 // 音量最大
+    
+    utterance.onstart = () => {
+      ElMessage.info(`正在播放: ${text}`)
+    }
+    
+    utterance.onerror = (event) => {
+      ElMessage.error('语音播放失败')
+      console.error('Speech synthesis error:', event)
+    }
+    
+    window.speechSynthesis.speak(utterance)
+  } else {
+    ElMessage.warning('您的浏览器不支持语音功能')
+  }
 }
 
 const startNextGroup = () => {
@@ -242,7 +281,11 @@ const goToNextTask = () => {
   // 标记第一个任务完成
   const studentId = parseInt(route.params.studentId as string)
   const wordSet = route.query.wordSet as string
-  progressStore.completeTask(studentId, wordSet, 1, 1)
+  const groupNumber = parseInt(route.query.groupNumber as string) || 1
+  progressStore.completeTask(studentId, wordSet, groupNumber, 1)
+  
+  // 获取总学习单词数
+  const totalWordsCount = parseInt(route.query.totalWords as string) || allWords.value.length
   
   // 跳转到第二个学习任务（检查任务）
   router.push({
@@ -251,7 +294,9 @@ const goToNextTask = () => {
     query: { 
       wordSet: route.query.wordSet,
       wordsCount: 5,
-      groupNumber: 1
+      groupNumber,
+      totalWords: totalWordsCount, // 传递总学习单词数
+      startIndex: route.query.startIndex // 传递起始位置
     }
   })
   
@@ -271,7 +316,8 @@ const loadNextGroup = () => {
 }
 
 const goBack = () => {
-  router.push('/learning')
+  const studentId = route.params.studentId
+  router.push(`/study/${studentId}`)
 }
 
 // 初始化数据
@@ -279,14 +325,15 @@ const initializeWords = () => {
   // 从路由参数获取信息
   const wordSetName = route.query.wordSet as string || ''
   const wordsCount = parseInt(route.query.wordsCount as string) || 20
+  const startIndex = parseInt(route.query.startIndex as string) || 0 // 新增：起始位置
   
   // 获取指定单词集的单词
   let sourceWords = wordSetName 
     ? wordsStore.getWordsBySet(wordSetName)
-    : wordsStore.words.slice(0, wordsCount)
+    : wordsStore.words
   
-  // 限制数量
-  sourceWords = sourceWords.slice(0, wordsCount)
+  // 从指定位置开始，取指定数量的单词
+  sourceWords = sourceWords.slice(startIndex, startIndex + wordsCount)
   
   // 转换为学习用的单词格式
   allWords.value = sourceWords.map(word => ({
@@ -300,7 +347,8 @@ const initializeWords = () => {
   // 加载第一组的5个单词
   loadNextGroup()
   
-  ElMessage.success(`开始学习 ${allWords.value.length} 个单词`)
+  const groupNumber = parseInt(route.query.groupNumber as string) || 1
+  ElMessage.success(`开始第${groupNumber}组学习，共 ${allWords.value.length} 个单词`)
 }
 
 // 生命周期
@@ -435,9 +483,18 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.reserved-button {
+.speak-button {
+  width: 100%;
   height: 40px;
-  /* 预留给未来功能的按钮空间 */
+  font-size: 14px;
+  font-weight: 500;
+  background: #1890ff;
+  border-color: #1890ff;
+}
+
+.speak-button:hover {
+  background: #40a9ff;
+  border-color: #40a9ff;
 }
 
 .completed-mark {

@@ -6,7 +6,7 @@
         <div class="header-content">
           <h2>{{ studentName }} - 第三个学习任务（混组检测）</h2>
           <div class="progress-info">
-            <span>当前检测: 第{{ currentTestingGroup }}组 | 总进度: {{ completedGroups }}/{{ totalGroups }}组</span>
+            <span>当前检测: 第{{ currentTestingGroup }}组 | 总进度: {{ completedGroups }}/{{ totalLearningGroups }}组</span>
             <el-progress 
               :percentage="overallProgress" 
               :stroke-width="6"
@@ -18,7 +18,7 @@
             <el-button 
               type="warning" 
               @click="skipToNextGroup"
-              :disabled="currentTestingGroup >= totalGroups"
+              :disabled="totalGroups >= totalLearningGroups"
               size="small"
             >
               下一组
@@ -138,12 +138,21 @@
       </el-button>
       
       <el-button 
-        v-if="allGroupsCompleted"
+        v-if="allGroupsCompleted && isLastLearningGroup"
         type="success" 
         @click="completeAllTests"
         size="large"
       >
         完成所有检测，进入最后一步
+      </el-button>
+      
+      <el-button 
+        v-if="allGroupsCompleted && !isLastLearningGroup"
+        type="warning" 
+        @click="startNextGroupLearning(false)"
+        size="large"
+      >
+        开始学习第{{ totalGroups.value + 1 }}组单词
       </el-button>
       
       <div v-if="!currentGroupCompleted" class="completion-hint">
@@ -180,7 +189,8 @@ interface TestWord {
 const studentName = ref('学生')
 const allGroupWords = ref<TestWord[][]>([]) // 按组存储的所有单词
 const currentTestingGroup = ref(1) // 当前正在检测的组
-const totalGroups = ref(1) // 总组数
+const totalGroups = ref(1) // 当前需要检测的组数（不是总学习组数）
+const totalLearningGroups = ref(1) // 总学习目标组数（例如10个单词=2组）
 const completedGroups = ref(0) // 已完成的组数
 
 // 计算属性
@@ -206,13 +216,17 @@ const allGroupsCompleted = computed(() => {
   return currentTestingGroup.value === totalGroups.value && currentGroupCompleted.value
 })
 
+const isLastLearningGroup = computed(() => {
+  return totalGroups.value >= totalLearningGroups.value
+})
+
 const overallProgress = computed(() => {
-  if (totalGroups.value === 0) return 0
+  if (totalLearningGroups.value === 0) return 0
   let completedGroupsCount = completedGroups.value
   if (currentGroupCompleted.value && currentTestingGroup.value <= totalGroups.value) {
     completedGroupsCount = Math.max(completedGroups.value, currentTestingGroup.value)
   }
-  return Math.round((completedGroupsCount / totalGroups.value) * 100)
+  return Math.round((completedGroupsCount / totalLearningGroups.value) * 100)
 })
 
 const remainingWordsInGroup = computed(() => {
@@ -270,14 +284,15 @@ const moveToNextGroup = () => {
 }
 
 const skipToNextGroup = async () => {
-  if (currentTestingGroup.value >= totalGroups.value) {
-    ElMessage.warning('已经是最后一组了')
+  // 检查是否已经是最后一组学习
+  if (totalGroups.value >= totalLearningGroups.value) {
+    ElMessage.warning('已经是最后一组了，无法跳过')
     return
   }
   
   try {
     await ElMessageBox.confirm(
-      `确定要跳过第${currentTestingGroup.value}组的检测吗？跳过的组将被标记为需要复习。`,
+      `确定要跳过当前混组检测吗？所有未检测的单词将被标记为掌握，并直接开始第${totalGroups.value + 1}组单词学习。`,
       '确认跳过',
       {
         confirmButtonText: '确定跳过',
@@ -286,16 +301,19 @@ const skipToNextGroup = async () => {
       }
     )
     
-    // 将当前组所有未检测的单词标记为需要复习
-    currentGroupWords.value.forEach(word => {
-      if (word.status === 'unchecked') {
-        word.status = 'need-review'
-      }
+    // 将所有组的所有未检测单词标记为掌握
+    allGroupWords.value.forEach(group => {
+      group.forEach(word => {
+        if (word.status === 'unchecked') {
+          word.status = 'mastered' // 跳过的单词标记为掌握
+        }
+      })
     })
     
-    completedGroups.value = Math.max(completedGroups.value, currentTestingGroup.value)
-    currentTestingGroup.value++
-    ElMessage.info(`已跳过，开始检测第${currentTestingGroup.value}组`)
+    ElMessage.success(`已跳过混组检测，开始第${totalGroups.value + 1}组单词学习`)
+    
+    // 直接跳转到下一组的第一个学习任务（跳过模式）
+    startNextGroupLearning(true)
   } catch {
     // 用户取消
   }
@@ -307,13 +325,61 @@ const completeAllTests = () => {
     return
   }
   
-  ElMessage.success('所有混组检测完成！准备进入最后一步...')
-  // TODO: 跳转到最后一个学习任务
-  console.log('进入最后一个学习任务')
+  // 跳转到训后检测页面
+  const studentId = route.params.studentId
+  const wordSet = route.query.wordSet as string
+  const totalWordsCount = totalLearningGroups.value * 5
+  
+  ElMessage.success('混组检测全部完成！进入训后检测阶段')
+  
+  router.push({
+    name: 'PostLearningTest',
+    params: { studentId },
+    query: { 
+      wordSet,
+      totalWords: totalWordsCount,
+      startIndex: 0 // 从第0个单词开始，检测所有学过的单词
+    }
+  })
+}
+
+const startNextGroupLearning = (skipMode = false) => {
+  if (!skipMode && !allGroupsCompleted.value) {
+    ElMessage.warning('请先完成当前检测')
+    return
+  }
+  
+  const studentId = route.params.studentId
+  const wordSet = route.query.wordSet as string
+  const nextGroupNumber = totalGroups.value + 1
+  const totalWordsCount = totalLearningGroups.value * 5
+  
+  if (!skipMode) {
+    ElMessage.success(`第${totalGroups.value}组检测完成！开始第${nextGroupNumber}组单词学习`)
+  }
+  
+  // 跳转到第一个学习任务，学习下一组的5个单词
+  router.push({
+    name: 'SimpleWordStudy',
+    params: { studentId },
+    query: { 
+      wordSet,
+      wordsCount: 5,
+      groupNumber: nextGroupNumber,
+      totalWords: totalWordsCount, // 传递总学习单词数
+      startIndex: totalGroups.value * 5 // 从当前组数*5的位置开始
+    }
+  })
+}
+
+const goBackToStudyHome = () => {
+  const studentId = route.params.studentId
+  router.push(`/study/${studentId}`)
 }
 
 const goBack = () => {
-  router.push('/learning')
+  const studentId = route.params.studentId
+  router.push(`/study/${studentId}`)
 }
 
 // 初始化数据
@@ -321,16 +387,22 @@ const initializeWords = () => {
   // 从路由参数获取信息
   const wordSetName = route.query.wordSet as string || ''
   const completedGroupsCount = parseInt(route.query.completedGroups as string) || 1
+  const totalWordsCount = parseInt(route.query.totalWords as string) || completedGroupsCount * 5
+  
+  // 计算总学习组数
+  totalLearningGroups.value = Math.ceil(totalWordsCount / 5)
   
   // 获取指定单词集的单词
   let sourceWords = wordSetName 
     ? wordsStore.getWordsBySet(wordSetName)
-    : wordsStore.words.slice(0, completedGroupsCount * 5)
+    : wordsStore.words
   
   // 按组分配单词（每组5个）
   const groupedWords: TestWord[][] = []
+  
   for (let i = 0; i < completedGroupsCount; i++) {
-    const groupWords = sourceWords.slice(i * 5, (i + 1) * 5).map((word, index) => ({
+    const groupStartIndex = i * 5 // 每组的实际起始位置
+    const groupWords = sourceWords.slice(groupStartIndex, groupStartIndex + 5).map((word, index) => ({
       id: word.id,
       english: word.english,
       chinese: word.chinese,
@@ -346,7 +418,7 @@ const initializeWords = () => {
   currentTestingGroup.value = 1
   completedGroups.value = 0
   
-  ElMessage.success(`开始混组检测，需要检测 ${totalGroups.value} 组单词`)
+  ElMessage.success(`开始混组检测，需要检测第1到第${totalGroups.value}组单词 (总共${totalLearningGroups.value}组)`)
 }
 
 // 生命周期

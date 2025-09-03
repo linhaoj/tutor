@@ -284,16 +284,18 @@ const goToNextTask = () => {
   
   progressStore.completeTask(studentId, wordSet, groupNumber, 2)
   
-  // 获取已完成的组数
-  const completedGroups = progressStore.getCompletedGroupsCount(studentId, wordSet)
+  // 获取总学习单词数（从localStorage或其他方式）
+  const totalWordsCount = parseInt(route.query.totalWords as string) || groupNumber * 5
   
-  // 跳转到混组检测页面
+  // 跳转到混组检测页面，检测到当前组为止的所有组
   router.push({
     name: 'MixedGroupTest',
     params: { studentId: route.params.studentId },
     query: { 
       wordSet: route.query.wordSet,
-      completedGroups: completedGroups
+      completedGroups: groupNumber, // 传递当前完成的组号
+      totalWords: totalWordsCount, // 传递总学习单词数
+      startIndex: route.query.startIndex // 传递起始位置信息
     }
   })
   
@@ -301,7 +303,8 @@ const goToNextTask = () => {
 }
 
 const goBack = () => {
-  router.push('/learning')
+  const studentId = route.params.studentId
+  router.push(`/study/${studentId}`)
 }
 
 // 初始化数据
@@ -309,14 +312,15 @@ const initializeWords = () => {
   // 从路由参数获取信息
   const wordSetName = route.query.wordSet as string || ''
   const wordsCount = 5 // 固定5个单词
+  const startIndex = parseInt(route.query.startIndex as string) || 0 // 新增：起始位置
   
-  // 获取指定单词集的单词（这里应该是从第一个任务传过来的相同5个单词）
+  // 获取指定单词集的单词
   let sourceWords = wordSetName 
     ? wordsStore.getWordsBySet(wordSetName)
-    : wordsStore.words.slice(0, wordsCount)
+    : wordsStore.words
   
-  // 限制为5个单词
-  sourceWords = sourceWords.slice(0, 5)
+  // 从指定位置开始，取5个单词（与第一个任务保持一致）
+  sourceWords = sourceWords.slice(startIndex, startIndex + wordsCount)
   
   // 转换为检查用的单词格式
   allWords.value = sourceWords.map(word => ({
@@ -330,7 +334,8 @@ const initializeWords = () => {
   // 显示这5个单词
   displayWords.value = [...allWords.value]
   
-  ElMessage.success(`开始第二个学习任务，检查 ${allWords.value.length} 个单词`)
+  const groupNumber = parseInt(route.query.groupNumber as string) || 1
+  ElMessage.success(`开始第${groupNumber}组检查任务，检查 ${allWords.value.length} 个单词`)
 }
 
 // 生命周期
