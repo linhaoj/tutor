@@ -12,86 +12,140 @@ import SimpleWordStudy from '@/views/SimpleWordStudy.vue'
 import WordCheckTask from '@/views/WordCheckTask.vue'
 import MixedGroupTest from '@/views/MixedGroupTest.vue'
 import PostLearningTest from '@/views/PostLearningTest.vue'
+import Login from '@/views/Login.vue'
+import Admin from '@/views/Admin.vue'
+
+// 导入认证Store用于路由守卫
+import { useAuthStore } from '@/stores/auth'
 
 const routes: RouteRecordRaw[] = [
+  {
+    path: '/login',
+    name: 'Login',
+    component: Login,
+    meta: { title: '登录', requiresGuest: true }
+  },
   {
     path: '/',
     name: 'Dashboard',
     component: Dashboard,
-    meta: { title: '日程管理' }
+    meta: { title: '日程管理', requiresAuth: true }
+  },
+  {
+    path: '/admin',
+    name: 'Admin',
+    component: Admin,
+    meta: { title: '系统管理', requiresAuth: true, requiresAdmin: true }
   },
   {
     path: '/students',
     name: 'Students',
     component: Students,
-    meta: { title: '学生管理' }
+    meta: { title: '学生管理', requiresAuth: true }
   },
   {
     path: '/words',
     name: 'Words',
     component: Words,
-    meta: { title: '单词管理' }
+    meta: { title: '单词管理', requiresAuth: true }
   },
 {
   path: '/study/:studentId',
   name: 'StudyHome',
   component: () => import('../views/StudyHome.vue'),
-  meta: { title: '学习准备' },
+  meta: { title: '学习准备', requiresAuth: true },
   props: true
 },
 {
   path: '/study/:studentId/learn',
   name: 'WordStudy',
   component: WordStudy,
-  meta: { title: '背单词' },
+  meta: { title: '背单词', requiresAuth: true },
   props: true
 },
   {
     path: '/learning/study/:studentId',
-    name: 'WordStudy',
+    name: 'WordStudy2',
     component: WordStudy,
-    meta: { title: '背单词' },
+    meta: { title: '背单词', requiresAuth: true },
     props: true
   },
   {
     path: '/simple-study/:studentId',
     name: 'SimpleWordStudy',
     component: SimpleWordStudy,
-    meta: { title: '简单学习' },
+    meta: { title: '简单学习', requiresAuth: true },
     props: true
   },
   {
     path: '/word-check/:studentId',
     name: 'WordCheckTask',
     component: WordCheckTask,
-    meta: { title: '单词检查任务' },
+    meta: { title: '单词检查任务', requiresAuth: true },
     props: true
   },
   {
     path: '/mixed-test/:studentId',
     name: 'MixedGroupTest',
     component: MixedGroupTest,
-    meta: { title: '混组检测' },
+    meta: { title: '混组检测', requiresAuth: true },
     props: true
   },
   {
     path: '/post-test/:studentId',
     name: 'PostLearningTest',
     component: PostLearningTest,
-    meta: { title: '训后检测' },
+    meta: { title: '训后检测', requiresAuth: true },
     props: true
   },
   {
     path: '/stats',
     name: 'Stats',
     component: Stats,
-    meta: { title: '统计分析' }
+    meta: { title: '统计分析', requiresAuth: true }
   }
 ]
 
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+// 路由守卫
+router.beforeEach((to, _from, next) => {
+  const authStore = useAuthStore()
+  
+  // 初始化认证状态
+  if (!authStore.currentUser) {
+    authStore.initializeAuth()
+  }
+  
+  // 检查是否需要认证
+  if (to.meta.requiresAuth && !authStore.isLoggedIn) {
+    // 需要认证但未登录，跳转到登录页
+    next('/login')
+    return
+  }
+  
+  // 检查是否需要管理员权限
+  if (to.meta.requiresAdmin && !authStore.isAdmin) {
+    // 需要管理员权限但不是管理员，跳转到首页
+    next('/')
+    return
+  }
+  
+  // 检查是否需要访客身份（如登录页）
+  if (to.meta.requiresGuest && authStore.isLoggedIn) {
+    // 已登录用户访问登录页，跳转到对应首页
+    if (authStore.isAdmin) {
+      next('/admin')
+    } else {
+      next('/')
+    }
+    return
+  }
+  
+  next()
 })
 
 export default router

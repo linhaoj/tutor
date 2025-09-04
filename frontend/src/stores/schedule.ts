@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { useAuthStore } from './auth'
 
 export interface Schedule {
   id: number
@@ -20,54 +21,35 @@ export interface DateGroup {
 }
 
 export const useScheduleStore = defineStore('schedule', () => {
-  // 从localStorage加载日程数据
+  const authStore = useAuthStore()
+  
+  // 获取当前用户的localStorage key
+  const getScheduleStorageKey = () => {
+    const currentUser = authStore.currentUser
+    return currentUser ? `schedule_${currentUser.id}` : 'schedule_guest'
+  }
+  
+  const getExpandedStatesStorageKey = () => {
+    const currentUser = authStore.currentUser
+    return currentUser ? `scheduleDateStates_${currentUser.id}` : 'scheduleDateStates_guest'
+  }
+  
+  // 从localStorage加载日程数据（按用户隔离）
   const loadSchedulesFromStorage = () => {
     try {
-      const saved = localStorage.getItem('schedules')
-      return saved ? JSON.parse(saved) : [
-        {
-          id: 1,
-          date: '2025-08-03',
-          time: '09:00',
-          studentName: '张三',
-          studentId: 1,
-          wordSet: '新版小学考纲单词V6.0',
-          type: 'learning',
-          completed: false,
-          created_at: new Date().toISOString()
-        },
-        {
-          id: 2,
-          date: '2025-08-03',
-          time: '14:00',
-          studentName: '李四',
-          studentId: 2,
-          wordSet: '【升序版】托福初级单词',
-          type: 'review',
-          completed: false,
-          created_at: new Date().toISOString()
-        },
-        {
-          id: 3,
-          date: '2025-08-04',
-          time: '10:00',
-          studentName: '张三',
-          studentId: 1,
-          wordSet: '高中英语必修单词',
-          type: 'learning',
-          completed: false,
-          created_at: new Date().toISOString()
-        }
-      ]
+      const storageKey = getScheduleStorageKey()
+      const saved = localStorage.getItem(storageKey)
+      return saved ? JSON.parse(saved) : []
     } catch {
       return []
     }
   }
 
-  // 从localStorage加载日期组展开状态
+  // 从localStorage加载日期组展开状态（按用户隔离）
   const loadExpandedStatesFromStorage = () => {
     try {
-      const saved = localStorage.getItem('scheduleDateStates')
+      const storageKey = getExpandedStatesStorageKey()
+      const saved = localStorage.getItem(storageKey)
       return saved ? JSON.parse(saved) : {}
     } catch {
       return {}
@@ -77,13 +59,15 @@ export const useScheduleStore = defineStore('schedule', () => {
   const schedules = ref<Schedule[]>(loadSchedulesFromStorage())
   const expandedStates = ref<Record<string, boolean>>(loadExpandedStatesFromStorage())
 
-  // 保存到localStorage
+  // 保存到localStorage（按用户隔离）
   const saveSchedulesToStorage = () => {
-    localStorage.setItem('schedules', JSON.stringify(schedules.value))
+    const storageKey = getScheduleStorageKey()
+    localStorage.setItem(storageKey, JSON.stringify(schedules.value))
   }
 
   const saveExpandedStatesToStorage = () => {
-    localStorage.setItem('scheduleDateStates', JSON.stringify(expandedStates.value))
+    const storageKey = getExpandedStatesStorageKey()
+    localStorage.setItem(storageKey, JSON.stringify(expandedStates.value))
   }
 
   // 添加新日程
@@ -171,6 +155,12 @@ export const useScheduleStore = defineStore('schedule', () => {
     ).length
   }
 
+  // 重新加载当前用户的数据（用于用户切换时）
+  const reloadUserData = () => {
+    schedules.value = loadSchedulesFromStorage()
+    expandedStates.value = loadExpandedStatesFromStorage()
+  }
+
   return {
     schedules,
     expandedStates,
@@ -183,6 +173,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     toggleDateGroupExpanded,
     isDateGroupExpanded,
     getGroupedSchedules,
-    getTodayReviewCount
+    getTodayReviewCount,
+    reloadUserData
   }
 })

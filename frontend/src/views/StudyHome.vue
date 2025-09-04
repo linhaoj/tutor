@@ -225,9 +225,9 @@ const loadRealGridStats = async () => {
   
   try {
     // 获取当前单词集的所有单词
-    const wordSet = wordsStore.wordSets.find(ws => ws.name === currentWordSet.value)
-    if (!wordSet || !wordSet.words) {
-      console.warn('找不到单词集:', currentWordSet.value)
+    const wordsInSet = wordsStore.getWordsBySet(currentWordSet.value)
+    if (!wordsInSet || wordsInSet.length === 0) {
+      console.warn('找不到单词集或单词集为空:', currentWordSet.value)
       return
     }
     
@@ -238,7 +238,7 @@ const loadRealGridStats = async () => {
     }
     
     // 遍历所有单词，统计每个阶段的单词数量
-    wordSet.words.forEach((word, index) => {
+    wordsInSet.forEach((_, index) => {
       const wordProgress = progressStore.getWordProgress(studentId.value, currentWordSet.value, index)
       const stage = wordProgress ? wordProgress.currentStage : 0
       

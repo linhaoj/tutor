@@ -17,13 +17,7 @@ export const useWordsStore = defineStore('words', () => {
   const loadWordsFromStorage = () => {
     try {
       const saved = localStorage.getItem('words')
-      return saved ? JSON.parse(saved) : [
-        { id: 1, english: 'hello', chinese: '你好；喂', word_set: '新版小学考纲单词V6.0' },
-        { id: 2, english: 'world', chinese: '世界；全世界', word_set: '新版小学考纲单词V6.0' },
-        { id: 3, english: 'apple', chinese: '苹果', word_set: '【升序版】托福初级单词' },
-        { id: 4, english: 'computer', chinese: '计算机；电脑', word_set: '【升序版】托福初级单词' },
-        { id: 5, english: 'study', chinese: '学习；研究', word_set: '新版小学考纲单词V6.0' }
-      ]
+      return saved ? JSON.parse(saved) : []
     } catch {
       return []
     }
@@ -33,17 +27,9 @@ export const useWordsStore = defineStore('words', () => {
   const loadWordSetsFromStorage = () => {
     try {
       const saved = localStorage.getItem('wordSets')
-      return saved ? JSON.parse(saved) : [
-        { name: '新版小学考纲单词V6.0' },
-        { name: '【升序版】托福初级单词' },
-        { name: '高中英语必修单词' }
-      ]
+      return saved ? JSON.parse(saved) : []
     } catch {
-      return [
-        { name: '新版小学考纲单词V6.0' },
-        { name: '【升序版】托福初级单词' },
-        { name: '高中英语必修单词' }
-      ]
+      return []
     }
   }
 

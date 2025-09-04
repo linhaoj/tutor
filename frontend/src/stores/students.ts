@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { useAuthStore } from './auth'
 
 export interface Student {
   id: number
@@ -10,27 +11,31 @@ export interface Student {
 }
 
 export const useStudentsStore = defineStore('students', () => {
-  // 从localStorage加载初始数据
+  const authStore = useAuthStore()
+  
+  // 获取当前用户的localStorage key
+  const getStorageKey = () => {
+    const currentUser = authStore.currentUser
+    return currentUser ? `students_${currentUser.id}` : 'students_guest'
+  }
+  
+  // 从localStorage加载初始数据（按用户隔离）
   const loadFromStorage = () => {
     try {
-      const saved = localStorage.getItem('students')
-      return saved ? JSON.parse(saved) : [
-        { id: 1, name: '张三', email: 'zhangsan@example.com', total_words: 100, learned_words: 30 },
-        { id: 2, name: '李四', email: 'lisi@example.com', total_words: 150, learned_words: 80 }
-      ]
+      const storageKey = getStorageKey()
+      const saved = localStorage.getItem(storageKey)
+      return saved ? JSON.parse(saved) : []
     } catch {
-      return [
-        { id: 1, name: '张三', email: 'zhangsan@example.com', total_words: 100, learned_words: 30 },
-        { id: 2, name: '李四', email: 'lisi@example.com', total_words: 150, learned_words: 80 }
-      ]
+      return []
     }
   }
 
   const students = ref<Student[]>(loadFromStorage())
 
-  // 保存到localStorage
+  // 保存到localStorage（按用户隔离）
   const saveToStorage = () => {
-    localStorage.setItem('students', JSON.stringify(students.value))
+    const storageKey = getStorageKey()
+    localStorage.setItem(storageKey, JSON.stringify(students.value))
   }
 
   const addStudent = (student: Student) => {
@@ -58,11 +63,17 @@ export const useStudentsStore = defineStore('students', () => {
     return students.value.find(s => s.id === id)
   }
 
+  // 重新加载当前用户的数据（用于用户切换时）
+  const reloadUserData = () => {
+    students.value = loadFromStorage()
+  }
+
   return { 
     students, 
     addStudent, 
     updateStudent, 
     deleteStudent, 
-    getStudent 
+    getStudent,
+    reloadUserData
   }
 })

@@ -1,6 +1,12 @@
 <template>
   <div id="app">
-    <el-container class="app-container">
+    <!-- 登录页面时不显示侧边栏 -->
+    <div v-if="isLoginPage" class="login-page">
+      <router-view />
+    </div>
+    
+    <!-- 主应用布局 -->
+    <el-container v-else class="app-container">
       <!-- 侧边导航 -->
       <el-aside width="250px" class="sidebar">
         <div class="logo">
@@ -14,6 +20,7 @@
           text-color="#bfcbd9"
           active-text-color="#409EFF"
         >
+          <!-- 普通用户菜单 -->
           <el-menu-item index="/">
             <el-icon><Calendar /></el-icon>
             <span>日程管理</span>
@@ -33,6 +40,12 @@
             <el-icon><DataAnalysis /></el-icon>
             <span>统计分析</span>
           </el-menu-item>
+          
+          <!-- 管理员菜单 -->
+          <el-menu-item v-if="authStore.isAdmin" index="/admin">
+            <el-icon><Setting /></el-icon>
+            <span>系统管理</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
       
@@ -47,6 +60,27 @@
                   今日复习
                 </el-button>
               </el-badge>
+              
+              <!-- 用户信息和操作 -->
+              <div class="user-info">
+                <el-dropdown @command="handleUserCommand">
+                  <el-button type="text" class="user-button">
+                    <el-icon><Avatar /></el-icon>
+                    {{ authStore.currentUser?.displayName }}
+                    <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item v-if="authStore.isAdmin" command="admin">
+                        系统管理
+                      </el-dropdown-item>
+                      <el-dropdown-item command="logout" divided>
+                        退出登录
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </div>
             </div>
           </div>
         </el-header>
@@ -60,12 +94,25 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { Calendar, User, Document, Reading, DataAnalysis } from '@element-plus/icons-vue'
+import { computed, ref, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Calendar, User, Document, DataAnalysis, Setting, Avatar, ArrowDown } from '@element-plus/icons-vue'
+import { useAuthStore } from '@/stores/auth'
+import { useStudentsStore } from '@/stores/students'
+import { useScheduleStore } from '@/stores/schedule'
+import { useLearningProgressStore } from '@/stores/learningProgress'
 
 const route = useRoute()
+const router = useRouter()
+const authStore = useAuthStore()
+const studentsStore = useStudentsStore()
+const scheduleStore = useScheduleStore()
+const progressStore = useLearningProgressStore()
+
 const todayReviewCount = ref(0)
+
+// 计算属性
+const isLoginPage = computed(() => route.path === '/login')
 
 // 页面标题映射
 const pageTitles: Record<string, string> = {
@@ -73,25 +120,54 @@ const pageTitles: Record<string, string> = {
   '/students': '学生管理',
   '/words': '单词管理',
   '/learning': '学习中心',
-  '/stats': '统计分析'
+  '/stats': '统计分析',
+  '/admin': '系统管理'
 }
 
 const pageTitle = computed(() => {
   return pageTitles[route.path] || '英语陪练系统'
 })
 
+// 方法
 const showTodayReviews = () => {
   // TODO: 显示今日需要复习的内容
   console.log('显示今日复习内容')
 }
 
+const handleUserCommand = (command: string) => {
+  if (command === 'logout') {
+    authStore.logout()
+    router.push('/login')
+  } else if (command === 'admin') {
+    router.push('/admin')
+  }
+}
+
+// 用户切换时重新加载数据
+watch(() => authStore.currentUser, (newUser, oldUser) => {
+  if (newUser && oldUser && newUser.id !== oldUser.id) {
+    // 用户切换，重新加载所有Store的用户数据
+    studentsStore.reloadUserData()
+    scheduleStore.reloadUserData()
+    progressStore.reloadUserData()
+  }
+}, { immediate: false })
+
 onMounted(() => {
+  // 初始化认证状态
+  authStore.initializeAuth()
+  
   // TODO: 获取今日复习数量
   todayReviewCount.value = 5
 })
 </script>
 
 <style scoped>
+.login-page {
+  width: 100%;
+  height: 100vh;
+}
+
 .app-container {
   height: 100vh;
 }
@@ -139,6 +215,21 @@ onMounted(() => {
 
 .review-badge {
   margin-right: 10px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+}
+
+.user-button {
+  font-size: 14px;
+  color: #606266;
+  padding: 8px 12px;
+}
+
+.user-button:hover {
+  background-color: #f5f7fa;
 }
 
 .main-content {

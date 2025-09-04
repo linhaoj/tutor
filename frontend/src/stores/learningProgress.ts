@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { useAuthStore } from './auth'
 
 export interface GroupProgress {
   groupNumber: number
@@ -28,10 +29,19 @@ export interface StudentProgress {
 }
 
 export const useLearningProgressStore = defineStore('learningProgress', () => {
-  // 从localStorage加载进度数据
+  const authStore = useAuthStore()
+  
+  // 获取当前用户的localStorage key
+  const getStorageKey = () => {
+    const currentUser = authStore.currentUser
+    return currentUser ? `learningProgress_${currentUser.id}` : 'learningProgress_guest'
+  }
+  
+  // 从localStorage加载进度数据（按用户隔离）
   const loadProgressFromStorage = () => {
     try {
-      const saved = localStorage.getItem('learningProgress')
+      const storageKey = getStorageKey()
+      const saved = localStorage.getItem(storageKey)
       return saved ? JSON.parse(saved) : []
     } catch {
       return []
@@ -40,9 +50,10 @@ export const useLearningProgressStore = defineStore('learningProgress', () => {
 
   const studentProgresses = ref<StudentProgress[]>(loadProgressFromStorage())
 
-  // 保存到localStorage
+  // 保存到localStorage（按用户隔离）
   const saveProgressToStorage = () => {
-    localStorage.setItem('learningProgress', JSON.stringify(studentProgresses.value))
+    const storageKey = getStorageKey()
+    localStorage.setItem(storageKey, JSON.stringify(studentProgresses.value))
   }
 
   // 开始新的学习进度
@@ -232,6 +243,11 @@ export const useLearningProgressStore = defineStore('learningProgress', () => {
     }
   }
 
+  // 重新加载当前用户的数据（用于用户切换时）
+  const reloadUserData = () => {
+    studentProgresses.value = loadProgressFromStorage()
+  }
+
   return {
     studentProgresses,
     startLearningProgress,
@@ -242,6 +258,7 @@ export const useLearningProgressStore = defineStore('learningProgress', () => {
     updateWordProgress,
     getWordProgress,
     getWordProgressStats,
-    resetProgress
+    resetProgress,
+    reloadUserData
   }
 })
