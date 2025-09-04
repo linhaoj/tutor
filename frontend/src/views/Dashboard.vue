@@ -263,7 +263,7 @@ const addCourse = async () => {
   adding.value = true
   
   try {
-    const student = students.value.find(s => s.id === courseForm.studentId)
+    const student = students.value.find(s => s.id === parseInt(courseForm.studentId))
     const dateStr = new Date(courseForm.date).toISOString().split('T')[0]
     const timeStr = courseForm.time
     
@@ -272,7 +272,7 @@ const addCourse = async () => {
       date: dateStr,
       wordSet: courseForm.wordSet,
       studentName: student?.name || '',
-      studentId: courseForm.studentId,
+      studentId: parseInt(courseForm.studentId),
       type: courseForm.type as 'learning' | 'review'
     }
     

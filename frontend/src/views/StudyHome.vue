@@ -16,7 +16,7 @@
           :class="getGridCellClass(i-1)"
         >
           <div class="grid-number">格子 {{ i-1 }}</div>
-          <div class="grid-count">{{ gridStats[`grid_${i-1}`] || 0 }}</div>
+          <div class="grid-count">{{ (gridStats as any)[`grid_${i-1}`] || 0 }}</div>
           <div class="grid-label">{{ getGridLabel(i-1) }}</div>
         </div>
       </div>
@@ -161,7 +161,7 @@ const availableWords = computed(() => {
   // 格子0-7的单词都可以学习
   let count = 0
   for (let i = 0; i <= 7; i++) {
-    count += gridStats.value[`grid_${i}` as keyof typeof gridStats.value]
+    count += (gridStats.value as any)[`grid_${i}`] || 0
   }
   return count
 })
@@ -244,7 +244,7 @@ const loadRealGridStats = async () => {
       
       // 阶段0-7对应grid_0到grid_7
       if (stage >= 0 && stage <= 7) {
-        stats[`grid_${stage}` as keyof typeof stats]++
+        (stats as any)[`grid_${stage}`]++
       }
     })
     
