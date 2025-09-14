@@ -326,7 +326,7 @@ const completeStage1 = async () => {
     })
     
     // 重置状态并进入第二阶段
-    Object.keys(cardFlipped).forEach(key => delete cardFlipped[key])
+    Object.keys(cardFlipped).forEach(key => delete cardFlipped[Number(key)])
     completedCards.value = []
     
     currentStage.value = 'stage2'
@@ -397,8 +397,8 @@ const loadNextGroup = async () => {
     currentStage.value = 'stage1'
     
     // 重置状态
-    Object.keys(cardFlipped).forEach(key => delete cardFlipped[key])
-    Object.keys(cardResults).forEach(key => delete cardResults[key])
+    Object.keys(cardFlipped).forEach(key => delete cardFlipped[Number(key)])
+    Object.keys(cardResults).forEach(key => delete cardResults[Number(key)])
     completedCards.value = []
     greenBasket.value = []
     redBasket.value = []
@@ -415,8 +415,8 @@ const loadStage3Words = async () => {
     currentStage.value = 'stage3'
     
     // 重置状态
-    Object.keys(cardFlipped).forEach(key => delete cardFlipped[key])
-    Object.keys(cardResults).forEach(key => delete cardResults[key])
+    Object.keys(cardFlipped).forEach(key => delete cardFlipped[Number(key)])
+    Object.keys(cardResults).forEach(key => delete cardResults[Number(key)])
   } catch (error) {
     ElMessage.error('加载第三阶段单词失败')
     console.error(error)

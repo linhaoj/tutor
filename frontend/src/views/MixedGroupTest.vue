@@ -1,5 +1,8 @@
 <template>
   <div class="mixed-group-test">
+    <!-- 课程计时器 -->
+    <CourseTimer />
+    
     <!-- 学习进度头部 -->
     <div class="study-header">
       <el-card>
@@ -152,7 +155,7 @@
         @click="startNextGroupLearning(false)"
         size="large"
       >
-        开始学习第{{ totalGroups.value + 1 }}组单词
+        开始学习第{{ totalGroups + 1 }}组单词
       </el-button>
       
       <div v-if="!currentGroupCompleted" class="completion-hint">
@@ -169,6 +172,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Check, Close } from '@element-plus/icons-vue'
 import { useWordsStore } from '@/stores/words'
 import { useStudentsStore } from '@/stores/students'
+import CourseTimer from '@/components/CourseTimer.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -338,7 +342,8 @@ const completeAllTests = () => {
     query: { 
       wordSet,
       totalWords: totalWordsCount,
-      startIndex: 0 // 从第0个单词开始，检测所有学过的单词
+      startIndex: 0, // 从第0个单词开始，检测所有学过的单词
+      teacherId: route.query.teacherId || '' // 传递teacherId
     }
   })
 }
@@ -367,7 +372,8 @@ const startNextGroupLearning = (skipMode = false) => {
       wordsCount: 5,
       groupNumber: nextGroupNumber,
       totalWords: totalWordsCount, // 传递总学习单词数
-      startIndex: totalGroups.value * 5 // 从当前组数*5的位置开始
+      startIndex: totalGroups.value * 5, // 从当前组数*5的位置开始
+      teacherId: route.query.teacherId || '' // 传递teacherId
     }
   })
 }
@@ -382,27 +388,52 @@ const goBack = () => {
   router.push(`/study/${studentId}`)
 }
 
+// Fisher-Yates 洗牌算法
+const shuffleArray = <T>(array: T[]): T[] => {
+  const shuffled = [...array]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
+}
+
 // 初始化数据
 const initializeWords = () => {
   // 从路由参数获取信息
   const wordSetName = route.query.wordSet as string || ''
+  const teacherId = route.query.teacherId as string || ''
   const completedGroupsCount = parseInt(route.query.completedGroups as string) || 1
   const totalWordsCount = parseInt(route.query.totalWords as string) || completedGroupsCount * 5
+  
+  console.log('MixedGroupTest - 初始化参数:', {
+    wordSetName,
+    teacherId,
+    completedGroupsCount,
+    totalWordsCount
+  })
   
   // 计算总学习组数
   totalLearningGroups.value = Math.ceil(totalWordsCount / 5)
   
-  // 获取指定单词集的单词
+  // 获取指定单词集的单词（支持跨用户访问）
   let sourceWords = wordSetName 
-    ? wordsStore.getWordsBySet(wordSetName)
+    ? (teacherId ? wordsStore.getWordsBySetForUser(teacherId, wordSetName) : wordsStore.getWordsBySet(wordSetName))
     : wordsStore.words
   
-  // 按组分配单词（每组5个）
+  console.log('MixedGroupTest - 获取到的单词数量:', sourceWords?.length || 0)
+  
+  // 按组分配单词（每组5个）并打乱顺序
   const groupedWords: TestWord[][] = []
   
   for (let i = 0; i < completedGroupsCount; i++) {
     const groupStartIndex = i * 5 // 每组的实际起始位置
-    const groupWords = sourceWords.slice(groupStartIndex, groupStartIndex + 5).map((word, index) => ({
+    const originalGroupWords = sourceWords.slice(groupStartIndex, groupStartIndex + 5)
+    
+    // 对每组的5个单词进行打乱
+    const shuffledGroupWords = shuffleArray(originalGroupWords)
+    
+    const groupWords = shuffledGroupWords.map((word, index) => ({
       id: word.id,
       english: word.english,
       chinese: word.chinese,
@@ -410,6 +441,8 @@ const initializeWords = () => {
       status: 'unchecked' as const,
       groupNumber: i + 1
     }))
+    
+    console.log(`MixedGroupTest - 第${i + 1}组单词已打乱:`, groupWords.map(w => w.english))
     groupedWords.push(groupWords)
   }
   

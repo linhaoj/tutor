@@ -2,7 +2,7 @@
   <div class="words-page">
     <div class="page-header">
       <h1>单词管理</h1>
-      <div class="header-actions">
+      <div v-if="authStore.isAdmin" class="header-actions">
         <el-button type="success" @click="showImportDialog">
           <el-icon><Upload /></el-icon>
           导入Excel
@@ -35,7 +35,7 @@
       
       <!-- 删除单词集按钮 -->
       <el-button 
-        v-if="selectedWordSet" 
+        v-if="selectedWordSet && authStore.isAdmin" 
         type="danger" 
         size="small"
         @click="deleteWordSet"
@@ -54,7 +54,7 @@
           <el-tag size="small" type="info">{{ scope.row.word_set || '未分类' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="150">
+      <el-table-column v-if="authStore.isAdmin" label="操作" width="150">
         <template #default="scope">
           <el-button size="small" @click="editWord(scope.row)">编辑</el-button>
           <el-button 
@@ -237,10 +237,16 @@ interface ExcelSheet {
 }
 
 import { useWordsStore } from '../stores/words'
+import { useAuthStore } from '../stores/auth'
 
 const wordsStore = useWordsStore()
+const authStore = useAuthStore()
 const words = computed(() => wordsStore.words)
-const wordSets = computed(() => wordsStore.wordSets)
+const wordSets = computed(() => {
+  // 使用按用户隔离的单词集数据
+  const currentUser = authStore.currentUser
+  return currentUser ? wordsStore.getWordSetsByUserId(currentUser.id) : []
+})
 
 // 状态
 const selectedWordSet = ref('')

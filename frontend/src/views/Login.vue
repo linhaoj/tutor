@@ -116,7 +116,7 @@ const handleLogin = async () => {
       if (authStore.isAdmin) {
         router.push('/admin')
       } else {
-        router.push('/')
+        router.push('/teacher')
       }
     } else {
       ElMessage.error(result.message)

@@ -1,5 +1,8 @@
 <template>
   <div class="word-check-task">
+    <!-- 课程计时器 -->
+    <CourseTimer />
+    
     <!-- 学习进度头部 -->
     <div class="study-header">
       <el-card>
@@ -149,6 +152,7 @@ import { ArrowRight, ArrowDown, Document, SuccessFilled, Hide } from '@element-p
 import { useWordsStore } from '@/stores/words'
 import { useStudentsStore } from '@/stores/students'
 import { useLearningProgressStore } from '@/stores/learningProgress'
+import CourseTimer from '@/components/CourseTimer.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -295,7 +299,8 @@ const goToNextTask = () => {
       wordSet: route.query.wordSet,
       completedGroups: groupNumber, // 传递当前完成的组号
       totalWords: totalWordsCount, // 传递总学习单词数
-      startIndex: route.query.startIndex // 传递起始位置信息
+      startIndex: route.query.startIndex, // 传递起始位置信息
+      teacherId: route.query.teacherId // 传递老师ID
     }
   })
   
@@ -307,23 +312,39 @@ const goBack = () => {
   router.push(`/study/${studentId}`)
 }
 
+// Fisher-Yates 洗牌算法
+const shuffleArray = <T>(array: T[]): T[] => {
+  const shuffled = [...array]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
+}
+
 // 初始化数据
 const initializeWords = () => {
   // 从路由参数获取信息
   const wordSetName = route.query.wordSet as string || ''
   const wordsCount = 5 // 固定5个单词
   const startIndex = parseInt(route.query.startIndex as string) || 0 // 新增：起始位置
+  const teacherId = route.query.teacherId as string || ''
   
-  // 获取指定单词集的单词
+  // 获取指定单词集的单词（使用老师的用户ID）
   let sourceWords = wordSetName 
-    ? wordsStore.getWordsBySet(wordSetName)
+    ? (teacherId ? wordsStore.getWordsBySetForUser(teacherId, wordSetName) : wordsStore.getWordsBySet(wordSetName))
     : wordsStore.words
   
   // 从指定位置开始，取5个单词（与第一个任务保持一致）
   sourceWords = sourceWords.slice(startIndex, startIndex + wordsCount)
   
+  // 打乱这5个单词的顺序
+  const shuffledWords = shuffleArray(sourceWords)
+  
+  console.log('WordCheckTask - 加载单词（已打乱）:', shuffledWords.map(w => w.english))
+  
   // 转换为检查用的单词格式
-  allWords.value = sourceWords.map(word => ({
+  allWords.value = shuffledWords.map(word => ({
     id: word.id,
     english: word.english,
     chinese: word.chinese,

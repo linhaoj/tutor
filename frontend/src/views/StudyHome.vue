@@ -1,5 +1,8 @@
 <template>
   <div class="study-home">
+    <!-- 课程计时器 -->
+    <CourseTimer />
+    
     <div class="page-header">
       <h1>{{ studentName }} - {{ currentWordSet || '单词学习' }}</h1>
       <el-button @click="goBack">返回日程</el-button>
@@ -117,6 +120,7 @@ import { ElMessage } from 'element-plus'
 import { useStudentsStore } from '@/stores/students'
 import { useWordsStore } from '@/stores/words'
 import { useLearningProgressStore } from '@/stores/learningProgress'
+import CourseTimer from '@/components/CourseTimer.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -126,6 +130,7 @@ const progressStore = useLearningProgressStore()
 
 // Props
 const studentId = ref<number>(parseInt(route.params.studentId as string))
+const teacherId = ref<string>(route.query.teacherId as string || '')
 
 // 响应式数据
 const studentName = ref<string>('')
@@ -201,13 +206,14 @@ const startLearning = () => {
     return
   }
   
-  // 跳转到简单学习页面
+  // 跳转到单词筛选页面
   router.push({
-    name: 'SimpleWordStudy',
+    name: 'WordFilter',
     params: { studentId: studentId.value },
     query: { 
       wordSet: route.query.wordSet || '',
-      wordsCount: finalWordsCount.value 
+      wordsCount: finalWordsCount.value,
+      teacherId: teacherId.value
     }
   })
 }
@@ -224,8 +230,29 @@ const loadRealGridStats = async () => {
   }
   
   try {
-    // 获取当前单词集的所有单词
-    const wordsInSet = wordsStore.getWordsBySet(currentWordSet.value)
+    // 获取当前单词集的所有单词（使用老师的用户ID）
+    console.log('StudyHome - 准备获取单词:', {
+      teacherId: teacherId.value,
+      currentWordSet: currentWordSet.value,
+      hasTeacherId: !!teacherId.value,
+      methodToUse: teacherId.value ? 'getWordsBySetForUser' : 'getWordsBySet'
+    })
+    
+    let wordsInSet;
+    if (teacherId.value) {
+      console.log('StudyHome - 调用 getWordsBySetForUser, 方法存在:', typeof wordsStore.getWordsBySetForUser)
+      wordsInSet = wordsStore.getWordsBySetForUser(teacherId.value, currentWordSet.value)
+      console.log('StudyHome - getWordsBySetForUser 返回结果:', wordsInSet)
+    } else {
+      wordsInSet = wordsStore.getWordsBySet(currentWordSet.value)
+    }
+    
+    console.log('StudyHome - 加载单词数据:', {
+      teacherId: teacherId.value,
+      currentWordSet: currentWordSet.value,
+      wordsCount: wordsInSet.length
+    })
+    
     if (!wordsInSet || wordsInSet.length === 0) {
       console.warn('找不到单词集或单词集为空:', currentWordSet.value)
       return

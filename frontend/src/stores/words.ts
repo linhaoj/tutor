@@ -10,6 +10,7 @@ export interface Word {
 
 export interface WordSet {
   name: string
+  words?: Word[]
 }
 
 export const useWordsStore = defineStore('words', () => {
@@ -115,6 +116,87 @@ export const useWordsStore = defineStore('words', () => {
     return words.value.find(w => w.id === id)
   }
 
+  // 管理员专用：跨用户操作方法
+  const getWordSetsByUserId = (userId: string): WordSet[] => {
+    try {
+      // 先尝试从用户特定的数据中加载
+      const saved = localStorage.getItem(`wordSets_${userId}`) || 
+                   localStorage.getItem(`backup_wordSets_${userId}`)
+      
+      if (saved) {
+        const userWordSets = JSON.parse(saved)
+        console.log(`Words Store - 用户 ${userId} 的原始数据:`, userWordSets)
+        
+        // 为每个单词集加载其单词（如果单词集本身包含words字段就直接使用）
+        const result = userWordSets.map((wordSet: any) => ({
+          name: wordSet.name,
+          description: wordSet.description || '',
+          created_at: wordSet.created_at || '',
+          userId: wordSet.userId || userId,
+          words: wordSet.words || []
+        }))
+        
+        console.log(`Words Store - 用户 ${userId} 的处理后数据:`, result)
+        console.log(`Words Store - 第一个单词集的words:`, result[0]?.words)
+        
+        return result
+      }
+      
+      return []
+    } catch (error) {
+      console.error('获取用户单词集失败:', error)
+      return []
+    }
+  }
+
+  const getWordsBySetForUser = (userId: string, wordSetName: string): Word[] => {
+    console.log('=== getWordsBySetForUser 开始执行 ===', { userId, wordSetName })
+    try {
+      // 尝试多个可能的localStorage键
+      const possibleKeys = [
+        `words_${userId}`,
+        `backup_words_${userId}`,
+        `wordSets_${userId}`,
+        `backup_wordSets_${userId}`
+      ]
+      
+      console.log('getWordsBySetForUser - 查找单词:', { userId, wordSetName, possibleKeys })
+      
+      // 检查每个可能的键
+      for (const key of possibleKeys) {
+        const saved = localStorage.getItem(key)
+        if (saved) {
+          console.log(`getWordsBySetForUser - 找到数据在键 ${key}:`, saved.substring(0, 100) + '...')
+          const data = JSON.parse(saved)
+          
+          // 如果是单词集格式，需要从words字段中过滤
+          if (Array.isArray(data) && data.length > 0 && data[0].words) {
+            console.log('getWordsBySetForUser - 检测到单词集格式，查找单词集:', data.map(ws => ws.name))
+            const wordSet = data.find((ws: any) => ws.name === wordSetName)
+            if (wordSet && wordSet.words) {
+              console.log(`getWordsBySetForUser - 找到单词集 "${wordSetName}"，单词数:`, wordSet.words.length)
+              return wordSet.words
+            }
+          } else if (Array.isArray(data)) {
+            // 如果是直接的单词数组格式
+            const filteredWords = data.filter((w: Word) => w.word_set === wordSetName)
+            if (filteredWords.length > 0) {
+              console.log(`getWordsBySetForUser - 找到单词（直接格式），数量:`, filteredWords.length)
+              return filteredWords
+            }
+          }
+        }
+      }
+      
+      console.log(`getWordsBySetForUser - 未找到单词集 "${wordSetName}"`)
+      return []
+    } catch (error) {
+      console.error('getWordsBySetForUser - 发生异常:', error)
+      console.error('getWordsBySetForUser - 异常详情:', error.message, error.stack)
+      return []
+    }
+  }
+
   return { 
     words, 
     wordSets,
@@ -124,6 +206,8 @@ export const useWordsStore = defineStore('words', () => {
     deleteWordSet,
     importWords,
     getWordsBySet,
-    getWord
+    getWord,
+    getWordSetsByUserId,
+    getWordsBySetForUser
   }
 })

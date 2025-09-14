@@ -20,32 +20,41 @@
           text-color="#bfcbd9"
           active-text-color="#409EFF"
         >
-          <!-- 普通用户菜单 -->
-          <el-menu-item index="/">
-            <el-icon><Calendar /></el-icon>
-            <span>日程管理</span>
-          </el-menu-item>
-          
-          <el-menu-item index="/students">
-            <el-icon><User /></el-icon>
-            <span>学生管理</span>
-          </el-menu-item>
-          
-          <el-menu-item index="/words">
-            <el-icon><Document /></el-icon>
-            <span>单词管理</span>
-          </el-menu-item>
-          
-          <el-menu-item index="/stats">
-            <el-icon><DataAnalysis /></el-icon>
-            <span>统计分析</span>
-          </el-menu-item>
+          <!-- 老师菜单 (只有teacher角色可见) -->
+          <template v-if="!authStore.isAdmin">
+            <el-menu-item index="/teacher">
+              <el-icon><User /></el-icon>
+              <span>老师工作台</span>
+            </el-menu-item>
+            
+            <el-menu-item index="/">
+              <el-icon><Calendar /></el-icon>
+              <span>日程管理</span>
+            </el-menu-item>
+            
+            <el-menu-item index="/students">
+              <el-icon><User /></el-icon>
+              <span>学生管理</span>
+            </el-menu-item>
+            
+            <el-menu-item index="/words">
+              <el-icon><Document /></el-icon>
+              <span>单词管理</span>
+            </el-menu-item>
+            
+            <el-menu-item index="/stats">
+              <el-icon><DataAnalysis /></el-icon>
+              <span>统计分析</span>
+            </el-menu-item>
+          </template>
           
           <!-- 管理员菜单 -->
-          <el-menu-item v-if="authStore.isAdmin" index="/admin">
-            <el-icon><Setting /></el-icon>
-            <span>系统管理</span>
-          </el-menu-item>
+          <template v-if="authStore.isAdmin">
+            <el-menu-item index="/admin">
+              <el-icon><Setting /></el-icon>
+              <span>系统管理</span>
+            </el-menu-item>
+          </template>
         </el-menu>
       </el-aside>
       
@@ -121,7 +130,8 @@ const pageTitles: Record<string, string> = {
   '/words': '单词管理',
   '/learning': '学习中心',
   '/stats': '统计分析',
-  '/admin': '系统管理'
+  '/admin': '系统管理',
+  '/teacher': '老师工作台'
 }
 
 const pageTitle = computed(() => {

@@ -2,7 +2,7 @@
   <div class="dashboard-page">
     <div class="page-header">
       <h1>日程管理</h1>
-      <el-button type="primary" @click="showAddDialog">
+      <el-button v-if="authStore.isAdmin" type="primary" @click="showAddDialog">
         <el-icon><Plus /></el-icon>
         添加课程
       </el-button>
@@ -27,38 +27,150 @@
         </div>
         
         <div v-show="dateGroup.expanded" class="schedule-list">
-          <div 
-            v-for="schedule in dateGroup.schedules" 
-            :key="schedule.id"
-            class="schedule-item"
-          >
-            <div class="schedule-time">{{ schedule.time }}</div>
-            <div class="schedule-content">
-              <div class="schedule-title">{{ schedule.wordSet }}</div>
-              <div class="schedule-student">{{ schedule.studentName }}</div>
-              <div class="schedule-type">
-                <el-tag 
-                  :type="schedule.type === 'review' ? 'warning' : 'success'" 
-                  size="small"
+          <!-- 今日课程：分为未完成和已完成两栏 -->
+          <div v-if="isToday(dateGroup.date)" class="today-schedule-columns">
+            <!-- 未完成课程栏 -->
+            <div class="schedule-column incomplete-column">
+              <div class="column-header">
+                <h3>未完成 ({{ getTodayIncompleteSchedules(dateGroup.schedules).length }})</h3>
+              </div>
+              <div class="column-content">
+                <div 
+                  v-for="schedule in getTodayIncompleteSchedules(dateGroup.schedules)" 
+                  :key="schedule.id"
+                  class="schedule-item"
                 >
-                  {{ schedule.type === 'review' ? '抗遗忘' : '单词学习' }}
-                </el-tag>
+                  <div class="schedule-time">{{ schedule.time }}</div>
+                  <div class="schedule-content">
+                    <div class="schedule-title">{{ schedule.wordSet }}</div>
+                    <div class="schedule-student">{{ schedule.studentName }}</div>
+                    <div class="schedule-meta">
+                      <el-tag 
+                        :type="schedule.type === 'review' ? 'warning' : 'success'" 
+                        size="small"
+                      >
+                        {{ schedule.type === 'review' ? '抗遗忘' : '单词学习' }}
+                      </el-tag>
+                      <el-tag 
+                        :type="schedule.classType === 'big' ? 'primary' : 'info'" 
+                        size="small"
+                        style="margin-left: 8px"
+                      >
+                        {{ schedule.classType === 'big' ? '大课' : '小课' }}
+                      </el-tag>
+                      <span class="duration-text">{{ schedule.duration || (schedule.classType === 'big' ? 60 : 30) }}分钟</span>
+                    </div>
+                  </div>
+                  <div class="schedule-actions">
+                    <el-button 
+                      type="success" 
+                      @click="startStudy(schedule)"
+                    >
+                      {{ schedule.type === 'review' ? '复习' : '学习' }}
+                    </el-button>
+                    <el-button 
+                      v-if="authStore.isAdmin"
+                      size="small" 
+                      type="danger" 
+                      @click="deleteSchedule(schedule)"
+                    >
+                      删除
+                    </el-button>
+                  </div>
+                </div>
+                <div v-if="getTodayIncompleteSchedules(dateGroup.schedules).length === 0" class="empty-column">
+                  <el-empty description="暂无未完成课程" :image-size="80" />
+                </div>
               </div>
             </div>
-            <div class="schedule-actions">
-              <el-button 
-                type="success" 
-                @click="startStudy(schedule)"
-              >
-                {{ schedule.type === 'review' ? '复习' : '学习' }}
-              </el-button>
-              <el-button 
-                size="small" 
-                type="danger" 
-                @click="deleteSchedule(schedule)"
-              >
-                删除
-              </el-button>
+            
+            <!-- 已完成课程栏 -->
+            <div class="schedule-column completed-column">
+              <div class="column-header">
+                <h3>已完成 ({{ getTodayCompletedSchedules(dateGroup.schedules).length }})</h3>
+              </div>
+              <div class="column-content">
+                <div 
+                  v-for="schedule in getTodayCompletedSchedules(dateGroup.schedules)" 
+                  :key="schedule.id"
+                  class="schedule-item completed"
+                >
+                  <div class="schedule-time">{{ schedule.time }}</div>
+                  <div class="schedule-content">
+                    <div class="schedule-title">{{ schedule.wordSet }}</div>
+                    <div class="schedule-student">{{ schedule.studentName }}</div>
+                    <div class="schedule-meta">
+                      <el-tag 
+                        :type="schedule.type === 'review' ? 'warning' : 'success'" 
+                        size="small"
+                      >
+                        {{ schedule.type === 'review' ? '抗遗忘' : '单词学习' }}
+                      </el-tag>
+                      <el-tag 
+                        :type="schedule.classType === 'big' ? 'primary' : 'info'" 
+                        size="small"
+                        style="margin-left: 8px"
+                      >
+                        {{ schedule.classType === 'big' ? '大课' : '小课' }}
+                      </el-tag>
+                      <span class="duration-text">{{ schedule.duration || (schedule.classType === 'big' ? 60 : 30) }}分钟</span>
+                      <el-tag type="success" size="small" style="margin-left: 8px">
+                        ✓ 已完成
+                      </el-tag>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="getTodayCompletedSchedules(dateGroup.schedules).length === 0" class="empty-column">
+                  <el-empty description="暂无已完成课程" :image-size="80" />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 非今日课程：保持原有显示方式 -->
+          <div v-else class="other-day-schedules">
+            <div 
+              v-for="schedule in dateGroup.schedules" 
+              :key="schedule.id"
+              class="schedule-item"
+            >
+              <div class="schedule-time">{{ schedule.time }}</div>
+              <div class="schedule-content">
+                <div class="schedule-title">{{ schedule.wordSet }}</div>
+                <div class="schedule-student">{{ schedule.studentName }}</div>
+                <div class="schedule-meta">
+                  <el-tag 
+                    :type="schedule.type === 'review' ? 'warning' : 'success'" 
+                    size="small"
+                  >
+                    {{ schedule.type === 'review' ? '抗遗忘' : '单词学习' }}
+                  </el-tag>
+                  <el-tag 
+                    :type="schedule.classType === 'big' ? 'primary' : 'info'" 
+                    size="small"
+                    style="margin-left: 8px"
+                  >
+                    {{ schedule.classType === 'big' ? '大课' : '小课' }}
+                  </el-tag>
+                  <span class="duration-text">{{ schedule.duration || (schedule.classType === 'big' ? 60 : 30) }}分钟</span>
+                </div>
+              </div>
+              <div class="schedule-actions">
+                <el-button 
+                  type="success" 
+                  @click="startStudy(schedule)"
+                >
+                  {{ schedule.type === 'review' ? '复习' : '学习' }}
+                </el-button>
+                <el-button 
+                  v-if="authStore.isAdmin"
+                  size="small" 
+                  type="danger" 
+                  @click="deleteSchedule(schedule)"
+                >
+                  删除
+                </el-button>
+              </div>
             </div>
           </div>
         </div>
@@ -104,6 +216,24 @@
             <el-radio value="learning">单词学习</el-radio>
             <el-radio value="review">抗遗忘</el-radio>
           </el-radio-group>
+        </el-form-item>
+        
+        <el-form-item label="课程规模">
+          <el-radio-group v-model="courseForm.classType" @change="updateDuration">
+            <el-radio value="big">大课 (60分钟)</el-radio>
+            <el-radio value="small">小课 (30分钟)</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        
+        <el-form-item label="课程时长">
+          <el-input-number
+            v-model="courseForm.duration"
+            :min="15"
+            :max="120"
+            :step="15"
+            style="width: 100%"
+          />
+          <span style="color: #999; font-size: 12px; margin-left: 8px;">分钟</span>
         </el-form-item>
         
         <el-form-item label="上课日期" required>
@@ -154,14 +284,25 @@ import { Plus, ArrowRight } from '@element-plus/icons-vue'
 import { useStudentsStore } from '@/stores/students'
 import { useWordsStore } from '@/stores/words'
 import { useScheduleStore } from '@/stores/schedule'
+import { useAuthStore } from '@/stores/auth'
+import { useAntiForgetStore } from '@/stores/antiForget'
 
 const studentsStore = useStudentsStore()
-const students = computed(() => studentsStore.students)
+const students = computed(() => {
+  const currentUser = authStore.currentUser
+  return currentUser ? studentsStore.getStudentsByUserId(currentUser.id) : []
+})
 
 const wordsStore = useWordsStore()
-const wordSets = computed(() => wordsStore.wordSets)
+const authStore = useAuthStore()
+const wordSets = computed(() => {
+  // 使用按用户隔离的单词集数据
+  const currentUser = authStore.currentUser
+  return currentUser ? wordsStore.getWordSetsByUserId(currentUser.id) : []
+})
 
 const scheduleStore = useScheduleStore()
+const antiForgetStore = useAntiForgetStore()
 
 const router = useRouter()
 
@@ -179,12 +320,15 @@ const courseForm = reactive({
   wordSet: '',
   type: 'study',
   date: '',
-  time: ''
+  time: '',
+  duration: 60,
+  classType: 'big'
 })
 
 // 计算属性 - 按日期分组
 const groupedSchedules = computed(() => {
-  return scheduleStore.getGroupedSchedules()
+  const currentUser = authStore.currentUser
+  return currentUser ? scheduleStore.getGroupedSchedulesByUserId(currentUser.id) : []
 })
 
 // 生成时间选项（6:00-22:00，每30分钟一个）
@@ -220,26 +364,91 @@ const formatDate = (dateStr: string) => {
 }
 
 
+// 方法
 const toggleDateGroup = (date: string) => {
   scheduleStore.toggleDateGroupExpanded(date)
 }
 
+// 判断是否是今天
+const isToday = (dateString: string) => {
+  const today = new Date()
+  const targetDate = new Date(dateString)
+  return today.toDateString() === targetDate.toDateString()
+}
+
+// 获取今日未完成课程
+const getTodayIncompleteSchedules = (schedules: any[]) => {
+  return schedules.filter(schedule => !schedule.completed)
+}
+
+// 获取今日已完成课程
+const getTodayCompletedSchedules = (schedules: any[]) => {
+  return schedules.filter(schedule => schedule.completed)
+}
+
 const startStudy = (schedule: any) => {
+  // 记录课程开始时间
+  const startTime = Date.now()
+  sessionStorage.setItem('courseStartTime', startTime.toString())
+  sessionStorage.setItem('currentScheduleId', schedule.id.toString())
+  
   if (schedule.type === 'review') {
     console.log('进入抗遗忘模式:', schedule)
-    // TODO: 实现抗遗忘模式
-    ElMessage.info('抗遗忘模式功能正在开发中...')
+    
+    // 查找现有的抗遗忘会话
+    const currentUser = authStore.currentUser
+    if (!currentUser) {
+      ElMessage.error('用户未登录')
+      return
+    }
+    
+    let existingSession = antiForgetStore.getActiveSession(
+      schedule.studentId, 
+      schedule.wordSet, 
+      currentUser.id
+    )
+    
+    // 如果没有现有会话，说明这是第一次抗遗忘复习
+    // 抗遗忘会话应该已经在学习完成时创建，这里只是获取
+    if (!existingSession) {
+      ElMessage.error('未找到抗遗忘复习数据，请确认已完成相关学习并创建了抗遗忘计划')
+      return
+    }
+    
+    if (existingSession) {
+      // 跳转到抗遗忘复习页面
+      router.push({
+        name: 'AntiForgetReview',
+        params: { studentId: schedule.studentId },
+        query: { 
+          wordSet: schedule.wordSet,
+          teacherId: currentUser.id,
+          sessionId: existingSession.id
+        }
+      })
+    } else {
+      ElMessage.error('无法创建或获取抗遗忘会话')
+    }
   } else if (schedule.type === 'learning') {
     // 跳转到学习准备页面，显示九宫格和选择学习单词数
     router.push({
       name: 'StudyHome',
       params: { studentId: schedule.studentId },
       query: { 
-        wordSet: schedule.wordSet
+        wordSet: schedule.wordSet,
+        teacherId: authStore.currentUser?.id || ''
       }
     })
   } else {
     ElMessage.error('未知的课程类型')
+  }
+}
+
+const updateDuration = () => {
+  if (courseForm.classType === 'big') {
+    courseForm.duration = 60
+  } else if (courseForm.classType === 'small') {
+    courseForm.duration = 30
   }
 }
 
@@ -249,7 +458,9 @@ const showAddDialog = () => {
     wordSet: '',
     type: 'learning',
     date: '',
-    time: ''
+    time: '',
+    duration: 60,
+    classType: 'big'
   })
   addDialogVisible.value = true
 }
@@ -273,7 +484,9 @@ const addCourse = async () => {
       wordSet: courseForm.wordSet,
       studentName: student?.name || '',
       studentId: parseInt(courseForm.studentId),
-      type: courseForm.type as 'learning' | 'review'
+      type: courseForm.type as 'learning' | 'review',
+      duration: courseForm.duration,
+      classType: courseForm.classType as 'big' | 'small'
     }
     
     scheduleStore.addSchedule(newSchedule)
@@ -369,6 +582,84 @@ onMounted(() => {
   gap: 10px;
 }
 
+/* 今日课程两栏布局 */
+.today-schedule-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  margin-top: 10px;
+}
+
+.schedule-column {
+  border: 2px solid #e4e7ed;
+  border-radius: 12px;
+  background: #fafafa;
+  overflow: hidden;
+}
+
+.incomplete-column {
+  border-color: #409eff;
+}
+
+.completed-column {
+  border-color: #67c23a;
+}
+
+.column-header {
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  padding: 15px 20px;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.incomplete-column .column-header {
+  background: linear-gradient(135deg, #409eff 0%, #36a2ff 100%);
+  color: white;
+}
+
+.completed-column .column-header {
+  background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
+  color: white;
+}
+
+.column-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.column-content {
+  padding: 15px;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.empty-column {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+/* 已完成课程样式 */
+.schedule-item.completed {
+  opacity: 0.8;
+  background: #f0f9ff;
+  border: 1px dashed #67c23a;
+}
+
+.schedule-item.completed .schedule-title {
+  text-decoration: line-through;
+  color: #909399;
+}
+
+/* 非今日课程保持原有样式 */
+.other-day-schedules {
+  /* 与原有.schedule-list相同的样式 */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .schedule-item {
   display: flex;
   align-items: center;
@@ -421,5 +712,20 @@ onMounted(() => {
   font-size: 12px;
   color: #909399;
   margin-top: 4px;
+}
+
+/* 新增课程显示样式 */
+.schedule-meta {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.duration-text {
+  color: #909399;
+  font-size: 12px;
+  margin-left: 4px;
 }
 </style>

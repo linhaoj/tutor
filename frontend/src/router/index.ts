@@ -12,6 +12,8 @@ import SimpleWordStudy from '@/views/SimpleWordStudy.vue'
 import WordCheckTask from '@/views/WordCheckTask.vue'
 import MixedGroupTest from '@/views/MixedGroupTest.vue'
 import PostLearningTest from '@/views/PostLearningTest.vue'
+import AntiForgetReview from '@/views/AntiForgetReview.vue'
+import WordFilter from '@/views/WordFilter.vue'
 import Login from '@/views/Login.vue'
 import Admin from '@/views/Admin.vue'
 
@@ -29,7 +31,7 @@ const routes: RouteRecordRaw[] = [
     path: '/',
     name: 'Dashboard',
     component: Dashboard,
-    meta: { title: '日程管理', requiresAuth: true }
+    meta: { title: '日程管理', requiresAuth: true, requiresTeacher: true }
   },
   {
     path: '/admin',
@@ -38,16 +40,28 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '系统管理', requiresAuth: true, requiresAdmin: true }
   },
   {
+    path: '/teacher',
+    name: 'TeacherHome',
+    component: () => import('../views/TeacherHome.vue'),
+    meta: { title: '老师首页', requiresAuth: true }
+  },
+  {
+    path: '/data-management',
+    name: 'DataManagement',
+    component: () => import('../views/DataManagement.vue'),
+    meta: { title: '数据管理', requiresAuth: true, requiresAdmin: true }
+  },
+  {
     path: '/students',
     name: 'Students',
     component: Students,
-    meta: { title: '学生管理', requiresAuth: true }
+    meta: { title: '学生管理', requiresAuth: true, requiresTeacher: true }
   },
   {
     path: '/words',
     name: 'Words',
     component: Words,
-    meta: { title: '单词管理', requiresAuth: true }
+    meta: { title: '单词管理', requiresAuth: true, requiresTeacher: true }
   },
 {
   path: '/study/:studentId',
@@ -68,6 +82,13 @@ const routes: RouteRecordRaw[] = [
     name: 'WordStudy2',
     component: WordStudy,
     meta: { title: '背单词', requiresAuth: true },
+    props: true
+  },
+  {
+    path: '/word-filter/:studentId',
+    name: 'WordFilter',
+    component: WordFilter,
+    meta: { title: '单词筛选', requiresAuth: true },
     props: true
   },
   {
@@ -99,10 +120,17 @@ const routes: RouteRecordRaw[] = [
     props: true
   },
   {
+    path: '/anti-forget/:studentId',
+    name: 'AntiForgetReview',
+    component: AntiForgetReview,
+    meta: { title: '抗遗忘复习', requiresAuth: true },
+    props: true
+  },
+  {
     path: '/stats',
     name: 'Stats',
     component: Stats,
-    meta: { title: '统计分析', requiresAuth: true }
+    meta: { title: '统计分析', requiresAuth: true, requiresTeacher: true }
   }
 ]
 
@@ -112,7 +140,7 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
   
   // 初始化认证状态
@@ -129,8 +157,19 @@ router.beforeEach((to, _from, next) => {
   
   // 检查是否需要管理员权限
   if (to.meta.requiresAdmin && !authStore.isAdmin) {
-    // 需要管理员权限但不是管理员，跳转到首页
-    next('/')
+    // 需要管理员权限但不是管理员，跳转到对应首页
+    if (authStore.currentUser?.role === 'teacher') {
+      next('/teacher')
+    } else {
+      next('/login')
+    }
+    return
+  }
+  
+  // 检查是否需要老师权限
+  if (to.meta.requiresTeacher && authStore.isAdmin) {
+    // 需要老师权限但是管理员，跳转到管理员首页
+    next('/admin')
     return
   }
   
@@ -140,7 +179,7 @@ router.beforeEach((to, _from, next) => {
     if (authStore.isAdmin) {
       next('/admin')
     } else {
-      next('/')
+      next('/teacher')
     }
     return
   }

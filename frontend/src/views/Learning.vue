@@ -49,7 +49,7 @@
                 :class="getGridCellClass(i-1)"
               >
                 <div class="grid-number">{{ i-1 }}</div>
-                <div class="grid-count">{{ studentGridStats[student.id][`grid_${i-1}`] || 0 }}</div>
+                <div class="grid-count">{{ studentGridStats[student.id][`grid_${i-1}` as keyof GridStats] || 0 }}</div>
               </div>
             </div>
             <div class="grid-legend">

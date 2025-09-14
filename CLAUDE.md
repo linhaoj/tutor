@@ -91,6 +91,7 @@ tutor/
 - `/word-check/:studentId` - 第二个学习任务 *需要认证
 - `/mixed-test/:studentId` - 第三个学习任务 *需要认证
 - `/post-test/:studentId` - 训后检测 *需要认证
+- `/anti-forget/:studentId` - 抗遗忘复习 (AntiForgetReview) *需要认证
 - `/stats` - 统计分析 *需要认证
 
 ## 学习流程设计
@@ -116,6 +117,31 @@ tutor/
 - ✅ 创建了完整的三阶段学习任务系统
 - ✅ 实现了学习进度管理系统
 - ✅ 修复了学习准备页面的显示问题
+- ✅ 修复了老师工作台数据加载问题 (2025-09-08)
+  - 修复了TeacherHome.vue中学生和课程数据显示为0的问题
+  - 使用正确的按用户隔离的数据获取方法（getStudentsByUserId, getSchedulesByUserId）
+  - 修复了所有TypeScript构建错误
+- ✅ 实现了基于角色的界面权限控制 (2025-09-08)
+  - 隐藏了老师界面中的所有编辑/添加/删除按钮
+  - Dashboard: 隐藏"添加课程"和"删除"按钮（仅管理员可见）
+  - Students: 隐藏"添加学生"按钮和整个操作列（仅管理员可见）  
+  - Words: 隐藏"导入Excel"、"添加单词"、"删除单词集"按钮和操作列（仅管理员可见）
+  - 老师只能查看数据和执行学习操作，不能修改基础数据
+- ✅ 修复了学习页面单词数据加载问题 (2025-09-10)
+  - 添加了teacherId参数传递支持跨用户单词数据访问
+  - 实现了getWordsBySetForUser方法用于访问教师的单词数据
+  - 修复了StudyHome、SimpleWordStudy、WordCheckTask等页面的单词加载
+- ✅ 实现了单词打乱功能 (2025-09-10)
+  - 在所有学习任务中加入Fisher-Yates洗牌算法
+  - 每组5个单词在显示前都会随机打乱顺序
+  - 防止学生通过位置记忆单词，提高学习效果
+- ✅ 完整实现抗遗忘复习系统 (2025-09-10)
+  - 创建了AntiForgetReview.vue复习页面
+  - 实现了antiForget.ts数据存储和管理
+  - 支持五角星标记系统，标记状态持久化
+  - 每个单词集默认需要复习10次
+  - 每次复习单词顺序随机打乱，但五角星状态保持
+  - 完整的复习进度跟踪和统计
 
 ### 技术细节
 - 使用 localStorage 进行前端数据持久化
@@ -201,8 +227,71 @@ npm run dev
 - 后端：http://localhost:8000
 - 前端：http://localhost:5173
 
+## 服务器部署指南
+
+### 手动部署到服务器（推荐）
+
+由于SSH密钥有密码保护，建议使用以下步骤手动更新服务器：
+
+#### 1. 停止现有服务
+```bash
+ssh admin@39.107.153.217
+pm2 stop all
+```
+
+#### 2. 更新代码
+```bash
+cd /var/www/tutor
+git pull origin main
+# 如果拉取失败，使用强制更新：
+# git fetch --all
+# git reset --hard origin/main
+```
+
+#### 3. 重新构建前端
+```bash
+cd /var/www/tutor/frontend
+npm install
+npm run build
+```
+
+#### 4. 重启服务
+```bash
+cd /var/www/tutor
+# 启动后端
+pm2 start backend/main.py --name backend --interpreter python3
+# 启动前端
+pm2 start --name frontend --cwd frontend/dist "python3 -m http.server 5173"
+```
+
+#### 5. 检查服务状态
+```bash
+pm2 status
+```
+
+### 重要文件更新
+
+如果需要单独更新特定文件，主要的新增和修改文件：
+
+1. **新增认证系统文件**：
+   - `frontend/src/stores/auth.ts`
+   - `frontend/src/views/Login.vue`
+   - `frontend/src/views/Admin.vue`
+
+2. **修改过的现有文件**：
+   - `frontend/src/router/index.ts` (添加路由守卫)
+   - `frontend/src/App.vue` (添加登录逻辑)
+   - `frontend/src/stores/students.ts` (数据隔离)
+   - `frontend/src/stores/schedule.ts` (数据隔离)
+   - `frontend/src/stores/learningProgress.ts` (数据隔离)
+
+### 访问地址
+- 前端: http://39.107.153.217:5173
+- 后端: http://39.107.153.217:8000
+- **默认管理员账号**: admin / admin123
+
 ---
 
-**最后更新**: 2025-08-03
-**开发者**: Claude Code Assistant
-**项目状态**: 核心功能已完成，等待后续扩展开发
+**最后更新**: 2025-09-04
+**开发者**: Claude Code Assistant  
+**项目状态**: 已实现多用户登录系统，准备部署

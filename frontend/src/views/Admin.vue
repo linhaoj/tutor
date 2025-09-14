@@ -23,8 +23,10 @@
     </div>
 
     <div class="admin-content">
-      <!-- 用户管理区域 -->
-      <el-card class="user-management">
+      <el-tabs v-model="activeTab" class="admin-tabs">
+        <el-tab-pane label="用户管理" name="users">
+          <!-- 用户管理区域 -->
+          <el-card class="user-management">
         <template #header>
           <div class="card-header">
             <span>用户管理</span>
@@ -86,6 +88,228 @@
           </el-table>
         </div>
       </el-card>
+        </el-tab-pane>
+
+        <el-tab-pane label="老师数据管理" name="teacherData">
+          <!-- 老师数据管理区域 -->
+          <el-card class="teacher-data-management">
+            <template #header>
+              <div class="card-header">
+                <span>老师数据管理</span>
+                <div class="header-actions">
+                  <el-alert 
+                    v-if="teachers.length === 0" 
+                    title="暂无老师账号"
+                    description="请先在用户管理中创建老师账号，管理员专注系统管理工作"
+                    type="info"
+                    :closable="false"
+                    show-icon
+                    style="margin-right: 20px;"
+                  />
+                  <el-select 
+                    v-model="selectedTeacherId" 
+                    placeholder="选择老师"
+                    @change="loadTeacherData"
+                    style="width: 200px"
+                    :disabled="teachers.length === 0"
+                  >
+                    <el-option
+                      v-for="teacher in teachers"
+                      :key="teacher.id"
+                      :label="teacher.displayName"
+                      :value="teacher.id"
+                    />
+                  </el-select>
+                </div>
+              </div>
+            </template>
+
+            <div v-if="selectedTeacherId" class="teacher-data-tabs">
+              <el-tabs v-model="activeDataTab" class="data-tabs">
+                <!-- 学生管理 -->
+                <el-tab-pane label="学生管理" name="students">
+                  <div class="data-section">
+                    <div class="section-header">
+                      <span>{{ getSelectedTeacherName() }} - 学生管理</span>
+                      <el-button type="primary" @click="showAddStudentDialog">
+                        <el-icon><Plus /></el-icon>
+                        添加学生
+                      </el-button>
+                    </div>
+                    <el-table :data="teacherStudents" style="width: 100%">
+                      <el-table-column prop="name" label="姓名" />
+                      <el-table-column prop="email" label="邮箱" />
+                      <el-table-column prop="total_words" label="总单词数" width="120" />
+                      <el-table-column prop="learned_words" label="已学单词数" width="120" />
+                      <el-table-column label="剩余课时" width="120">
+                        <template #default="scope">
+                          <span :class="getHoursClass(scope.row.remainingHours)">
+                            {{ (scope.row.remainingHours || 0).toFixed(1) }}h
+                          </span>
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="操作" width="200">
+                        <template #default="scope">
+                          <el-button size="small" @click="editStudent(scope.row)">编辑</el-button>
+                          <el-button size="small" type="primary" @click="editStudentHours(scope.row)">课时</el-button>
+                          <el-button size="small" type="danger" @click="deleteStudent(scope.row)">删除</el-button>
+                        </template>
+                      </el-table-column>
+                    </el-table>
+                  </div>
+                </el-tab-pane>
+
+                <!-- 单词管理 -->
+                <el-tab-pane label="单词管理" name="words">
+                  <div class="data-section">
+                    <div class="section-header">
+                      <span>{{ getSelectedTeacherName() }} - 单词管理</span>
+                      <div>
+                        <el-button @click="showAddWordSetDialog">
+                          <el-icon><Plus /></el-icon>
+                          添加单词集
+                        </el-button>
+                        <el-button type="success" @click="importWords">
+                          <el-icon><Upload /></el-icon>
+                          导入Excel
+                        </el-button>
+                      </div>
+                    </div>
+                    <div class="words-content">
+                      <div class="word-sets-panel">
+                        <h3>单词集列表</h3>
+                        <div class="word-sets">
+                          <div 
+                            v-for="wordSet in teacherWordSets" 
+                            :key="wordSet.name"
+                            class="word-set-item"
+                            :class="{ active: selectedWordSet === wordSet.name }"
+                          >
+                            <div class="word-set-content" @click="selectWordSet(wordSet.name)">
+                              <span>{{ wordSet.name }}</span>
+                              <span class="word-count">({{ wordSet.words?.length || 0 }} 个单词)</span>
+                            </div>
+                            <el-button 
+                              type="danger" 
+                              size="small" 
+                              :icon="Delete"
+                              @click.stop="deleteWordSet(wordSet)"
+                              class="delete-btn"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div class="words-panel" v-if="selectedWordSet">
+                        <h3>{{ selectedWordSet }} - 单词列表</h3>
+                        <div class="words-list">
+                          <div v-for="word in getCurrentWords()" :key="word.english" class="word-item">
+                            <strong>{{ word.english }}</strong>
+                            <span>{{ word.chinese }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </el-tab-pane>
+
+                <!-- 日程管理 -->
+                <el-tab-pane label="日程管理" name="schedule">
+                  <div class="data-section">
+                    <div class="section-header">
+                      <span>{{ getSelectedTeacherName() }} - 日程管理</span>
+                      <el-button type="primary" @click="showAddScheduleDialog">
+                        <el-icon><Plus /></el-icon>
+                        添加课程
+                      </el-button>
+                    </div>
+                    <div class="schedule-list">
+                      <div 
+                        v-for="dateGroup in groupedTeacherSchedules" 
+                        :key="dateGroup.date"
+                        class="date-group"
+                      >
+                        <div class="date-header">
+                          <span class="date-text">{{ formatDate(dateGroup.date) }}</span>
+                          <span class="course-count">{{ dateGroup.schedules.length }} 门课程</span>
+                        </div>
+                        <div class="schedule-items">
+                          <div 
+                            v-for="schedule in dateGroup.schedules" 
+                            :key="schedule.id"
+                            class="schedule-item"
+                          >
+                            <div class="schedule-time">{{ schedule.time }}</div>
+                            <div class="schedule-content">
+                              <div class="schedule-title">{{ schedule.wordSet }}</div>
+                              <div class="schedule-student">{{ schedule.studentName }}</div>
+                              <div class="schedule-type">
+                                <el-tag 
+                                  :type="schedule.type === 'review' ? 'warning' : 'success'" 
+                                  size="small"
+                                >
+                                  {{ schedule.type === 'review' ? '抗遗忘' : '单词学习' }}
+                                </el-tag>
+                              </div>
+                            </div>
+                            <div class="schedule-actions">
+                              <el-button size="small" @click="editSchedule(schedule)">编辑</el-button>
+                              <el-button size="small" type="danger" @click="deleteSchedule(schedule)">删除</el-button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </el-tab-pane>
+              </el-tabs>
+            </div>
+
+            <div v-else class="no-teacher-selected">
+              <el-empty description="请选择一个老师开始管理数据" />
+            </div>
+          </el-card>
+        </el-tab-pane>
+
+        <el-tab-pane label="数据管理" name="dataManagement">
+          <!-- 数据管理页面 -->
+          <div class="data-management-section">
+            <el-card>
+              <template #header>
+                <span>数据管理</span>
+              </template>
+              <div class="data-actions">
+                <div class="action-grid">
+                  <el-button 
+                    type="primary" 
+                    size="large"
+                    @click="goToDataManagement"
+                  >
+                    <el-icon><Setting /></el-icon>
+                    打开数据管理
+                  </el-button>
+                  <el-button 
+                    type="success" 
+                    size="large"
+                    @click="exportAllData"
+                  >
+                    <el-icon><Download /></el-icon>
+                    快速导出数据
+                  </el-button>
+                </div>
+                <div class="data-info">
+                  <p>数据管理功能包括：</p>
+                  <ul>
+                    <li>导出所有数据到JSON文件</li>
+                    <li>从JSON文件导入数据</li>
+                    <li>查看数据统计信息</li>
+                    <li>清空所有数据（危险操作）</li>
+                  </ul>
+                </div>
+              </div>
+            </el-card>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
     </div>
 
     <!-- 添加用户对话框 -->
@@ -109,8 +333,18 @@
         </el-form-item>
         <el-form-item label="角色" prop="role">
           <el-select v-model="userForm.role" placeholder="请选择角色">
-            <el-option label="老师" value="teacher" />
-            <el-option label="管理员" value="admin" />
+            <el-option label="老师" value="teacher">
+              <div>
+                <div><strong>老师</strong></div>
+                <div style="font-size: 12px; color: #999;">负责教学工作，管理自己的学生和课程</div>
+              </div>
+            </el-option>
+            <el-option label="管理员" value="admin">
+              <div>
+                <div><strong>管理员</strong></div>
+                <div style="font-size: 12px; color: #999;">系统管理员，不参与具体教学</div>
+              </div>
+            </el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="邮箱">
@@ -177,19 +411,406 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 添加学生对话框 -->
+    <el-dialog 
+      v-model="addStudentDialogVisible" 
+      title="添加学生"
+      width="500px"
+    >
+      <el-form :model="studentForm" label-width="100px">
+        <el-form-item label="学生姓名" required>
+          <el-input v-model="studentForm.name" placeholder="请输入学生姓名" />
+        </el-form-item>
+        <el-form-item label="邮箱">
+          <el-input v-model="studentForm.email" placeholder="可选" />
+        </el-form-item>
+        <el-form-item label="总单词数">
+          <el-input-number v-model="studentForm.total_words" :min="0" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="已学单词数">
+          <el-input-number v-model="studentForm.learned_words" :min="0" :max="studentForm.total_words" style="width: 100%" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="addStudentDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitAddStudent">
+          添加
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 编辑学生对话框 -->
+    <el-dialog 
+      v-model="editStudentDialogVisible" 
+      title="编辑学生"
+      width="500px"
+    >
+      <el-form :model="editStudentForm" label-width="100px">
+        <el-form-item label="学生姓名" required>
+          <el-input v-model="editStudentForm.name" placeholder="请输入学生姓名" />
+        </el-form-item>
+        <el-form-item label="邮箱">
+          <el-input v-model="editStudentForm.email" placeholder="可选" />
+        </el-form-item>
+        <el-form-item label="总单词数">
+          <el-input-number v-model="editStudentForm.total_words" :min="0" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="已学单词数">
+          <el-input-number v-model="editStudentForm.learned_words" :min="0" :max="editStudentForm.total_words" style="width: 100%" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editStudentDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitEditStudent">
+          保存
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 编辑学生课时对话框 -->
+    <el-dialog 
+      v-model="editHoursDialogVisible" 
+      title="编辑学生课时"
+      width="450px"
+    >
+      <el-form :model="editHoursForm" label-width="120px">
+        <el-form-item label="学生姓名">
+          <el-input v-model="editHoursForm.name" disabled />
+        </el-form-item>
+        <el-form-item label="所属老师">
+          <el-input v-model="selectedTeacherName" disabled />
+        </el-form-item>
+        <el-form-item label="当前剩余课时">
+          <el-input :value="(editHoursForm.currentHours || 0).toFixed(1) + 'h'" disabled />
+        </el-form-item>
+        <el-form-item label="调整方式">
+          <el-radio-group v-model="hoursAdjustmentType">
+            <el-radio value="set">直接设置</el-radio>
+            <el-radio value="add">增加课时</el-radio>
+            <el-radio value="subtract">扣除课时</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item :label="getHoursAdjustmentLabel()">
+          <el-input-number 
+            v-model="hoursAdjustmentValue" 
+            :precision="1"
+            :step="0.5"
+            :min="hoursAdjustmentType === 'subtract' ? 0 : hoursAdjustmentType === 'set' ? 0 : 0"
+            :max="1000"
+            style="width: 100%"
+          />
+          <div style="font-size: 12px; color: #909399; margin-top: 5px;">
+            大课60分钟 = 1.0h，小课30分钟 = 0.5h
+          </div>
+        </el-form-item>
+        <el-form-item label="备注" v-if="hoursAdjustmentType !== 'set'">
+          <el-input 
+            v-model="hoursAdjustmentRemark" 
+            type="textarea" 
+            :rows="2" 
+            placeholder="请填写调整原因（可选）" 
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editHoursDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitHoursAdjustment" :loading="savingHours">
+          {{ getHoursSubmitText() }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 添加单词集对话框 -->
+    <el-dialog 
+      v-model="addWordSetDialogVisible" 
+      title="添加单词集"
+      width="500px"
+    >
+      <el-form :model="wordSetForm" label-width="100px">
+        <el-form-item label="单词集名称" required>
+          <el-input v-model="wordSetForm.name" placeholder="请输入单词集名称" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="wordSetForm.description" type="textarea" placeholder="可选" />
+        </el-form-item>
+        <el-form-item label="单词列表" required>
+          <el-input 
+            v-model="wordSetForm.wordsText" 
+            type="textarea" 
+            :rows="10"
+            placeholder="请输入单词列表，格式：英文单词 中文意思（每行一个）&#10;例如：&#10;apple 苹果&#10;banana 香蕉"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="addWordSetDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitAddWordSet">
+          添加
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 添加课程对话框 -->
+    <el-dialog 
+      v-model="addScheduleDialogVisible" 
+      title="添加课程"
+      width="600px"
+    >
+      <el-form :model="scheduleForm" label-width="100px">
+        <el-form-item label="选择学生" required>
+          <el-select v-model="scheduleForm.studentId" placeholder="请选择学生" style="width: 100%">
+            <el-option 
+              v-for="student in teacherStudents" 
+              :key="student.id" 
+              :label="student.name" 
+              :value="student.id" 
+            />
+          </el-select>
+        </el-form-item>
+        
+        <el-form-item label="选择单词集" required>
+          <el-select v-model="scheduleForm.wordSet" placeholder="请选择单词集" style="width: 100%">
+            <el-option 
+              v-for="set in teacherWordSets" 
+              :key="set.name" 
+              :label="set.name" 
+              :value="set.name" 
+            />
+          </el-select>
+        </el-form-item>
+        
+        <el-form-item label="课程类型" required>
+          <el-radio-group v-model="scheduleForm.type">
+            <el-radio value="learning">单词学习</el-radio>
+            <el-radio value="review">抗遗忘</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        
+        <el-form-item label="课程规模">
+          <el-radio-group v-model="scheduleForm.classType" @change="updateScheduleDuration">
+            <el-radio value="big">大课 (60分钟)</el-radio>
+            <el-radio value="small">小课 (30分钟)</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        
+        <el-form-item label="课程时长">
+          <el-input-number
+            v-model="scheduleForm.duration"
+            :min="15"
+            :max="120"
+            :step="15"
+            style="width: 100%"
+          />
+          <span style="color: #999; font-size: 12px; margin-left: 8px;">分钟</span>
+        </el-form-item>
+        
+        <el-form-item label="上课日期" required>
+          <el-date-picker
+            v-model="scheduleForm.date"
+            type="date"
+            placeholder="选择日期"
+            style="width: 100%"
+          />
+        </el-form-item>
+        
+        <el-form-item label="上课时间" required>
+          <el-select 
+            v-model="scheduleForm.time" 
+            placeholder="选择时间"
+            filterable
+            allow-create
+            style="width: 100%"
+          >
+            <el-option 
+              v-for="timeSlot in timeSlots" 
+              :key="timeSlot" 
+              :label="timeSlot" 
+              :value="timeSlot" 
+            />
+          </el-select>
+          <div class="form-help">
+            可选择预设时间或输入自定义时间（如：14:15）
+          </div>
+        </el-form-item>
+      </el-form>
+      
+      <template #footer>
+        <el-button @click="addScheduleDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitAddSchedule">
+          添加课程
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Excel导入对话框 -->
+    <el-dialog 
+      v-model="importWordsDialogVisible" 
+      title="导入Excel单词"
+      width="800px"
+    >
+      <div class="import-content">
+        <el-alert
+          title="导入说明"
+          description="Excel文件第一列必须是英文，第二列必须是中文。支持多个Sheet，每个Sheet会被识别为一个单词集。"
+          type="info"
+          :closable="false"
+          style="margin-bottom: 20px"
+        />
+        
+        <el-form label-width="100px">
+          <el-form-item label="选择文件" required>
+            <el-upload
+              ref="uploadRef"
+              :auto-upload="false"
+              :limit="1"
+              accept=".xlsx,.xls"
+              :on-change="handleFileChange"
+              :file-list="fileList"
+              :before-remove="handleFileRemove"
+            >
+              <el-button type="primary">
+                <el-icon><Upload /></el-icon>
+                选择Excel文件
+              </el-button>
+              <template #tip>
+                <div class="el-upload__tip">
+                  只能上传xlsx/xls文件，且不超过10MB
+                </div>
+              </template>
+            </el-upload>
+          </el-form-item>
+          
+          <!-- 显示解析结果 -->
+          <div v-if="excelSheets.length > 0" class="sheets-preview">
+            <h4>检测到的Sheet：</h4>
+            <div class="sheets-list">
+              <el-card 
+                v-for="(sheet, index) in excelSheets" 
+                :key="index"
+                style="margin-bottom: 15px"
+              >
+                <div class="sheet-header">
+                  <div class="sheet-info">
+                    <h5>{{ sheet.name }}</h5>
+                    <span class="word-count-badge">{{ sheet.wordCount }} 个单词</span>
+                  </div>
+                  <div class="sheet-actions">
+                    <el-input 
+                      v-model="sheet.customName" 
+                      placeholder="自定义单词集名称"
+                      style="width: 250px; margin-right: 10px"
+                    />
+                    <el-checkbox v-model="sheet.selected">导入</el-checkbox>
+                  </div>
+                </div>
+                
+                <!-- 预览前几个单词 -->
+                <div class="word-preview">
+                  <div 
+                    v-for="(word, wordIndex) in sheet.preview" 
+                    :key="wordIndex"
+                    class="preview-word"
+                  >
+                    <span class="english">{{ word.english }}</span>
+                    <span class="chinese">{{ word.chinese }}</span>
+                  </div>
+                  <div v-if="sheet.wordCount > 3" class="more-words">
+                    还有 {{ sheet.wordCount - 3 }} 个单词...
+                  </div>
+                </div>
+              </el-card>
+            </div>
+          </div>
+        </el-form>
+      </div>
+      
+      <template #footer>
+        <el-button @click="importWordsDialogVisible = false">取消</el-button>
+        <el-button 
+          type="primary" 
+          @click="importWordsFromExcel" 
+          :loading="importing"
+          :disabled="!hasSelectedSheets"
+        >
+          开始导入 ({{ selectedSheetsCount }} 个Sheet)
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElForm } from 'element-plus'
-import { Plus, Avatar, ArrowDown } from '@element-plus/icons-vue'
+import { Plus, Avatar, ArrowDown, Upload, Setting, Download, Delete } from '@element-plus/icons-vue'
+import * as XLSX from 'xlsx'
 import { useAuthStore } from '@/stores/auth'
+import { useStudentsStore } from '@/stores/students'
+import { useWordsStore } from '@/stores/words'
+import { useScheduleStore } from '@/stores/schedule'
+import tutorDB from '@/utils/localDatabase'
 import type { User } from '@/stores/auth'
+import type { Student } from '@/stores/students'
+import type { WordSet } from '@/stores/words'
+import type { Schedule } from '@/stores/schedule'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const studentsStore = useStudentsStore()
+const wordsStore = useWordsStore()
+const scheduleStore = useScheduleStore()
+
+// 标签页状态
+const activeTab = ref('users')
+const activeDataTab = ref('students')
+
+// 老师数据管理状态
+const selectedTeacherId = ref('')
+const selectedWordSet = ref('')
+
+// 老师数据
+const teacherStudents = ref<Student[]>([])
+const teacherWordSets = ref<WordSet[]>([])
+const teacherSchedules = ref<Schedule[]>([])
+
+// 计算属性
+const teachers = computed(() => {
+  // 只显示teacher角色的用户，排除管理员
+  return users.value.filter(user => user.role === 'teacher')
+})
+
+const hasSelectedSheets = computed(() => {
+  return excelSheets.value.some(sheet => sheet.selected)
+})
+
+const selectedSheetsCount = computed(() => {
+  return excelSheets.value.filter(sheet => sheet.selected).length
+})
+
+const groupedTeacherSchedules = computed(() => {
+  const groups: { date: string, schedules: Schedule[] }[] = []
+  const schedulesByDate: { [key: string]: Schedule[] } = {}
+  
+  teacherSchedules.value.forEach(schedule => {
+    if (!schedulesByDate[schedule.date]) {
+      schedulesByDate[schedule.date] = []
+    }
+    schedulesByDate[schedule.date].push(schedule)
+  })
+  
+  Object.keys(schedulesByDate)
+    .sort()
+    .forEach(date => {
+      groups.push({
+        date,
+        schedules: schedulesByDate[date].sort((a, b) => a.time.localeCompare(b.time))
+      })
+    })
+    
+  return groups
+})
 
 // 表单引用
 const userFormRef = ref<InstanceType<typeof ElForm>>()
@@ -292,8 +913,8 @@ const passwordRules = {
 }
 
 // 方法
-const loadUsers = () => {
-  users.value = authStore.getAllUsers()
+const loadUsers = async () => {
+  users.value = await authStore.getAllUsers()
 }
 
 const formatDate = (dateString: string) => {
@@ -345,7 +966,7 @@ const submitAddUser = async () => {
     if (result.success) {
       ElMessage.success(result.message)
       addUserDialogVisible.value = false
-      loadUsers()
+      await loadUsers()
     } else {
       ElMessage.error(result.message)
     }
@@ -442,11 +1063,713 @@ const deleteUser = async (user: User) => {
     if (result.success) {
       ElMessage.success(result.message)
       loadUsers()
+      // 如果删除的是当前选中的老师，清空选择
+      if (selectedTeacherId.value === user.id) {
+        selectedTeacherId.value = ''
+        clearTeacherData()
+      }
     } else {
       ElMessage.error(result.message)
     }
   } catch {
     // 用户取消删除
+  }
+}
+
+// 老师数据管理方法
+const loadTeacherData = async () => {
+  if (!selectedTeacherId.value) {
+    clearTeacherData()
+    return
+  }
+  
+  try {
+    // 加载老师的学生数据
+    teacherStudents.value = studentsStore.getStudentsByUserId(selectedTeacherId.value)
+    
+    // 加载老师的单词数据（使用全局单词库，但按用户过滤）
+    teacherWordSets.value = wordsStore.getWordSetsByUserId(selectedTeacherId.value)
+    console.log(`加载老师 ${selectedTeacherId.value} 的单词集:`, teacherWordSets.value)
+    console.log('第一个单词集的详细信息:', teacherWordSets.value[0])
+    console.log('第一个单词集的words长度:', teacherWordSets.value[0]?.words?.length)
+    
+    // 加载老师的日程数据
+    teacherSchedules.value = scheduleStore.getSchedulesByUserId(selectedTeacherId.value)
+  } catch (error) {
+    console.error('加载老师数据失败:', error)
+    ElMessage.error('加载老师数据失败')
+  }
+}
+
+const clearTeacherData = () => {
+  teacherStudents.value = []
+  teacherWordSets.value = []
+  teacherSchedules.value = []
+  selectedWordSet.value = ''
+}
+
+const getSelectedTeacherName = () => {
+  const teacher = teachers.value.find(t => t.id === selectedTeacherId.value)
+  return teacher ? teacher.displayName : ''
+}
+
+const selectWordSet = (wordSetName: string) => {
+  selectedWordSet.value = wordSetName
+}
+
+const getCurrentWords = () => {
+  const wordSet = teacherWordSets.value.find(ws => ws.name === selectedWordSet.value)
+  console.log(`获取单词集 "${selectedWordSet.value}" 的单词:`, wordSet?.words)
+  console.log('当前选中的单词集名称:', selectedWordSet.value)
+  console.log('所有可用的单词集:', teacherWordSets.value.map(ws => ws.name))
+  return wordSet?.words || []
+}
+
+// 学生管理状态
+const addStudentDialogVisible = ref(false)
+const editStudentDialogVisible = ref(false)
+const editHoursDialogVisible = ref(false)
+const savingHours = ref(false)
+
+const studentForm = reactive({
+  name: '',
+  email: '',
+  total_words: 0,
+  learned_words: 0
+})
+
+const editStudentForm = reactive({
+  id: 0,
+  name: '',
+  email: '',
+  total_words: 0,
+  learned_words: 0
+})
+
+// 课时编辑状态
+const editHoursForm = reactive({
+  id: 0,
+  name: '',
+  currentHours: 0
+})
+
+const hoursAdjustmentType = ref('set') // 'set', 'add', 'subtract'
+const hoursAdjustmentValue = ref(0)
+const hoursAdjustmentRemark = ref('')
+
+// 单词管理状态
+const addWordSetDialogVisible = ref(false)
+
+const wordSetForm = reactive({
+  name: '',
+  description: '',
+  wordsText: ''
+})
+
+// 日程管理状态
+const addScheduleDialogVisible = ref(false)
+
+// Excel导入状态
+const importWordsDialogVisible = ref(false)
+const importing = ref(false)
+const excelSheets = ref<ExcelSheet[]>([])
+const fileList = ref([])
+const selectedFile = ref<File | null>(null)
+
+// Excel Sheet 接口定义
+interface ExcelSheet {
+  name: string
+  customName: string
+  selected: boolean
+  wordCount: number
+  preview: Array<{ english: string; chinese: string }>
+  data: Array<{ english: string; chinese: string }>
+}
+
+const scheduleForm = reactive({
+  studentId: '',
+  wordSet: '',
+  type: 'learning',
+  date: '',
+  time: '',
+  duration: 60,
+  classType: 'big'
+})
+
+// 生成时间选项（6:00-22:00，每30分钟一个）
+const timeSlots = computed(() => {
+  const slots = []
+  for (let hour = 6; hour <= 22; hour++) {
+    slots.push(`${hour.toString().padStart(2, '0')}:00`)
+    if (hour < 22) {
+      slots.push(`${hour.toString().padStart(2, '0')}:30`)
+    }
+  }
+  return slots
+})
+
+// 学生管理方法
+const showAddStudentDialog = () => {
+  if (!selectedTeacherId.value) {
+    ElMessage.error('请先选择一个老师')
+    return
+  }
+  
+  Object.assign(studentForm, {
+    name: '',
+    email: '',
+    total_words: 0,
+    learned_words: 0
+  })
+  addStudentDialogVisible.value = true
+}
+
+const submitAddStudent = async () => {
+  if (!studentForm.name) {
+    ElMessage.error('请输入学生姓名')
+    return
+  }
+  
+  try {
+    const newStudent = {
+      id: Date.now(),
+      name: studentForm.name,
+      email: studentForm.email || '',
+      total_words: studentForm.total_words,
+      learned_words: studentForm.learned_words
+    }
+    
+    // 添加学生到选中老师的数据中
+    const currentStudents = studentsStore.getStudentsByUserId(selectedTeacherId.value)
+    currentStudents.push(newStudent)
+    
+    // 保存到localStorage
+    localStorage.setItem(`students_${selectedTeacherId.value}`, JSON.stringify(currentStudents))
+    localStorage.setItem(`backup_students_${selectedTeacherId.value}`, JSON.stringify(currentStudents))
+    
+    ElMessage.success('学生添加成功')
+    addStudentDialogVisible.value = false
+    await loadTeacherData()
+  } catch (error) {
+    console.error('添加学生失败:', error)
+    ElMessage.error('添加学生失败')
+  }
+}
+
+const editStudent = (student: Student) => {
+  Object.assign(editStudentForm, {
+    id: student.id,
+    name: student.name,
+    email: student.email || '',
+    total_words: student.total_words || 0,
+    learned_words: student.learned_words || 0
+  })
+  editStudentDialogVisible.value = true
+}
+
+const submitEditStudent = async () => {
+  if (!editStudentForm.name) {
+    ElMessage.error('请输入学生姓名')
+    return
+  }
+  
+  try {
+    const currentStudents = studentsStore.getStudentsByUserId(selectedTeacherId.value)
+    const studentIndex = currentStudents.findIndex(s => s.id === editStudentForm.id)
+    
+    if (studentIndex !== -1) {
+      currentStudents[studentIndex] = {
+        id: editStudentForm.id,
+        name: editStudentForm.name,
+        email: editStudentForm.email,
+        total_words: editStudentForm.total_words,
+        learned_words: editStudentForm.learned_words
+      }
+      
+      // 保存到localStorage
+      localStorage.setItem(`students_${selectedTeacherId.value}`, JSON.stringify(currentStudents))
+      localStorage.setItem(`backup_students_${selectedTeacherId.value}`, JSON.stringify(currentStudents))
+      
+      ElMessage.success('学生信息更新成功')
+      editStudentDialogVisible.value = false
+      await loadTeacherData()
+    }
+  } catch (error) {
+    console.error('更新学生信息失败:', error)
+    ElMessage.error('更新学生信息失败')
+  }
+}
+
+// 课时管理相关函数
+const editStudentHours = (student: Student) => {
+  Object.assign(editHoursForm, {
+    id: student.id,
+    name: student.name,
+    currentHours: student.remainingHours || 0
+  })
+  hoursAdjustmentType.value = 'set'
+  hoursAdjustmentValue.value = student.remainingHours || 0
+  hoursAdjustmentRemark.value = ''
+  editHoursDialogVisible.value = true
+}
+
+const getHoursAdjustmentLabel = () => {
+  switch (hoursAdjustmentType.value) {
+    case 'set': return '设置课时'
+    case 'add': return '增加课时'
+    case 'subtract': return '扣除课时'
+    default: return '调整课时'
+  }
+}
+
+const getHoursSubmitText = () => {
+  switch (hoursAdjustmentType.value) {
+    case 'set': return '确认设置'
+    case 'add': return '确认增加'
+    case 'subtract': return '确认扣除'
+    default: return '确认调整'
+  }
+}
+
+const getHoursClass = (hours: number) => {
+  if (!hours || hours <= 0) return 'hours-empty'
+  if (hours <= 1) return 'hours-low'
+  if (hours <= 5) return 'hours-medium'
+  return 'hours-high'
+}
+
+const selectedTeacherName = computed(() => {
+  const teacher = users.value.find(u => u.id === selectedTeacherId.value)
+  return teacher?.displayName || ''
+})
+
+const submitHoursAdjustment = async () => {
+  const value = hoursAdjustmentValue.value || 0
+  
+  if (value < 0) {
+    ElMessage.error('调整数值不能为负数')
+    return
+  }
+  
+  savingHours.value = true
+  
+  try {
+    // 计算新的课时值
+    let newHours = 0
+    const currentHours = editHoursForm.currentHours || 0
+    
+    switch (hoursAdjustmentType.value) {
+      case 'set':
+        newHours = value
+        break
+      case 'add':
+        newHours = currentHours + value
+        break
+      case 'subtract':
+        newHours = Math.max(0, currentHours - value)
+        break
+      default:
+        newHours = currentHours
+    }
+    
+    // 更新学生的课时信息
+    const currentStudents = studentsStore.getStudentsByUserId(selectedTeacherId.value)
+    const studentIndex = currentStudents.findIndex(s => s.id === editHoursForm.id)
+    
+    if (studentIndex !== -1) {
+      const updatedStudent = {
+        ...currentStudents[studentIndex],
+        remainingHours: newHours
+      }
+      
+      // 使用studentsStore的updateStudent方法（需要先切换到对应用户）
+      const originalStudent = currentStudents[studentIndex]
+      const userStudents = studentsStore.getStudentsByUserId(selectedTeacherId.value)
+      const updatedStudents = userStudents.map(s => 
+        s.id === editHoursForm.id ? { ...s, remainingHours: newHours } : s
+      )
+      
+      // 直接更新localStorage
+      localStorage.setItem(`students_${selectedTeacherId.value}`, JSON.stringify(updatedStudents))
+      
+      // 重新加载数据
+      await loadTeacherData()
+      
+      const actionText = hoursAdjustmentType.value === 'set' ? '设置' : 
+                        hoursAdjustmentType.value === 'add' ? '增加' : '扣除'
+      ElMessage.success(`学生课时${actionText}成功：${originalStudent.name} 现剩余 ${newHours.toFixed(1)}h`)
+      
+      editHoursDialogVisible.value = false
+    } else {
+      ElMessage.error('找不到对应的学生信息')
+    }
+    
+  } catch (error) {
+    console.error('课时调整失败:', error)
+    ElMessage.error('课时调整失败')
+  } finally {
+    savingHours.value = false
+  }
+}
+
+const deleteStudent = async (student: Student) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除学生 "${student.name}" 吗？`,
+      '确认删除',
+      { type: 'warning' }
+    )
+    
+    studentsStore.deleteStudentForUser(selectedTeacherId.value, student.id)
+    loadTeacherData()
+    ElMessage.success('学生删除成功')
+  } catch {
+    // 用户取消
+  }
+}
+
+// 单词管理方法
+const showAddWordSetDialog = () => {
+  if (!selectedTeacherId.value) {
+    ElMessage.error('请先选择一个老师')
+    return
+  }
+  
+  Object.assign(wordSetForm, {
+    name: '',
+    description: '',
+    wordsText: ''
+  })
+  addWordSetDialogVisible.value = true
+}
+
+const submitAddWordSet = async () => {
+  if (!wordSetForm.name || !wordSetForm.wordsText) {
+    ElMessage.error('请输入单词集名称和单词列表')
+    return
+  }
+  
+  try {
+    // 解析单词列表
+    const words = wordSetForm.wordsText.trim().split('\n').map((line, index) => {
+      const parts = line.trim().split(/\s+/)
+      if (parts.length >= 2) {
+        return {
+          id: Date.now() + index,
+          english: parts[0],
+          chinese: parts.slice(1).join(' ')
+        }
+      }
+      return null
+    }).filter(word => word !== null)
+    
+    if (words.length === 0) {
+      ElMessage.error('请输入有效的单词列表')
+      return
+    }
+    
+    const newWordSet = {
+      name: wordSetForm.name,
+      description: wordSetForm.description || '',
+      words,
+      created_at: new Date().toISOString().split('T')[0],
+      userId: selectedTeacherId.value
+    }
+    
+    // 获取当前用户的单词集（返回新数组，避免直接修改原数组）
+    const currentWordSets = [...wordsStore.getWordSetsByUserId(selectedTeacherId.value)]
+    currentWordSets.push(newWordSet)
+    
+    console.log('手动添加 - 保存前的单词集:', currentWordSets)
+    
+    // 保存到用户特定的localStorage
+    localStorage.setItem(`wordSets_${selectedTeacherId.value}`, JSON.stringify(currentWordSets))
+    localStorage.setItem(`backup_wordSets_${selectedTeacherId.value}`, JSON.stringify(currentWordSets))
+    
+    ElMessage.success('单词集添加成功')
+    addWordSetDialogVisible.value = false
+    await loadTeacherData()
+  } catch (error) {
+    console.error('添加单词集失败:', error)
+    ElMessage.error('添加单词集失败')
+  }
+}
+
+// Excel导入方法
+const showImportWordsDialog = () => {
+  if (!selectedTeacherId.value) {
+    ElMessage.error('请先选择一个老师')
+    return
+  }
+  
+  fileList.value = []
+  selectedFile.value = null
+  excelSheets.value = []
+  importWordsDialogVisible.value = true
+}
+
+const handleFileChange = async (file: any) => {
+  selectedFile.value = file.raw
+  
+  try {
+    const arrayBuffer = await file.raw.arrayBuffer()
+    const workbook = XLSX.read(arrayBuffer)
+    
+    excelSheets.value = []
+    
+    // 解析每个Sheet
+    workbook.SheetNames.forEach(sheetName => {
+      const worksheet = workbook.Sheets[sheetName]
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+      
+      // 过滤空行并提取单词数据
+      const wordData: Array<{ english: string; chinese: string }> = []
+      
+      for (let i = 0; i < jsonData.length; i++) {
+        const row = jsonData[i] as any[]
+        if (row && row.length >= 2 && row[0] && row[1]) {
+          const english = String(row[0]).trim()
+          const chinese = String(row[1]).trim()
+          
+          if (english && chinese) {
+            wordData.push({ english, chinese })
+          }
+        }
+      }
+      
+      if (wordData.length > 0) {
+        excelSheets.value.push({
+          name: sheetName,
+          customName: sheetName,
+          selected: true,
+          wordCount: wordData.length,
+          preview: wordData.slice(0, 3),
+          data: wordData
+        })
+      }
+    })
+    
+    if (excelSheets.value.length === 0) {
+      ElMessage.error('Excel文件中没有找到有效的单词数据')
+    } else {
+      ElMessage.success(`成功解析 ${excelSheets.value.length} 个Sheet`)
+    }
+    
+  } catch (error) {
+    ElMessage.error('解析Excel文件失败，请检查文件格式')
+    console.error('Excel解析错误:', error)
+  }
+}
+
+const handleFileRemove = () => {
+  selectedFile.value = null
+  excelSheets.value = []
+}
+
+const importWordsFromExcel = async () => {
+  if (!selectedFile.value) {
+    ElMessage.error('请选择文件')
+    return
+  }
+  
+  importing.value = true
+  
+  try {
+    const selectedSheets = excelSheets.value.filter(sheet => sheet.selected)
+    
+    if (selectedSheets.length === 0) {
+      ElMessage.error('请至少选择一个Sheet导入')
+      return
+    }
+    
+    const allImportedWords: any[] = []
+    
+    for (const sheet of selectedSheets) {
+      const wordSetName = sheet.customName || sheet.name
+      
+      // 将sheet数据转换为WordSet格式
+      const newWordSet = {
+        name: wordSetName,
+        description: `从 Excel 导入（${sheet.name}）`,
+        words: sheet.data.map((wordData, index) => ({
+          id: Date.now() + index,
+          english: wordData.english,
+          chinese: wordData.chinese
+        })),
+        created_at: new Date().toISOString().split('T')[0],
+        userId: selectedTeacherId.value
+      }
+      
+      console.log(`创建新单词集 "${wordSetName}":`, newWordSet)
+      console.log(`新单词集的words长度:`, newWordSet.words.length)
+      console.log(`sheet.data内容:`, sheet.data)
+      
+      allImportedWords.push(newWordSet)
+    }
+    
+    // 获取当前用户的单词集（返回新数组，避免直接修改原数组）
+    const currentUserWordSets = [...wordsStore.getWordSetsByUserId(selectedTeacherId.value)]
+    currentUserWordSets.push(...allImportedWords)
+    
+    console.log('Excel导入 - 新导入的单词集数据:', allImportedWords)
+    console.log('Excel导入 - 新导入的第一个单词集的words:', allImportedWords[0]?.words)
+    console.log('Excel导入 - 保存前的全部单词集:', currentUserWordSets)
+    console.log('Excel导入 - 最后一个(新导入)单词集的words:', currentUserWordSets[currentUserWordSets.length - 1]?.words)
+    
+    // 保存到用户特定的localStorage
+    localStorage.setItem(`wordSets_${selectedTeacherId.value}`, JSON.stringify(currentUserWordSets))
+    localStorage.setItem(`backup_wordSets_${selectedTeacherId.value}`, JSON.stringify(currentUserWordSets))
+    
+    const totalWords = allImportedWords.reduce((sum, ws) => sum + ws.words.length, 0)
+    ElMessage.success(`成功导入 ${totalWords} 个单词，来自 ${selectedSheets.length} 个Sheet`)
+    importWordsDialogVisible.value = false
+    await loadTeacherData()
+    
+  } catch (error) {
+    ElMessage.error('导入失败')
+    console.error('导入错误:', error)
+  } finally {
+    importing.value = false
+  }
+}
+
+const deleteWordSet = async (wordSet: any) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除单词集 "${wordSet.name}" 吗？这将删除该单词集下的所有 ${wordSet.words?.length || 0} 个单词。`,
+      '确认删除单词集',
+      {
+        type: 'warning',
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消'
+      }
+    )
+    
+    // 从当前用户的单词集中删除
+    const currentWordSets = [...wordsStore.getWordSetsByUserId(selectedTeacherId.value)]
+    const filteredWordSets = currentWordSets.filter(ws => ws.name !== wordSet.name)
+    
+    // 保存到localStorage
+    localStorage.setItem(`wordSets_${selectedTeacherId.value}`, JSON.stringify(filteredWordSets))
+    localStorage.setItem(`backup_wordSets_${selectedTeacherId.value}`, JSON.stringify(filteredWordSets))
+    
+    // 如果删除的是当前选中的单词集，清空选择
+    if (selectedWordSet.value === wordSet.name) {
+      selectedWordSet.value = ''
+    }
+    
+    ElMessage.success(`单词集 "${wordSet.name}" 已删除`)
+    await loadTeacherData()
+  } catch {
+    // 用户取消删除
+  }
+}
+
+const importWords = () => {
+  showImportWordsDialog()
+}
+
+// 日程管理方法
+const showAddScheduleDialog = () => {
+  if (!selectedTeacherId.value) {
+    ElMessage.error('请先选择一个老师')
+    return
+  }
+  
+  Object.assign(scheduleForm, {
+    studentId: '',
+    wordSet: '',
+    type: 'learning',
+    date: '',
+    time: '',
+    duration: 60,
+    classType: 'big'
+  })
+  addScheduleDialogVisible.value = true
+}
+
+const updateScheduleDuration = () => {
+  if (scheduleForm.classType === 'big') {
+    scheduleForm.duration = 60
+  } else if (scheduleForm.classType === 'small') {
+    scheduleForm.duration = 30
+  }
+}
+
+const submitAddSchedule = async () => {
+  if (!scheduleForm.studentId || !scheduleForm.wordSet || !scheduleForm.date || !scheduleForm.time) {
+    ElMessage.error('请填写完整的课程信息')
+    return
+  }
+  
+  try {
+    const student = teacherStudents.value.find(s => s.id === parseInt(scheduleForm.studentId))
+    const dateStr = new Date(scheduleForm.date).toISOString().split('T')[0]
+    const timeStr = scheduleForm.time
+    
+    const newSchedule = {
+      id: Date.now(),
+      time: timeStr,
+      date: dateStr,
+      wordSet: scheduleForm.wordSet,
+      studentName: student?.name || '',
+      studentId: parseInt(scheduleForm.studentId),
+      type: scheduleForm.type as 'learning' | 'review',
+      duration: scheduleForm.duration,
+      classType: scheduleForm.classType as 'big' | 'small',
+      completed: false,
+      created_at: new Date().toISOString()
+    }
+    
+    // 添加课程到选中老师的数据中
+    const currentSchedules = scheduleStore.getSchedulesByUserId(selectedTeacherId.value)
+    currentSchedules.push(newSchedule)
+    
+    // 保存到localStorage
+    localStorage.setItem(`schedule_${selectedTeacherId.value}`, JSON.stringify(currentSchedules))
+    localStorage.setItem(`backup_schedule_${selectedTeacherId.value}`, JSON.stringify(currentSchedules))
+    
+    ElMessage.success('课程添加成功')
+    addScheduleDialogVisible.value = false
+    await loadTeacherData()
+  } catch (error) {
+    console.error('添加课程失败:', error)
+    ElMessage.error('添加课程失败')
+  }
+}
+
+const editSchedule = (schedule: Schedule) => {
+  ElMessage.info('编辑课程功能开发中...')
+}
+
+const deleteSchedule = async (schedule: Schedule) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除这个课程安排吗？`,
+      '确认删除',
+      { type: 'warning' }
+    )
+    
+    scheduleStore.deleteScheduleForUser(selectedTeacherId.value, schedule.id)
+    loadTeacherData()
+    ElMessage.success('课程删除成功')
+  } catch {
+    // 用户取消
+  }
+}
+
+// 数据管理方法
+const goToDataManagement = () => {
+  router.push('/data-management')
+}
+
+const exportAllData = async () => {
+  try {
+    await tutorDB.backupToFile()
+    ElMessage.success('数据导出成功！')
+  } catch (error) {
+    console.error('数据导出失败:', error)
+    ElMessage.error('数据导出失败')
   }
 }
 
@@ -517,6 +1840,12 @@ onMounted(() => {
   align-items: center;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
 .card-header span {
   font-size: 18px;
   font-weight: 600;
@@ -555,5 +1884,367 @@ onMounted(() => {
     gap: 15px;
     align-items: flex-start;
   }
+}
+
+/* 老师数据管理样式 */
+.admin-tabs {
+  margin-top: 20px;
+}
+
+.teacher-data-management {
+  margin-bottom: 30px;
+}
+
+.data-tabs {
+  margin-top: 20px;
+}
+
+.data-section {
+  padding: 20px 0;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.section-header span {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.section-header .el-button-group,
+.section-header div {
+  display: flex;
+  gap: 10px;
+}
+
+.no-teacher-selected {
+  padding: 60px 0;
+  text-align: center;
+}
+
+/* 单词管理样式 */
+.words-content {
+  display: flex;
+  gap: 20px;
+  min-height: 400px;
+}
+
+.word-sets-panel {
+  flex: 0 0 300px;
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.word-sets-panel h3 {
+  margin: 0 0 15px 0;
+  color: #303133;
+  font-size: 16px;
+}
+
+.word-sets {
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.word-set-item {
+  padding: 12px 15px;
+  margin-bottom: 8px;
+  background: white;
+  border-radius: 6px;
+  transition: all 0.3s;
+  border: 2px solid transparent;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.word-set-content {
+  flex: 1;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.delete-btn {
+  margin-left: 10px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.word-set-item:hover {
+  background: #f0f9ff;
+  border-color: #409eff;
+}
+
+.word-set-item:hover .delete-btn {
+  opacity: 1;
+}
+
+.word-set-item.active {
+  background: #409eff;
+  color: white;
+  border-color: #409eff;
+}
+
+.word-count {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.words-panel {
+  flex: 1;
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.words-panel h3 {
+  margin: 0 0 15px 0;
+  color: #303133;
+  font-size: 16px;
+}
+
+.words-list {
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.word-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 15px;
+  margin-bottom: 8px;
+  background: white;
+  border-radius: 6px;
+  border-left: 4px solid #409eff;
+}
+
+.word-item strong {
+  color: #303133;
+}
+
+.word-item span {
+  color: #606266;
+}
+
+/* 日程管理样式 */
+.schedule-list {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.date-group {
+  margin-bottom: 20px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.date-header {
+  background: #f5f7fa;
+  padding: 15px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.date-text {
+  font-weight: 600;
+  color: #303133;
+}
+
+.course-count {
+  color: #909399;
+  font-size: 14px;
+}
+
+.schedule-items {
+  background: white;
+}
+
+.schedule-item {
+  display: flex;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.schedule-item:last-child {
+  border-bottom: none;
+}
+
+.schedule-time {
+  font-weight: bold;
+  color: #409eff;
+  min-width: 80px;
+  margin-right: 20px;
+}
+
+.schedule-content {
+  flex: 1;
+}
+
+.schedule-title {
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 5px;
+}
+
+.schedule-student {
+  color: #606266;
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+.schedule-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* 数据管理样式 */
+.data-management-section {
+  padding: 20px 0;
+}
+
+.data-actions {
+  padding: 20px 0;
+}
+
+.action-grid {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.action-grid .el-button {
+  flex: 1;
+  height: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.data-info {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  border-left: 4px solid #409eff;
+}
+
+.data-info p {
+  margin: 0 0 10px 0;
+  font-weight: 600;
+  color: #303133;
+}
+
+.data-info ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.data-info li {
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+/* 表单帮助文本样式 */
+.form-help {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+}
+
+/* Excel导入相关样式 */
+.sheets-preview {
+  margin-top: 20px;
+}
+
+.sheets-preview h4 {
+  margin: 0 0 15px 0;
+  color: #303133;
+}
+
+.sheet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.sheet-info h5 {
+  margin: 0 0 5px 0;
+  color: #303133;
+}
+
+.word-count-badge {
+  background: #e6f7ff;
+  color: #1890ff;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.sheet-actions {
+  display: flex;
+  align-items: center;
+}
+
+.word-preview {
+  background: #f9f9f9;
+  padding: 10px;
+  border-radius: 4px;
+}
+
+.preview-word {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 5px;
+}
+
+.preview-word .english {
+  font-weight: 600;
+  color: #303133;
+  min-width: 120px;
+}
+
+.preview-word .chinese {
+  color: #606266;
+}
+
+.more-words {
+  color: #909399;
+  font-size: 12px;
+  margin-top: 10px;
+}
+
+/* 剩余时长颜色样式 */
+.hours-empty {
+  color: #f56c6c;
+  font-weight: bold;
+}
+
+.hours-low {
+  color: #e6a23c;
+  font-weight: bold;
+}
+
+.hours-medium {
+  color: #409eff;
+  font-weight: bold;
+}
+
+.hours-high {
+  color: #67c23a;
+  font-weight: bold;
 }
 </style>

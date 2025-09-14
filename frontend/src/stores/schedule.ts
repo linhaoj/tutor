@@ -10,6 +10,8 @@ export interface Schedule {
   studentId: number
   wordSet: string
   type: 'learning' | 'review'
+  duration: number // 课程持续时间（分钟）
+  classType: 'big' | 'small' // 大课(60分钟) 或 小课(30分钟)
   completed?: boolean
   created_at?: string
 }
@@ -161,6 +163,43 @@ export const useScheduleStore = defineStore('schedule', () => {
     expandedStates.value = loadExpandedStatesFromStorage()
   }
 
+  // 管理员专用：跨用户操作方法
+  const getSchedulesByUserId = (userId: string): Schedule[] => {
+    try {
+      const saved = localStorage.getItem(`schedule_${userId}`)
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  }
+
+  const deleteScheduleForUser = (userId: string, scheduleId: number) => {
+    const userSchedules = getSchedulesByUserId(userId)
+    const updatedSchedules = userSchedules.filter(s => s.id !== scheduleId)
+    localStorage.setItem(`schedule_${userId}`, JSON.stringify(updatedSchedules))
+  }
+
+  // 获取指定用户的按日期分组的日程
+  const getGroupedSchedulesByUserId = (userId: string): DateGroup[] => {
+    const userSchedules = getSchedulesByUserId(userId)
+    const groups: Record<string, Schedule[]> = {}
+    
+    userSchedules.forEach(schedule => {
+      if (!groups[schedule.date]) {
+        groups[schedule.date] = []
+      }
+      groups[schedule.date].push(schedule)
+    })
+
+    return Object.keys(groups)
+      .sort() // 按日期排序
+      .map(date => ({
+        date,
+        schedules: groups[date].sort((a, b) => a.time.localeCompare(b.time)), // 按时间排序
+        expanded: isDateGroupExpanded(date)
+      }))
+  }
+
   return {
     schedules,
     expandedStates,
@@ -174,6 +213,9 @@ export const useScheduleStore = defineStore('schedule', () => {
     isDateGroupExpanded,
     getGroupedSchedules,
     getTodayReviewCount,
-    reloadUserData
+    reloadUserData,
+    getSchedulesByUserId,
+    deleteScheduleForUser,
+    getGroupedSchedulesByUserId
   }
 })

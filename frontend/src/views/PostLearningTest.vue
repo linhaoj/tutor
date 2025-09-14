@@ -137,13 +137,19 @@ import { useWordsStore } from '@/stores/words'
 import { useStudentsStore } from '@/stores/students'
 import { useLearningProgressStore } from '@/stores/learningProgress'
 import { useAntiForgetSessionStore } from '@/stores/antiForgetSession'
+import { useAntiForgetStore } from '@/stores/antiForget'
+import { useAuthStore } from '@/stores/auth'
+import { useScheduleStore } from '@/stores/schedule'
 
 const route = useRoute()
 const router = useRouter()
 const wordsStore = useWordsStore()
 const studentsStore = useStudentsStore()
 const progressStore = useLearningProgressStore()
-const antiForgetStore = useAntiForgetSessionStore()
+const antiForgetSessionStore = useAntiForgetSessionStore()
+const antiForgetStore = useAntiForgetStore()
+const authStore = useAuthStore()
+const scheduleStore = useScheduleStore()
 
 // 单词接口
 interface PostTestWord {
@@ -240,6 +246,44 @@ const endPracticeAndCreateAntiForget = () => {
   
   // 创建抗遗忘任务（内部会自动记录通过的单词）
   createAntiForgetTasks()
+  
+  // 标记当前课程为已完成
+  markCourseAsCompleted()
+}
+
+const markCourseAsCompleted = () => {
+  try {
+    const scheduleIdStr = sessionStorage.getItem('currentScheduleId')
+    const teacherId = route.query.teacherId as string
+    const studentId = parseInt(route.params.studentId as string)
+    
+    if (scheduleIdStr && teacherId && studentId) {
+      const scheduleId = parseInt(scheduleIdStr)
+      
+      // 获取课程信息来确定扣减时长
+      const schedule = scheduleStore.getSchedulesByUserId(teacherId).find(s => s.id === scheduleId)
+      if (schedule) {
+        // 根据课程类型扣减时长：大课(60分钟) = 1.0h，小课(30分钟) = 0.5h
+        const hoursToDeduct = schedule.classType === 'big' ? 1.0 : 0.5
+        
+        // 扣减学生课程时长
+        const success = studentsStore.deductStudentHours(studentId, hoursToDeduct, teacherId)
+        if (success) {
+          console.log(`学生课程时长已扣减: ${hoursToDeduct}h (${schedule.classType === 'big' ? '大课' : '小课'})`)
+        } else {
+          console.warn('扣减学生课程时长失败')
+        }
+      }
+      
+      // 标记课程为已完成
+      scheduleStore.completeSchedule(scheduleId)
+      console.log('课程已标记为完成:', scheduleId)
+    } else {
+      console.warn('缺少课程完成所需信息', { scheduleIdStr, teacherId, studentId })
+    }
+  } catch (error) {
+    console.error('标记课程完成失败:', error)
+  }
 }
 
 const updateLearningProgress = () => {
@@ -316,12 +360,12 @@ const recordPassedWordsForAntiForget = () => {
   }))
   
   // 添加到抗遗忘会话
-  antiForgetStore.addPassedWordsToSession(studentId, wordSet, passedWordsData)
+  antiForgetSessionStore.addPassedWordsToSession(studentId, wordSet, passedWordsData)
   
   console.log(`已将 ${passedWords.value.length} 个通过的单词记录到抗遗忘会话中`)
   
   // 验证是否成功添加
-  const currentSession = antiForgetStore.getCurrentSession(studentId)
+  const currentSession = antiForgetSessionStore.getCurrentSession(studentId)
   console.log('当前会话单词数:', currentSession?.words.length)
 }
 
@@ -337,7 +381,7 @@ const createAntiForgetTasks = async () => {
   recordPassedWordsForAntiForget()
   
   // 获取当前会话（不要立即完成，先让用户看到正确的单词数量）
-  const currentSession = antiForgetStore.getCurrentSession(studentId)
+  const currentSession = antiForgetSessionStore.getCurrentSession(studentId)
   
   if (!currentSession || currentSession.words.length === 0) {
     ElMessage.warning('没有找到需要创建抗遗忘的单词')
@@ -354,7 +398,7 @@ const createAntiForgetTasks = async () => {
     }
     
     // 现在完成会话并获取所有累积的单词
-    const completedSession = antiForgetStore.completeSession(studentId)
+    const completedSession = antiForgetSessionStore.completeSession(studentId)
     
     if (!completedSession) {
       ElMessage.error('完成会话时出现错误')
@@ -374,7 +418,8 @@ const createAntiForgetTasks = async () => {
     
   } catch (error) {
     console.error('创建抗遗忘任务失败:', error)
-    ElMessage.error('创建抗遗忘任务失败，请重试')
+    console.error('错误详情:', error.message, error.stack)
+    ElMessage.error(`创建抗遗忘任务失败: ${error.message || '未知错误'}`)
   }
 }
 
@@ -389,7 +434,7 @@ const promptForAntiForgetTime = (): Promise<string | null> => {
       }
     }
 
-    const currentSession = antiForgetStore.getCurrentSession(parseInt(route.params.studentId as string))
+    const currentSession = antiForgetSessionStore.getCurrentSession(parseInt(route.params.studentId as string))
     const wordsCount = currentSession?.words.length || 0
 
     // 创建HTML字符串作为message
@@ -440,6 +485,33 @@ const promptForAntiForgetTime = (): Promise<string | null> => {
   })
 }
 
+// 获取主要的单词集名称
+const getMainWordSetName = (words: any[]) => {
+  if (!words || words.length === 0) {
+    return '未知单词集'
+  }
+  
+  // 统计各个单词集的单词数量
+  const wordSetCounts = {}
+  words.forEach(word => {
+    const wordSetName = word.wordSetName || '未知单词集'
+    wordSetCounts[wordSetName] = (wordSetCounts[wordSetName] || 0) + 1
+  })
+  
+  // 找到单词数量最多的单词集
+  let maxCount = 0
+  let mainWordSet = '未知单词集'
+  
+  for (const [wordSetName, count] of Object.entries(wordSetCounts)) {
+    if (count > maxCount) {
+      maxCount = count
+      mainWordSet = wordSetName
+    }
+  }
+  
+  return mainWordSet
+}
+
 const createAntiForgetSchedule = async (session: any, time: string) => {
   try {
     const { useScheduleStore } = await import('@/stores/schedule')
@@ -450,11 +522,36 @@ const createAntiForgetSchedule = async (session: any, time: string) => {
     
     const today = new Date()
     const studentId = parseInt(route.params.studentId as string)
-    const student = studentsStore.students.find(s => s.id === studentId)
+    
+    // 使用当前用户的权限获取学生数据
+    const currentUser = authStore.currentUser
+    if (!currentUser) {
+      throw new Error('用户未登录')
+    }
+    
+    // 获取该老师的所有学生
+    const userStudents = studentsStore.getStudentsByUserId(currentUser.id)
+    const student = userStudents.find(s => s.id === studentId)
     
     if (!student) {
       throw new Error('找不到学生信息')
     }
+    
+    // 创建抗遗忘复习会话，使用学习会话中的单词数据
+    const sessionWords = session.words.map(word => ({
+      id: word.id,
+      english: word.english,
+      chinese: word.chinese
+    }))
+    
+    const antiForgetSessionId = antiForgetStore.createAntiForgetSession(
+      studentId,
+      getMainWordSetName(session.words),
+      currentUser.id,
+      sessionWords
+    )
+    
+    console.log(`已创建抗遗忘复习会话，会话ID: ${antiForgetSessionId}，单词数: ${sessionWords.length}`)
     
     // 为每个抗遗忘日期创建课程
     antiForgetDays.forEach(dayOffset => {
@@ -469,8 +566,10 @@ const createAntiForgetSchedule = async (session: any, time: string) => {
         time: time,
         studentName: student.name,
         studentId: studentId,
-        wordSet: session.words.length > 1 ? '混合单词集' : (session.words[0]?.wordSetName || '未知单词集'),
+        wordSet: getMainWordSetName(session.words),
         type: 'review' as const, // 抗遗忘课程类型
+        duration: 30, // 抗遗忘课程默认30分钟
+        classType: 'small' as const, // 抗遗忘课程默认小课
         completed: false
       }
       
@@ -481,6 +580,7 @@ const createAntiForgetSchedule = async (session: any, time: string) => {
     
   } catch (error) {
     console.error('创建抗遗忘日程失败:', error)
+    console.error('创建日程错误详情:', error.message, error.stack)
     throw error
   }
 }
@@ -818,7 +918,14 @@ const drawInfoTable = (doc: any, yStart: number, totalWords: number) => {
   
   // 获取学生姓名
   const studentId = parseInt(route.params.studentId as string)
-  const student = studentsStore.students.find(s => s.id === studentId)
+  const currentUser = authStore.currentUser
+  if (!currentUser) {
+    ElMessage.error('用户未登录')
+    return
+  }
+  
+  const userStudents = studentsStore.getStudentsByUserId(currentUser.id)
+  const student = userStudents.find(s => s.id === studentId)
   const studentName = student ? student.name : '未知学生'
   
   // 填写信息
@@ -890,9 +997,13 @@ onMounted(() => {
   // 获取学生信息
   const studentId = parseInt(route.params.studentId as string)
   if (studentId) {
-    const student = studentsStore.students.find(s => s.id === studentId)
-    if (student) {
-      studentName.value = student.name
+    const currentUser = authStore.currentUser
+    if (currentUser) {
+      const userStudents = studentsStore.getStudentsByUserId(currentUser.id)
+      const student = userStudents.find(s => s.id === studentId)
+      if (student) {
+        studentName.value = student.name
+      }
     }
   }
   
