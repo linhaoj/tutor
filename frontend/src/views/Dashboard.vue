@@ -475,7 +475,12 @@ const addCourse = async () => {
   
   try {
     const student = students.value.find(s => s.id === parseInt(courseForm.studentId))
-    const dateStr = new Date(courseForm.date).toISOString().split('T')[0]
+    // 使用本地时区格式化日期，避免时区转换问题
+    const dateStr = courseForm.date instanceof Date
+      ? courseForm.date.getFullYear() + '-' +
+        String(courseForm.date.getMonth() + 1).padStart(2, '0') + '-' +
+        String(courseForm.date.getDate()).padStart(2, '0')
+      : courseForm.date
     const timeStr = courseForm.time
     
     const newSchedule = {

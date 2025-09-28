@@ -47,7 +47,17 @@
           >
             <div class="word-content">
               <div class="english">{{ word.english }}</div>
-              <div class="chinese">{{ word.chinese }}</div>
+            </div>
+            <div class="word-actions">
+              <el-button
+                type="primary"
+                :icon="VideoPlay"
+                size="small"
+                circle
+                @click.stop="playPronunciation(word.english)"
+                class="pronunciation-btn"
+                title="播放发音"
+              />
             </div>
             <div class="selection-indicator" v-if="selectedKnownWords.includes(index)">
               <el-icon class="check-icon"><Check /></el-icon>
@@ -66,9 +76,8 @@
           </div>
           
           <div class="action-buttons">
-            <el-button @click="goBack" size="large">返回</el-button>
-            <el-button 
-              type="primary" 
+            <el-button
+              type="primary"
               size="large"
               @click="confirmSelection"
               :loading="processing"
@@ -86,10 +95,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Check } from '@element-plus/icons-vue'
+import { Check, VideoPlay } from '@element-plus/icons-vue'
 import { useWordsStore } from '@/stores/words'
 import { useStudentsStore } from '@/stores/students'
 import { useLearningProgressStore } from '@/stores/learningProgress'
+import { useUIStore } from '@/stores/ui'
 import CourseTimer from '@/components/CourseTimer.vue'
 
 interface Word {
@@ -103,6 +113,7 @@ const router = useRouter()
 const wordsStore = useWordsStore()
 const studentsStore = useStudentsStore()
 const progressStore = useLearningProgressStore()
+const uiStore = useUIStore()
 
 // 路由参数
 const studentId = ref<number>(parseInt(route.params.studentId as string))
@@ -157,6 +168,29 @@ const getAvailableReplacementWords = (excludeWords: Word[]): Word[] => {
     const stage = wordProgress ? wordProgress.currentStage : 0
     return stage >= 0 && stage <= 6
   })
+}
+
+// 播放单词发音
+const playPronunciation = (word: string) => {
+  try {
+    // 使用 Web Speech API 播放发音
+    if ('speechSynthesis' in window) {
+      // 停止当前播放
+      window.speechSynthesis.cancel()
+
+      const utterance = new SpeechSynthesisUtterance(word)
+      utterance.lang = 'en-US' // 设置英语发音
+      utterance.rate = 0.8 // 稍慢的语速
+      utterance.volume = 1.0
+
+      window.speechSynthesis.speak(utterance)
+    } else {
+      ElMessage.warning('您的浏览器不支持语音播放功能')
+    }
+  } catch (error) {
+    console.error('播放发音失败:', error)
+    ElMessage.error('播放发音失败')
+  }
 }
 
 // 切换单词选择状态
@@ -264,17 +298,6 @@ const startLearning = () => {
   })
 }
 
-// 返回
-const goBack = () => {
-  router.push({
-    name: 'StudyHome',
-    params: { studentId: studentId.value },
-    query: { 
-      wordSet: wordSetName.value,
-      teacherId: teacherId.value
-    }
-  })
-}
 
 // 初始化单词列表
 const initializeWords = () => {
@@ -289,7 +312,15 @@ const initializeWords = () => {
 
     if (!allWords || allWords.length === 0) {
       ElMessage.error('找不到单词集数据')
-      goBack()
+      uiStore.exitCourseMode()
+      router.push({
+        name: 'StudyHome',
+        params: { studentId: studentId.value },
+        query: {
+          wordSet: wordSetName.value,
+          teacherId: teacherId.value
+        }
+      })
       return
     }
 
@@ -313,12 +344,25 @@ const initializeWords = () => {
   } catch (error) {
     console.error('初始化单词失败:', error)
     ElMessage.error('加载单词数据失败')
-    goBack()
+    uiStore.exitCourseMode()
+    router.push({
+      name: 'StudyHome',
+      params: { studentId: studentId.value },
+      query: {
+        wordSet: wordSetName.value,
+        teacherId: teacherId.value
+      }
+    })
   }
 }
 
 // 页面加载
 onMounted(async () => {
+  // 确保处于课程模式（不重新设置计时）
+  if (!uiStore.isInCourseMode) {
+    uiStore.enterCourseMode('/study/' + route.params.studentId)
+  }
+
   try {
     // 获取学生信息
     if (teacherId.value) {
@@ -336,7 +380,15 @@ onMounted(async () => {
 
     if (!studentName.value) {
       ElMessage.error('找不到学生信息')
-      goBack()
+      uiStore.exitCourseMode()
+      router.push({
+        name: 'StudyHome',
+        params: { studentId: studentId.value },
+        query: {
+          wordSet: wordSetName.value,
+          teacherId: teacherId.value
+        }
+      })
       return
     }
 
@@ -346,7 +398,15 @@ onMounted(async () => {
   } catch (error) {
     console.error('页面初始化失败:', error)
     ElMessage.error('页面加载失败')
-    goBack()
+    uiStore.exitCourseMode()
+    router.push({
+      name: 'StudyHome',
+      params: { studentId: studentId.value },
+      query: {
+        wordSet: wordSetName.value,
+        teacherId: teacherId.value
+      }
+    })
   }
 })
 </script>
@@ -412,6 +472,9 @@ onMounted(async () => {
   cursor: pointer;
   transition: all 0.3s ease;
   background: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .word-item:hover {
@@ -428,20 +491,28 @@ onMounted(async () => {
 }
 
 .word-content {
-  text-align: center;
+  flex: 1;
+  text-align: left;
 }
 
 .english {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 600;
   color: #303133;
-  margin-bottom: 10px;
+  margin: 0;
 }
 
-.chinese {
-  font-size: 16px;
-  color: #606266;
-  line-height: 1.5;
+.word-actions {
+  margin-left: 15px;
+}
+
+.pronunciation-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .selection-indicator {
@@ -492,21 +563,34 @@ onMounted(async () => {
   .words-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .header-content {
     flex-direction: column;
     gap: 10px;
     text-align: center;
   }
-  
+
   .card-header {
     flex-direction: column;
     gap: 10px;
     text-align: center;
   }
-  
+
   .action-buttons {
     flex-direction: column;
+  }
+
+  .english {
+    font-size: 22px;
+  }
+
+  .word-item {
+    padding: 15px;
+  }
+
+  .pronunciation-btn {
+    width: 36px;
+    height: 36px;
   }
 }
 </style>

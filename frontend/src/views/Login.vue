@@ -49,15 +49,6 @@
         </el-form-item>
       </el-form>
 
-      <div class="login-footer">
-        <el-divider>
-          <span class="footer-text">默认管理员账号</span>
-        </el-divider>
-        <div class="default-account">
-          <p><strong>用户名：</strong>admin</p>
-          <p><strong>密码：</strong>admin123</p>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -200,30 +191,6 @@ onMounted(() => {
   border-radius: 8px;
 }
 
-.login-footer {
-  margin-top: 30px;
-}
-
-.footer-text {
-  color: #909399;
-  font-size: 12px;
-  padding: 0 15px;
-}
-
-.default-account {
-  text-align: center;
-  margin-top: 15px;
-}
-
-.default-account p {
-  margin: 8px 0;
-  font-size: 13px;
-  color: #606266;
-}
-
-.default-account strong {
-  color: #303133;
-}
 
 /* 响应式设计 */
 @media (max-width: 480px) {

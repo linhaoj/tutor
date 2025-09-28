@@ -5,7 +5,6 @@
     
     <div class="page-header">
       <h1>{{ studentName }} - {{ currentWordSet || '单词学习' }}</h1>
-      <el-button @click="goBack">返回日程</el-button>
     </div>
 
     <!-- 九宫格统计 -->
@@ -120,6 +119,7 @@ import { ElMessage } from 'element-plus'
 import { useStudentsStore } from '@/stores/students'
 import { useWordsStore } from '@/stores/words'
 import { useLearningProgressStore } from '@/stores/learningProgress'
+import { useUIStore } from '@/stores/ui'
 import CourseTimer from '@/components/CourseTimer.vue'
 
 const route = useRoute()
@@ -127,6 +127,7 @@ const router = useRouter()
 const studentsStore = useStudentsStore()
 const wordsStore = useWordsStore()
 const progressStore = useLearningProgressStore()
+const uiStore = useUIStore()
 
 // Props
 const studentId = ref<number>(parseInt(route.params.studentId as string))
@@ -218,9 +219,6 @@ const startLearning = () => {
   })
 }
 
-const goBack = () => {
-  router.push('/')
-}
 
 // 加载真实的九宫格统计数据
 const loadRealGridStats = async () => {
@@ -286,21 +284,53 @@ const loadRealGridStats = async () => {
   }
 }
 
+// 初始化课程模式
+const initializeCourseMode = () => {
+  // 确保处于课程模式（不重新设置计时）
+  if (!uiStore.isInCourseMode) {
+    uiStore.enterCourseMode('/')
+  }
+
+  // 设置计时开始时间（如果还没有设置）
+  if (!sessionStorage.getItem('courseStartTime')) {
+    sessionStorage.setItem('courseStartTime', Date.now().toString())
+    console.log('设置课程开始时间:', new Date().toLocaleTimeString())
+  } else {
+    console.log('课程已在进行中，继续计时')
+  }
+}
+
 // 生命周期
 onMounted(async () => {
   try {
+    // 初始化课程模式
+    initializeCourseMode()
+
     // 获取学生信息
-    const student = studentsStore.students.find(s => s.id === studentId.value)
+    let student;
+    if (teacherId.value) {
+      // 如果有teacherId，从指定老师的学生列表中查找
+      const teacherStudents = studentsStore.getStudentsByUserId(teacherId.value)
+      student = teacherStudents.find(s => s.id === studentId.value)
+    } else {
+      // 否则从当前用户的学生列表中查找
+      student = studentsStore.students.find(s => s.id === studentId.value)
+    }
+
     if (student) {
       studentName.value = student.name
+    } else {
+      console.warn('找不到学生信息', { studentId: studentId.value, teacherId: teacherId.value })
+      ElMessage.error('找不到学生信息')
+      return
     }
-    
+
     // 获取单词集信息
     currentWordSet.value = route.query.wordSet as string || ''
-    
+
     // 获取真实的九宫格统计数据
     await loadRealGridStats()
-    
+
   } catch (error) {
     ElMessage.error('加载学习数据失败')
     console.error(error)

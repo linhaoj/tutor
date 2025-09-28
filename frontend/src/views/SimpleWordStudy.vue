@@ -92,10 +92,9 @@
 
     <!-- 底部操作按钮 -->
     <div class="action-buttons">
-      <el-button @click="goBack">返回</el-button>
-      <el-button 
+      <el-button
         v-if="currentGroupCompleted"
-        type="warning" 
+        type="warning"
         @click="goToNextTask"
         size="large"
       >
@@ -113,6 +112,7 @@ import { ArrowDown, Box, VideoPlay } from '@element-plus/icons-vue'
 import { useWordsStore } from '@/stores/words'
 import { useStudentsStore } from '@/stores/students'
 import { useLearningProgressStore } from '@/stores/learningProgress'
+import { useUIStore } from '@/stores/ui'
 import CourseTimer from '@/components/CourseTimer.vue'
 
 const route = useRoute()
@@ -120,6 +120,7 @@ const router = useRouter()
 const wordsStore = useWordsStore()
 const studentsStore = useStudentsStore()
 const progressStore = useLearningProgressStore()
+const uiStore = useUIStore()
 
 // 单词接口
 interface StudyWord {
@@ -311,7 +312,9 @@ const goToNextTask = () => {
 const completeAllLearning = () => {
   ElMessage.success('恭喜！所有单词学习完成！')
   setTimeout(() => {
-    goBack()
+    uiStore.exitCourseMode()
+    const studentId = route.params.studentId
+    router.push(`/study/${studentId}`)
   }, 2000)
 }
 
@@ -334,10 +337,6 @@ const loadNextGroup = () => {
   console.log('SimpleWordStudy - 加载新组单词（已打乱）:', shuffledWords.map(w => w.english))
 }
 
-const goBack = () => {
-  const studentId = route.params.studentId
-  router.push(`/study/${studentId}`)
-}
 
 // 初始化数据
 const initializeWords = () => {
@@ -346,10 +345,10 @@ const initializeWords = () => {
   const wordsCount = parseInt(route.query.wordsCount as string) || 20
   const startIndex = parseInt(route.query.startIndex as string) || 0
   const teacherId = route.query.teacherId as string || ''
-  const isFiltered = route.query.filtered === 'true' // 检查是否经过筛选
-  
+  let isFiltered = route.query.filtered === 'true' // 检查是否经过筛选
+
   let sourceWords = []
-  
+
   if (isFiltered) {
     // 如果是经过筛选的单词，从sessionStorage获取
     try {
@@ -396,7 +395,7 @@ const initializeWords = () => {
   const shuffledWords = shuffleArray(sourceWords)
   
   // 转换为学习用的单词格式
-  allWords.value = shuffledWords.map(word => ({
+  allWords.value = shuffledWords.map((word: any) => ({
     id: word.id,
     english: word.english,
     chinese: word.chinese,
@@ -415,6 +414,11 @@ const initializeWords = () => {
 
 // 生命周期
 onMounted(() => {
+  // 确保处于课程模式（不重新设置计时）
+  if (!uiStore.isInCourseMode) {
+    uiStore.enterCourseMode('/study/' + route.params.studentId)
+  }
+
   // 获取学生信息
   const studentId = parseInt(route.params.studentId as string)
   if (studentId) {
@@ -440,12 +444,13 @@ onMounted(() => {
 
 <style scoped>
 .simple-word-study {
-  max-width: 1200px;
+  max-width: 800px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 15px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background-color: #fefefe;
 }
 
 .study-header {
@@ -487,11 +492,11 @@ onMounted(() => {
 .word-card-row {
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 10px;
-  border-radius: 12px;
-  background: white;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  gap: 15px;
+  padding: 8px;
+  border-radius: 10px;
+  background: #f8fdf8;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
   transition: all 0.3s ease;
 }
 
@@ -501,66 +506,70 @@ onMounted(() => {
 
 .word-card {
   flex: 1;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
+  background: linear-gradient(135deg, #81c784 0%, #66bb6a 100%);
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
-  min-height: 120px;
+  min-height: 100px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid rgba(129, 199, 132, 0.3);
 }
 
 .word-card:hover {
-  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
-  transform: translateY(-2px);
+  background: linear-gradient(135deg, #66bb6a 0%, #4caf50 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(76, 175, 80, 0.2);
 }
 
 .word-card.moved-to-box {
-  background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
-  opacity: 0.7;
+  background: linear-gradient(135deg, #c8e6c9 0%, #a5d6a7 100%);
+  opacity: 0.8;
+  border-color: rgba(165, 214, 167, 0.5);
 }
 
 .word-text {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 600;
-  color: white;
+  color: #1b5e20;
   text-align: center;
   line-height: 1.4;
   word-break: break-word;
-  padding: 20px;
+  padding: 15px;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.7);
 }
 
 .card-actions {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  min-width: 150px;
+  gap: 8px;
+  min-width: 120px;
 }
 
 .move-button {
   width: 100%;
-  height: 50px;
-  font-size: 16px;
+  height: 42px;
+  font-size: 14px;
   font-weight: 600;
 }
 
 .speak-button {
   width: 100%;
-  height: 40px;
-  font-size: 14px;
+  height: 36px;
+  font-size: 13px;
   font-weight: 500;
-  background: #1890ff;
-  border-color: #1890ff;
+  background: #42a5f5;
+  border-color: #42a5f5;
 }
 
 .speak-button:hover {
-  background: #40a9ff;
-  border-color: #40a9ff;
+  background: #1e88e5;
+  border-color: #1e88e5;
 }
 
 .completed-mark {
-  min-width: 150px;
+  min-width: 120px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -578,22 +587,22 @@ onMounted(() => {
 }
 
 .word-box {
-  min-height: 120px;
-  border: 3px dashed #dcdfe6;
-  border-radius: 12px;
-  padding: 20px;
-  background: #fafafa;
+  min-height: 100px;
+  border: 2px dashed #c8e6c9;
+  border-radius: 10px;
+  padding: 15px;
+  background: #f1f8e9;
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   justify-content: center;
   transition: all 0.3s ease;
 }
 
 .word-box.has-words {
-  border-color: #67c23a;
-  background: #f0f9ff;
+  border-color: #4caf50;
+  background: #e8f5e8;
 }
 
 .box-word-item {
@@ -643,46 +652,59 @@ onMounted(() => {
 }
 
 /* 响应式设计 */
-@media (max-width: 1200px) {
-  .word-cards-area {
-    grid-template-columns: repeat(3, 1fr);
+@media (max-width: 600px) {
+  .simple-word-study {
+    padding: 10px;
+    max-width: 100%;
+  }
+
+  .header-content {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+
+  .word-card-row {
+    gap: 10px;
+    padding: 6px;
+  }
+
+  .word-card {
+    min-height: 80px;
+  }
+
+  .word-text {
+    font-size: 20px;
+    padding: 10px;
+  }
+
+  .card-actions {
+    min-width: 100px;
+  }
+
+  .move-button {
+    height: 38px;
+    font-size: 13px;
+  }
+
+  .speak-button {
+    height: 32px;
+    font-size: 12px;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+    gap: 10px;
   }
 }
 
-@media (max-width: 768px) {
-  .simple-word-study {
-    padding: 15px;
-  }
-  
-  .header-content {
-    flex-direction: column;
-    gap: 15px;
-    text-align: center;
-  }
-  
-  .word-cards-area {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
-  }
-  
-  .card-content {
-    padding: 20px 15px;
-    min-height: 150px;
-  }
-  
+@media (max-width: 400px) {
   .word-text {
     font-size: 18px;
   }
-  
-  .action-buttons {
-    flex-direction: column;
-    gap: 15px;
-  }
-}
 
-@media (max-width: 480px) {
-  .word-cards-area {
-    grid-template-columns: 1fr;
+  .card-actions {
+    min-width: 90px;
   }
 }
 </style>

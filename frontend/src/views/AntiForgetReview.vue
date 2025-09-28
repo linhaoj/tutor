@@ -34,9 +34,8 @@
           </div>
 
           <div class="action-section">
-            <el-button @click="goBack">返回日程</el-button>
-            <el-button 
-              type="success" 
+            <el-button
+              type="success"
               @click="completeCurrentReview"
               :disabled="!hasAnyChanges"
             >
@@ -51,7 +50,7 @@
     <div class="review-instructions">
       <el-alert
         title="复习说明"
-        description="点击单词卡可以查看中英文切换。点击右侧的五角星可以标记需要重点关注的单词，标记状态会在下次复习时保持。每完成一次复习，进度会自动更新。"
+        description="点击单词卡或发音按钮可以听取单词读音。点击五角星可以标记需要重点关注的单词，标记状态会在下次复习时保持。每完成一次复习，进度会自动更新。"
         type="info"
         :closable="false"
         show-icon
@@ -67,24 +66,28 @@
           class="word-item"
         >
           <!-- 单词卡片 -->
-          <div 
+          <div
             class="word-card"
             :class="{ 'starred': word.isStarred }"
-            @click="toggleWordDisplay(index)"
+            @click="playPronunciation(word.english)"
           >
             <div class="word-content">
               <div class="word-text">
-                {{ word.showChinese ? word.chinese : word.english }}
-              </div>
-              <div class="word-hint">
-                {{ word.showChinese ? word.english : word.chinese }}
+                {{ word.english }}
               </div>
             </div>
           </div>
           
-          <!-- 五角星按钮 -->
-          <div class="star-button-container">
-            <el-button 
+          <!-- 发音和五角星按钮 -->
+          <div class="action-buttons-container">
+            <el-button
+              class="pronunciation-button"
+              @click="playPronunciation(word.english)"
+              :icon="VideoPlay"
+              circle
+              size="large"
+            />
+            <el-button
               :class="['star-button', { 'starred': word.isStarred }]"
               @click="toggleWordStar(word.id)"
               :icon="Star"
@@ -127,11 +130,12 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Star } from '@element-plus/icons-vue'
+import { Star, VideoPlay } from '@element-plus/icons-vue'
 import { useAntiForgetStore, type AntiForgetWord } from '@/stores/antiForget'
 import { useStudentsStore } from '@/stores/students'
 import { useWordsStore } from '@/stores/words'
 import { useScheduleStore } from '@/stores/schedule'
+import { useUIStore } from '@/stores/ui'
 import CourseTimer from '@/components/CourseTimer.vue'
 
 const route = useRoute()
@@ -140,6 +144,7 @@ const antiForgetStore = useAntiForgetStore()
 const studentsStore = useStudentsStore()
 const wordsStore = useWordsStore()
 const scheduleStore = useScheduleStore()
+const uiStore = useUIStore()
 
 // 扩展的单词接口，包含显示状态
 interface ReviewWord extends AntiForgetWord {
@@ -184,6 +189,24 @@ const shuffleArray = <T>(array: T[]): T[] => {
     ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
   }
   return shuffled
+}
+
+// 发音功能
+const playPronunciation = (word: string) => {
+  if ('speechSynthesis' in window) {
+    // 停止当前播放的语音
+    window.speechSynthesis.cancel()
+
+    const utterance = new SpeechSynthesisUtterance(word)
+    utterance.lang = 'en-US'
+    utterance.rate = 0.8
+    utterance.pitch = 1.0
+    utterance.volume = 1.0
+
+    window.speechSynthesis.speak(utterance)
+  } else {
+    ElMessage.warning('您的浏览器不支持语音播放功能')
+  }
 }
 
 // 方法
@@ -239,7 +262,9 @@ const completeCurrentReview = async () => {
         markAntiForgetCourseAsCompleted()
         
         setTimeout(() => {
-          goBack()
+          // 完全结束课程并跳转到日程管理
+          uiStore.endCourse()
+          router.push('/')
         }, 2000)
       } else {
         // 刷新页面数据，准备下一次复习
@@ -286,9 +311,6 @@ const markAntiForgetCourseAsCompleted = () => {
   }
 }
 
-const goBack = () => {
-  router.push('/')
-}
 
 // 加载复习数据
 const loadReviewData = () => {
@@ -312,7 +334,8 @@ const loadReviewData = () => {
   const session = antiForgetStore.getSession(sessionId.value)
   if (!session) {
     ElMessage.error('找不到复习会话数据')
-    goBack()
+    uiStore.endCourse() // 错误时也结束课程
+    router.push('/')
     return
   }
   
@@ -349,6 +372,11 @@ watch(() => route.query.refresh, (newRefresh) => {
 
 // 生命周期
 onMounted(() => {
+  // 确保处于课程模式（不重新设置计时）
+  if (!uiStore.isInCourseMode) {
+    uiStore.enterCourseMode('/')
+  }
+
   loadReviewData()
 })
 </script>
@@ -464,7 +492,7 @@ onMounted(() => {
 
 .word-card {
   flex: 1;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -476,11 +504,11 @@ onMounted(() => {
 }
 
 .word-card:hover {
-  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+  background: linear-gradient(135deg, #4fd1c7 0%, #38b2ac 100%);
 }
 
 .word-card.starred {
-  background: linear-gradient(135deg, #f7ba2a 0%, #e6a23c 100%);
+  background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
 }
 
 .word-content {
@@ -489,22 +517,34 @@ onMounted(() => {
 }
 
 .word-text {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
   line-height: 1.4;
-  margin-bottom: 8px;
+  color: white;
 }
 
-.word-hint {
-  font-size: 14px;
-  opacity: 0.7;
-  line-height: 1.3;
-}
-
-.star-button-container {
+.action-buttons-container {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 10px;
+}
+
+.pronunciation-button {
+  width: 50px;
+  height: 50px;
+  border: 2px solid #e4e7ed;
+  background: white;
+  color: #48bb78;
+  transition: all 0.3s ease;
+}
+
+.pronunciation-button:hover {
+  border-color: #48bb78;
+  color: #38a169;
+  background: #f0fff4;
+  transform: scale(1.1);
 }
 
 .star-button {
@@ -588,9 +628,10 @@ onMounted(() => {
     flex-direction: column;
     gap: 15px;
   }
-  
-  .star-button-container {
+
+  .action-buttons-container {
     width: 100%;
+    flex-direction: row;
     justify-content: center;
   }
   

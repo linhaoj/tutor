@@ -129,35 +129,33 @@
 
     <!-- 底部操作按钮 -->
     <div class="action-buttons">
-      <el-button @click="goBack">返回</el-button>
-      
-      <el-button 
+      <el-button
         v-if="currentGroupCompleted && currentTestingGroup < totalGroups"
-        type="primary" 
+        type="primary"
         @click="moveToNextGroup"
         size="large"
       >
         检测下一组 (第{{ currentTestingGroup + 1 }}组)
       </el-button>
-      
-      <el-button 
+
+      <el-button
         v-if="allGroupsCompleted && isLastLearningGroup"
-        type="success" 
+        type="success"
         @click="completeAllTests"
         size="large"
       >
         完成所有检测，进入最后一步
       </el-button>
-      
-      <el-button 
+
+      <el-button
         v-if="allGroupsCompleted && !isLastLearningGroup"
-        type="warning" 
+        type="warning"
         @click="startNextGroupLearning(false)"
         size="large"
       >
         开始学习第{{ totalGroups + 1 }}组单词
       </el-button>
-      
+
       <div v-if="!currentGroupCompleted" class="completion-hint">
         <span>还有 {{ remainingWordsInGroup }} 个单词需要检测</span>
       </div>
@@ -172,12 +170,14 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Check, Close } from '@element-plus/icons-vue'
 import { useWordsStore } from '@/stores/words'
 import { useStudentsStore } from '@/stores/students'
+import { useUIStore } from '@/stores/ui'
 import CourseTimer from '@/components/CourseTimer.vue'
 
 const route = useRoute()
 const router = useRouter()
 const wordsStore = useWordsStore()
 const studentsStore = useStudentsStore()
+const uiStore = useUIStore()
 
 // 单词接口
 interface TestWord {
@@ -378,15 +378,6 @@ const startNextGroupLearning = (skipMode = false) => {
   })
 }
 
-const goBackToStudyHome = () => {
-  const studentId = route.params.studentId
-  router.push(`/study/${studentId}`)
-}
-
-const goBack = () => {
-  const studentId = route.params.studentId
-  router.push(`/study/${studentId}`)
-}
 
 // Fisher-Yates 洗牌算法
 const shuffleArray = <T>(array: T[]): T[] => {
@@ -456,6 +447,11 @@ const initializeWords = () => {
 
 // 生命周期
 onMounted(() => {
+  // 确保处于课程模式（不重新设置计时）
+  if (!uiStore.isInCourseMode) {
+    uiStore.enterCourseMode('/study/' + route.params.studentId)
+  }
+
   // 获取学生信息
   const studentId = parseInt(route.params.studentId as string)
   if (studentId) {
@@ -464,7 +460,7 @@ onMounted(() => {
       studentName.value = student.name
     }
   }
-  
+
   // 初始化单词数据
   initializeWords()
 })
@@ -472,12 +468,13 @@ onMounted(() => {
 
 <style scoped>
 .mixed-group-test {
-  max-width: 1200px;
+  max-width: 800px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 15px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background-color: #fefefe;
 }
 
 .study-header {
@@ -552,11 +549,11 @@ onMounted(() => {
 .word-card-row {
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 10px;
-  border-radius: 12px;
-  background: white;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  gap: 15px;
+  padding: 8px;
+  border-radius: 10px;
+  background: #f8fdf8;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
   transition: all 0.3s ease;
 }
 
@@ -566,76 +563,81 @@ onMounted(() => {
 
 .word-card {
   flex: 1;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
+  background: linear-gradient(135deg, #81c784 0%, #66bb6a 100%);
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
-  min-height: 120px;
+  min-height: 100px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid rgba(129, 199, 132, 0.3);
 }
 
 .word-card:hover {
-  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
-  transform: translateY(-2px);
+  background: linear-gradient(135deg, #66bb6a 0%, #4caf50 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(76, 175, 80, 0.2);
 }
 
 .word-card.mastered {
-  background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);
+  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+  border-color: rgba(76, 175, 80, 0.5);
 }
 
 .word-card.need-review {
-  background: linear-gradient(135deg, #faad14 0%, #d48806 100%);
+  background: linear-gradient(135deg, #ffb74d 0%, #ffa726 100%);
+  border-color: rgba(255, 183, 77, 0.5);
 }
 
 .word-text {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 600;
-  color: white;
+  color: #1b5e20;
   text-align: center;
   line-height: 1.4;
   word-break: break-word;
-  padding: 20px;
+  padding: 15px;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.7);
 }
 
 .card-actions {
   display: flex;
   flex-direction: column;
-  gap: 15px;
-  min-width: 160px;
+  gap: 10px;
+  min-width: 130px;
 }
 
 .master-button, .review-button {
   width: 100%;
-  height: 55px;
-  font-size: 16px;
+  height: 44px;
+  font-size: 14px;
   font-weight: 600;
 }
 
 .master-button {
-  background: #52c41a;
-  border-color: #52c41a;
+  background: #4caf50;
+  border-color: #4caf50;
 }
 
 .master-button:hover {
-  background: #389e0d;
-  border-color: #389e0d;
+  background: #388e3c;
+  border-color: #388e3c;
 }
 
 .review-button {
-  background: #faad14;
-  border-color: #faad14;
+  background: #ff9800;
+  border-color: #ff9800;
   color: white;
 }
 
 .review-button:hover {
-  background: #d48806;
-  border-color: #d48806;
+  background: #f57c00;
+  border-color: #f57c00;
 }
 
 .status-mark {
-  min-width: 160px;
+  min-width: 130px;
   display: flex;
   justify-content: center;
   align-items: center;

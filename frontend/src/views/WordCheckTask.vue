@@ -128,10 +128,9 @@
 
     <!-- 底部操作按钮 -->
     <div class="action-buttons">
-      <el-button @click="goBack">返回</el-button>
-      <el-button 
+      <el-button
         v-if="allWordsPassed"
-        type="success" 
+        type="success"
         @click="goToNextTask"
         size="large"
       >
@@ -152,6 +151,7 @@ import { ArrowRight, ArrowDown, Document, SuccessFilled, Hide } from '@element-p
 import { useWordsStore } from '@/stores/words'
 import { useStudentsStore } from '@/stores/students'
 import { useLearningProgressStore } from '@/stores/learningProgress'
+import { useUIStore } from '@/stores/ui'
 import CourseTimer from '@/components/CourseTimer.vue'
 
 const route = useRoute()
@@ -159,6 +159,7 @@ const router = useRouter()
 const wordsStore = useWordsStore()
 const studentsStore = useStudentsStore()
 const progressStore = useLearningProgressStore()
+const uiStore = useUIStore()
 
 // 单词接口
 interface CheckWord {
@@ -307,10 +308,6 @@ const goToNextTask = () => {
   ElMessage.success('第二个任务完成！进入第三个学习任务：混组检测')
 }
 
-const goBack = () => {
-  const studentId = route.params.studentId
-  router.push(`/study/${studentId}`)
-}
 
 // Fisher-Yates 洗牌算法
 const shuffleArray = <T>(array: T[]): T[] => {
@@ -361,6 +358,11 @@ const initializeWords = () => {
 
 // 生命周期
 onMounted(() => {
+  // 确保处于课程模式（不重新设置计时）
+  if (!uiStore.isInCourseMode) {
+    uiStore.enterCourseMode('/study/' + route.params.studentId)
+  }
+
   // 获取学生信息
   const studentId = parseInt(route.params.studentId as string)
   if (studentId) {
@@ -377,12 +379,13 @@ onMounted(() => {
 
 <style scoped>
 .word-check-task {
-  max-width: 1200px;
+  max-width: 800px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 15px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background-color: #fefefe;
 }
 
 .study-header {
@@ -428,11 +431,11 @@ onMounted(() => {
 .word-card-row {
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 10px;
-  border-radius: 12px;
-  background: white;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  gap: 15px;
+  padding: 8px;
+  border-radius: 10px;
+  background: #f8fdf8;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
   transition: all 0.3s ease;
 }
 
@@ -442,41 +445,47 @@ onMounted(() => {
 
 .word-card {
   flex: 1;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
+  background: linear-gradient(135deg, #81c784 0%, #66bb6a 100%);
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
-  min-height: 120px;
+  min-height: 100px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid rgba(129, 199, 132, 0.3);
 }
 
 .word-card:hover {
-  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
-  transform: translateY(-2px);
+  background: linear-gradient(135deg, #66bb6a 0%, #4caf50 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(76, 175, 80, 0.2);
 }
 
 .word-card.passed {
-  background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);
+  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+  border-color: rgba(76, 175, 80, 0.5);
 }
 
 .word-card.failed {
-  background: linear-gradient(135deg, #ff7875 0%, #f5222d 100%);
+  background: linear-gradient(135deg, #ef5350 0%, #d32f2f 100%);
+  border-color: rgba(239, 83, 80, 0.5);
 }
 
 .word-card.hidden {
-  background: linear-gradient(135deg, #8c8c8c 0%, #595959 100%);
+  background: linear-gradient(135deg, #bdbdbd 0%, #9e9e9e 100%);
+  border-color: rgba(189, 189, 189, 0.5);
 }
 
 .word-text {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 600;
-  color: white;
+  color: #1b5e20;
   text-align: center;
   line-height: 1.4;
   word-break: break-word;
-  padding: 20px;
+  padding: 15px;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.7);
 }
 
 .hidden-text {
@@ -497,14 +506,14 @@ onMounted(() => {
 .card-actions {
   display: flex;
   flex-direction: column;
-  gap: 15px;
-  min-width: 160px;
+  gap: 10px;
+  min-width: 130px;
 }
 
 .pass-button, .fail-button {
   width: 100%;
-  height: 55px;
-  font-size: 16px;
+  height: 44px;
+  font-size: 14px;
   font-weight: 600;
 }
 

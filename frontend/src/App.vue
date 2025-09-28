@@ -4,7 +4,24 @@
     <div v-if="isLoginPage" class="login-page">
       <router-view />
     </div>
-    
+
+    <!-- 课程模式（全屏，无导航栏） -->
+    <div v-else-if="uiStore.isInCourseMode" class="course-mode">
+      <!-- 左上角返回按钮 -->
+      <div class="course-return-button">
+        <el-button
+          type="primary"
+          :icon="ArrowLeft"
+          @click="returnFromCourse"
+          size="large"
+          round
+        >
+          返回
+        </el-button>
+      </div>
+      <router-view />
+    </div>
+
     <!-- 主应用布局 -->
     <el-container v-else class="app-container">
       <!-- 侧边导航 -->
@@ -105,11 +122,12 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Calendar, User, Document, DataAnalysis, Setting, Avatar, ArrowDown } from '@element-plus/icons-vue'
+import { Calendar, User, Document, DataAnalysis, Setting, Avatar, ArrowDown, ArrowLeft } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useStudentsStore } from '@/stores/students'
 import { useScheduleStore } from '@/stores/schedule'
 import { useLearningProgressStore } from '@/stores/learningProgress'
+import { useUIStore } from '@/stores/ui'
 
 const route = useRoute()
 const router = useRouter()
@@ -117,6 +135,7 @@ const authStore = useAuthStore()
 const studentsStore = useStudentsStore()
 const scheduleStore = useScheduleStore()
 const progressStore = useLearningProgressStore()
+const uiStore = useUIStore()
 
 const todayReviewCount = ref(0)
 
@@ -144,6 +163,12 @@ const showTodayReviews = () => {
   console.log('显示今日复习内容')
 }
 
+const returnFromCourse = () => {
+  const returnPath = uiStore.courseReturnPath
+  uiStore.temporaryExitCourseMode() // 临时退出，保留计时
+  router.push(returnPath)
+}
+
 const handleUserCommand = (command: string) => {
   if (command === 'logout') {
     authStore.logout()
@@ -160,6 +185,29 @@ watch(() => authStore.currentUser, (newUser, oldUser) => {
     studentsStore.reloadUserData()
     scheduleStore.reloadUserData()
     progressStore.reloadUserData()
+  }
+}, { immediate: false })
+
+// 监听路由变化，自动退出课程模式
+watch(() => route.path, (newPath) => {
+  // 定义学习相关的路径模式
+  const learningPaths = [
+    '/study/',
+    '/simple-study/',
+    '/word-check/',
+    '/mixed-test/',
+    '/post-test/',
+    '/anti-forget/',
+    '/word-filter/'
+  ]
+
+  // 检查当前路径是否为学习相关页面
+  const isLearningPage = learningPaths.some(pattern => newPath.includes(pattern))
+
+  // 如果当前在课程模式但不在学习页面，则临时退出课程模式
+  if (uiStore.isInCourseMode && !isLearningPage) {
+    console.log('路由变化检测到非学习页面，临时退出课程模式:', newPath)
+    uiStore.temporaryExitCourseMode()
   }
 }, { immediate: false })
 
@@ -245,5 +293,20 @@ onMounted(() => {
 .main-content {
   background-color: #f5f5f5;
   padding: 20px;
+}
+
+/* 课程模式样式 */
+.course-mode {
+  width: 100%;
+  height: 100vh;
+  background-color: #f5f5f5;
+  position: relative;
+}
+
+.course-return-button {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 1000;
 }
 </style>

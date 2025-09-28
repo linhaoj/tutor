@@ -101,18 +101,16 @@
 
     <!-- 底部操作按钮 -->
     <div class="action-buttons">
-      <el-button @click="goBack">返回</el-button>
-      
       <div class="main-actions">
-        <el-button 
+        <el-button
           type="primary"
           @click="continuePractice"
           size="large"
         >
           继续练习
         </el-button>
-        
-        <el-button 
+
+        <el-button
           type="warning"
           @click="endPracticeAndCreateAntiForget"
           size="large"
@@ -120,7 +118,7 @@
           结束练习并创造抗遗忘
         </el-button>
       </div>
-      
+
       <div v-if="uncheckedCount > 0" class="completion-hint">
         <span>还有 {{ uncheckedCount }} 个单词未检测</span>
       </div>
@@ -140,6 +138,7 @@ import { useAntiForgetSessionStore } from '@/stores/antiForgetSession'
 import { useAntiForgetStore } from '@/stores/antiForget'
 import { useAuthStore } from '@/stores/auth'
 import { useScheduleStore } from '@/stores/schedule'
+import { useUIStore } from '@/stores/ui'
 
 const route = useRoute()
 const router = useRouter()
@@ -150,6 +149,7 @@ const antiForgetSessionStore = useAntiForgetSessionStore()
 const antiForgetStore = useAntiForgetStore()
 const authStore = useAuthStore()
 const scheduleStore = useScheduleStore()
+const uiStore = useUIStore()
 
 // 单词接口
 interface PostTestWord {
@@ -198,17 +198,42 @@ const markWordStatus = (index: number, status: 'passed' | 'failed') => {
   const word = allWords.value[index]
   if (word && word.status === 'unchecked') {
     word.status = status
-    
+
     // 获取当前阶段信息用于显示
     const studentId = parseInt(route.params.studentId as string)
     const wordSet = route.query.wordSet as string
     const currentProgress = progressStore.getWordProgress(studentId, wordSet, word.originalIndex)
     const currentStage = currentProgress ? currentProgress.currentStage : 0
-    
+
     const statusText = status === 'passed' ? '通过' : '不通过'
     const progressText = status === 'passed' ? `（将从阶段${currentStage}进入阶段${Math.min(currentStage + 1, 7)}）` : `（保持阶段${currentStage}）`
-    
+
     ElMessage.success(`"${word.english}" 标记为${statusText}${progressText}`)
+
+    // 保存当前检测状态
+    saveCurrentTestStatus()
+  }
+}
+
+// 保存当前检测状态到sessionStorage
+const saveCurrentTestStatus = () => {
+  const wordSetName = route.query.wordSet as string || ''
+  const totalWords = parseInt(route.query.totalWords as string) || 10
+  const startIndex = parseInt(route.query.startIndex as string) || 0
+  const studentId = parseInt(route.params.studentId as string)
+
+  const storageKey = `postTestStatus_${studentId}_${wordSetName}_${startIndex}_${totalWords}`
+  const statusData: { [key: number]: 'passed' | 'failed' | 'unchecked' } = {}
+
+  allWords.value.forEach(word => {
+    statusData[word.originalIndex] = word.status
+  })
+
+  try {
+    sessionStorage.setItem(storageKey, JSON.stringify(statusData))
+    console.log('已保存检测状态:', statusData)
+  } catch (error) {
+    console.warn('保存检测状态失败:', error)
   }
 }
 
@@ -217,38 +242,67 @@ const resetWordStatus = (index: number) => {
   if (word && word.status !== 'unchecked') {
     word.status = 'unchecked'
     word.showChinese = false
-    
+
     ElMessage.info(`"${word.english}" 重新设为未检测状态`)
+
+    // 保存当前检测状态
+    saveCurrentTestStatus()
   }
 }
 
 const continuePractice = () => {
   // 更新学习进度
   updateLearningProgress()
-  
+
   // 将通过的单词添加到抗遗忘会话
   recordPassedWordsForAntiForget()
-  
+
+  // 清理sessionStorage中的检测状态数据
+  clearTestStatusStorage()
+
   // 跳转到学习进度页面，传递refresh参数让页面刷新数据
   const studentId = route.params.studentId
   const wordSet = route.query.wordSet
+  const teacherId = route.query.teacherId
   router.push({
     path: `/study/${studentId}`,
-    query: { wordSet, refresh: Date.now() } // 添加时间戳强制刷新
+    query: { wordSet, teacherId, refresh: Date.now() } // 添加teacherId和时间戳
   })
-  
+
   ElMessage.success('训后检测完成！已更新学习进度，通过的单词已记录到抗遗忘会话中')
+}
+
+// 清理sessionStorage中的检测状态数据
+const clearTestStatusStorage = () => {
+  const wordSetName = route.query.wordSet as string || ''
+  const totalWords = parseInt(route.query.totalWords as string) || 10
+  const startIndex = parseInt(route.query.startIndex as string) || 0
+  const studentId = parseInt(route.params.studentId as string)
+
+  const storageKey = `postTestStatus_${studentId}_${wordSetName}_${startIndex}_${totalWords}`
+  try {
+    sessionStorage.removeItem(storageKey)
+    console.log('已清理检测状态缓存:', storageKey)
+  } catch (error) {
+    console.warn('清理检测状态缓存失败:', error)
+  }
 }
 
 const endPracticeAndCreateAntiForget = () => {
   // 更新学习进度
   updateLearningProgress()
-  
+
   // 创建抗遗忘任务（内部会自动记录通过的单词）
   createAntiForgetTasks()
-  
+
   // 标记当前课程为已完成
   markCourseAsCompleted()
+
+  // 清理sessionStorage中的检测状态数据
+  clearTestStatusStorage()
+
+  // 完全结束课程（清除计时）
+  uiStore.endCourse()
 }
 
 const markCourseAsCompleted = () => {
@@ -289,45 +343,59 @@ const markCourseAsCompleted = () => {
 const updateLearningProgress = () => {
   const studentId = parseInt(route.params.studentId as string)
   const wordSet = route.query.wordSet as string
-  
+
   if (!studentId || !wordSet) {
     ElMessage.error('缺少必要的学习信息')
     return
   }
-  
+
   let promotedCount = 0
   let unchangedCount = 0
-  
-  // 处理通过的单词 - 阶段+1
-  passedWords.value.forEach(word => {
+  let uncheckedCount = 0
+
+  // 处理所有单词，不只是有明确状态的单词
+  allWords.value.forEach(word => {
     // 获取当前阶段
     const currentProgress = progressStore.getWordProgress(studentId, wordSet, word.originalIndex)
     const currentStage = currentProgress ? currentProgress.currentStage : 0
-    
-    // 进入下一阶段（最高7阶段）
-    const newStage = Math.min(currentStage + 1, 7)
-    
-    progressStore.updateWordProgress(studentId, wordSet, word.originalIndex, newStage)
-    
-    if (newStage > currentStage) {
-      promotedCount++
-      console.log(`单词 "${word.english}" 从阶段${currentStage}进入阶段${newStage}`)
+
+    if (word.status === 'passed') {
+      // 通过的单词 - 阶段+1
+      const newStage = Math.min(currentStage + 1, 7)
+      progressStore.updateWordProgress(studentId, wordSet, word.originalIndex, newStage)
+
+      if (newStage > currentStage) {
+        promotedCount++
+        console.log(`单词 "${word.english}" 从阶段${currentStage}进入阶段${newStage}`)
+      }
+    } else if (word.status === 'failed') {
+      // 未通过的单词 - 保持当前阶段不变
+      progressStore.updateWordProgress(studentId, wordSet, word.originalIndex, currentStage)
+      unchangedCount++
+      console.log(`单词 "${word.english}" 保持在阶段${currentStage}（未通过）`)
+    } else if (word.status === 'unchecked') {
+      // 未检测的单词 - 如果当前阶段是0，提升到阶段1（认为已经学过）
+      if (currentStage === 0) {
+        const newStage = 1
+        progressStore.updateWordProgress(studentId, wordSet, word.originalIndex, newStage)
+        promotedCount++
+        uncheckedCount++
+        console.log(`单词 "${word.english}" 从阶段${currentStage}进入阶段${newStage}（未检测视为已学习）`)
+      } else {
+        // 如果已经不在阶段0，保持当前阶段
+        progressStore.updateWordProgress(studentId, wordSet, word.originalIndex, currentStage)
+        unchangedCount++
+        console.log(`单词 "${word.english}" 保持在阶段${currentStage}（未检测但已学过）`)
+      }
     }
   })
-  
-  // 处理未通过的单词 - 保持当前阶段不变
-  failedWords.value.forEach(word => {
-    const currentProgress = progressStore.getWordProgress(studentId, wordSet, word.originalIndex)
-    const currentStage = currentProgress ? currentProgress.currentStage : 0
-    
-    // 保持当前阶段不变（不退步）
-    progressStore.updateWordProgress(studentId, wordSet, word.originalIndex, currentStage)
-    
-    unchangedCount++
-    console.log(`单词 "${word.english}" 保持在阶段${currentStage}（未通过）`)
-  })
-  
-  ElMessage.success(`学习进度已更新：${promotedCount}个单词进入下一阶段，${unchangedCount}个单词保持当前阶段`)
+
+  let message = `学习进度已更新：${promotedCount}个单词进入下一阶段，${unchangedCount}个单词保持当前阶段`
+  if (uncheckedCount > 0) {
+    message += `，${uncheckedCount}个未检测单词视为已学习`
+  }
+
+  ElMessage.success(message)
 }
 
 const recordPassedWordsForAntiForget = () => {
@@ -959,10 +1027,6 @@ const generateSimpleTextReport = (words: any[]) => {
   ElMessage.success('文本报告已生成下载')
 }
 
-const goBack = () => {
-  const studentId = route.params.studentId
-  router.push(`/study/${studentId}`)
-}
 
 // 初始化数据
 const initializeWords = () => {
@@ -970,30 +1034,55 @@ const initializeWords = () => {
   const wordSetName = route.query.wordSet as string || ''
   const totalWords = parseInt(route.query.totalWords as string) || 10
   const startIndex = parseInt(route.query.startIndex as string) || 0
-  
+  const studentId = parseInt(route.params.studentId as string)
+
   // 获取指定单词集的单词
-  let sourceWords = wordSetName 
+  let sourceWords = wordSetName
     ? wordsStore.getWordsBySet(wordSetName)
     : wordsStore.words
-  
+
   // 获取本次学习的所有单词
   sourceWords = sourceWords.slice(startIndex, startIndex + totalWords)
-  
+
+  // 尝试从sessionStorage恢复之前的检测状态
+  const storageKey = `postTestStatus_${studentId}_${wordSetName}_${startIndex}_${totalWords}`
+  let savedStatus: { [key: number]: 'passed' | 'failed' | 'unchecked' } = {}
+
+  try {
+    const saved = sessionStorage.getItem(storageKey)
+    if (saved) {
+      savedStatus = JSON.parse(saved)
+      console.log('恢复了之前的检测状态:', savedStatus)
+    }
+  } catch (error) {
+    console.warn('无法恢复检测状态:', error)
+  }
+
   // 转换为训后检测用的单词格式
-  allWords.value = sourceWords.map((word, index) => ({
-    id: word.id,
-    english: word.english,
-    chinese: word.chinese,
-    showChinese: false,
-    status: 'unchecked' as const,
-    originalIndex: startIndex + index // 保存原始索引用于进度更新
-  }))
-  
+  allWords.value = sourceWords.map((word, index) => {
+    const originalIndex = startIndex + index
+    const savedWordStatus = savedStatus[originalIndex] || 'unchecked'
+
+    return {
+      id: word.id,
+      english: word.english,
+      chinese: word.chinese,
+      showChinese: false,
+      status: savedWordStatus,
+      originalIndex // 保存原始索引用于进度更新
+    }
+  })
+
   ElMessage.success(`开始训后检测，共 ${allWords.value.length} 个单词`)
 }
 
 // 生命周期
 onMounted(() => {
+  // 确保处于课程模式（不重新设置计时）
+  if (!uiStore.isInCourseMode) {
+    uiStore.enterCourseMode('/study/' + route.params.studentId)
+  }
+
   // 获取学生信息
   const studentId = parseInt(route.params.studentId as string)
   if (studentId) {
@@ -1006,7 +1095,7 @@ onMounted(() => {
       }
     }
   }
-  
+
   // 初始化单词数据
   initializeWords()
 })
@@ -1014,12 +1103,13 @@ onMounted(() => {
 
 <style scoped>
 .post-learning-test {
-  max-width: 1200px;
+  max-width: 800px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 15px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background-color: #fefefe;
 }
 
 .study-header {
@@ -1065,11 +1155,11 @@ onMounted(() => {
 .word-item {
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 15px;
-  border-radius: 12px;
-  background: white;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  gap: 15px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #f8fdf8;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
   transition: all 0.3s ease;
 }
 
@@ -1079,28 +1169,32 @@ onMounted(() => {
 
 .word-card {
   flex: 1;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
+  background: linear-gradient(135deg, #81c784 0%, #66bb6a 100%);
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
-  min-height: 100px;
+  min-height: 80px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px;
+  padding: 15px;
+  border: 1px solid rgba(129, 199, 132, 0.3);
 }
 
 .word-card:hover {
-  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
-  transform: translateY(-2px);
+  background: linear-gradient(135deg, #66bb6a 0%, #4caf50 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(76, 175, 80, 0.2);
 }
 
 .word-card.passed {
-  background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);
+  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+  border-color: rgba(76, 175, 80, 0.5);
 }
 
 .word-card.failed {
-  background: linear-gradient(135deg, #ff7875 0%, #f5222d 100%);
+  background: linear-gradient(135deg, #ef5350 0%, #d32f2f 100%);
+  border-color: rgba(239, 83, 80, 0.5);
 }
 
 .word-content {
@@ -1111,19 +1205,21 @@ onMounted(() => {
 }
 
 .word-text {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
-  color: white;
+  color: #1b5e20;
   text-align: left;
   line-height: 1.4;
   word-break: break-word;
   flex: 1;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.7);
 }
 
 .word-number {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+  color: #2e7d32;
   font-weight: 500;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.7);
 }
 
 .test-actions {
