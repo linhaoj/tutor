@@ -657,213 +657,189 @@ const createAntiForgetSchedule = async (session: any, time: string) => {
   }
 }
 
-// 中文文本处理帮助函数 - 使用拼音或英文替代
-const processChinese = (text: string, doc: any, x: number, y: number, fallback?: string) => {
-  if (!text) return
-  
-  // 由于jsPDF默认不支持中文字体，中文会显示为乱码
-  // 我们使用一个更实用的方法：如果有英文备选就用英文，否则用拼音
-  
-  if (text.match(/[\u4e00-\u9fff]/)) {
-    // 包含中文字符
-    if (fallback) {
-      // 优先使用英文备选
-      doc.text(fallback, x, y)
-    } else {
-      // 没有英文备选，尝试转换为拼音或简单标识
-      const pinyinText = convertToPinyin(text)
-      doc.text(pinyinText, x, y)
-    }
-  } else {
-    // 不包含中文，直接显示
-    doc.text(text, x, y)
-  }
-}
+// 创建HTML内容用于PDF生成
+const createPDFHtmlContent = (words: any[], studentName: string): string => {
+  const antiForgetDays = [1, 2, 3, 5, 7, 9, 12, 14, 17, 21]
+  const today = new Date()
 
-// 中文转英文翻译函数（扩展版）
-const convertToPinyin = (text: string): string => {
-  // 扩展的常见单词翻译映射
-  const commonWords: Record<string, string> = {
-    // 系统标签
-    '学生姓名': 'Student Name',
-    '陪练姓名': 'Tutor Name', 
-    '总单词数': 'Total Words',
-    '打印时间': 'Print Time',
-    '第几天': 'Day',
-    '复习日期': 'Review Date',
-    '遗忘词数': 'Forgotten Words',
-    '单词学习报告': 'Word Learning Report',
-    
-    // 常见名词
-    '苹果': 'apple',
-    '香蕉': 'banana', 
-    '橙子': 'orange',
-    '葡萄': 'grape',
-    '草莓': 'strawberry',
-    '西瓜': 'watermelon',
-    '盘子': 'plate',
-    '杯子': 'cup',
-    '碗': 'bowl',
-    '桌子': 'table',
-    '椅子': 'chair',
-    '门': 'door',
-    '窗户': 'window',
-    '书': 'book',
-    '笔': 'pen',
-    '纸': 'paper',
-    '水': 'water',
-    '火': 'fire',
-    '土': 'earth',
-    '风': 'wind',
-    
-    // 常见动词
-    '学习': 'study/learn',
-    '吃': 'eat',
-    '喝': 'drink', 
-    '跑': 'run',
-    '走': 'walk',
-    '看': 'look/see',
-    '听': 'listen',
-    '说': 'speak/say',
-    '写': 'write',
-    '读': 'read',
-    '睡觉': 'sleep',
-    '起床': 'get up',
-    
-    // 常见形容词
-    '大': 'big/large',
-    '小': 'small',
-    '高': 'tall/high',
-    '矮': 'short',
-    '长': 'long',
-    '短': 'short',
-    '好': 'good',
-    '坏': 'bad',
-    '新': 'new',
-    '旧': 'old',
-    '热': 'hot',
-    '冷': 'cold',
-    
-    // 数字和时间
-    '一': 'one',
-    '二': 'two', 
-    '三': 'three',
-    '四': 'four',
-    '五': 'five',
-    '六': 'six',
-    '七': 'seven',
-    '八': 'eight',
-    '九': 'nine',
-    '十': 'ten',
-    '天': 'day',
-    '月': 'month',
-    '年': 'year',
-    
-    // 人物和关系
-    '人': 'person',
-    '男人': 'man',
-    '女人': 'woman',
-    '孩子': 'child',
-    '朋友': 'friend',
-    '家人': 'family',
-    '老师': 'teacher',
-    '学生': 'student'
-  }
-  
-  // 先检查是否有直接映射
-  if (commonWords[text]) {
-    return commonWords[text]
-  }
-  
-  // 检查部分匹配（如果文本包含已知单词）
-  for (const [chinese, english] of Object.entries(commonWords)) {
-    if (text.includes(chinese)) {
-      return text.replace(chinese, english)
+  // 生成单词表格HTML
+  const generateWordTables = (pageWords: any[]) => {
+    const tables = []
+    for (let i = 0; i < 3; i++) {
+      const startIdx = i * 5
+      const endIdx = Math.min(startIdx + 5, pageWords.length)
+      if (startIdx >= pageWords.length) break
+
+      const wordsInTable = pageWords.slice(startIdx, endIdx)
+      const rows = wordsInTable.map(word => `
+        <tr>
+          <td style="width: 40%; padding: 8px; border: 1px solid #333;">${word.english}</td>
+          <td style="width: 60%; padding: 8px; border: 1px solid #333;">${word.chinese}</td>
+        </tr>
+      `).join('')
+
+      tables.push(`
+        <table style="width: 30%; border-collapse: collapse; margin-right: 15px; display: inline-table; vertical-align: top;">
+          ${rows}
+        </table>
+      `)
     }
+    return tables.join('')
   }
-  
-  // 如果没有匹配，返回原文本（但用拼音标识代替）
-  const chineseCharCount = (text.match(/[\u4e00-\u9fff]/g) || []).length
-  if (chineseCharCount > 0) {
-    return `(${chineseCharCount} Chinese chars)`
+
+  // 生成复习进度表格
+  const generateReviewTable = () => {
+    const dayRow = antiForgetDays.map(day => `<td style="border: 1px solid #333; padding: 5px; text-align: center;">${day}</td>`).join('')
+    const dateRow = antiForgetDays.map(day => {
+      const date = new Date(today)
+      date.setDate(today.getDate() + day)
+      return `<td style="border: 1px solid #333; padding: 5px; text-align: center;">${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}</td>`
+    }).join('')
+    const emptyRow = antiForgetDays.map(() => `<td style="border: 1px solid #333; padding: 5px;">&nbsp;</td>`).join('')
+
+    return `
+      <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+        <tr>
+          <td style="border: 1px solid #333; padding: 5px; width: 80px; font-weight: bold;">第几天</td>
+          ${dayRow}
+        </tr>
+        <tr>
+          <td style="border: 1px solid #333; padding: 5px; font-weight: bold;">复习日期</td>
+          ${dateRow}
+        </tr>
+        <tr>
+          <td style="border: 1px solid #333; padding: 5px; font-weight: bold;">遗忘词数</td>
+          ${emptyRow}
+        </tr>
+      </table>
+    `
   }
-  
-  // 如果没有中文字符，直接返回
-  return text
+
+  // 生成信息表格
+  const generateInfoTable = () => {
+    return `
+      <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+        <tr>
+          <td style="border: 1px solid #333; padding: 15px;">
+            <div style="margin-bottom: 10px;"><strong>学生姓名:</strong> ${studentName}</div>
+            <div style="margin-bottom: 10px;"><strong>陪练姓名:</strong> lyb</div>
+            <div style="margin-bottom: 10px;"><strong>总单词数:</strong> ${words.length}</div>
+            <div><strong>打印时间:</strong> ${new Date().toLocaleDateString('zh-CN')}</div>
+          </td>
+        </tr>
+      </table>
+    `
+  }
+
+  // 生成所有页面
+  let htmlContent = `
+    <div style="width: 1100px; padding: 20px; font-family: 'Microsoft YaHei', 'SimSun', Arial, sans-serif; background: white;">
+      <h2 style="text-align: center; margin-bottom: 30px;">单词学习报告</h2>
+  `
+
+  // 每页15个单词（3组 x 5个）
+  for (let i = 0; i < words.length; i += 15) {
+    const pageWords = words.slice(i, i + 15)
+    htmlContent += `
+      <div style="margin-bottom: 40px; page-break-after: always;">
+        <div style="margin-bottom: 30px;">
+          ${generateWordTables(pageWords)}
+        </div>
+        ${i + 15 >= words.length ? generateReviewTable() + generateInfoTable() : ''}
+      </div>
+    `
+  }
+
+  htmlContent += `</div>`
+  return htmlContent
 }
 
 const generateWordsReport = async (words: any[]) => {
   try {
-    // 动态导入jsPDF
-    const jsPDFModule = await import('jspdf')
+    // 获取学生姓名
+    const studentId = parseInt(route.params.studentId as string)
+    const currentUser = authStore.currentUser
+    if (!currentUser) {
+      ElMessage.error('用户未登录')
+      return
+    }
+
+    const teacherId = route.query.teacherId as string
+    const userIdForStudent = teacherId || currentUser.id
+    const userStudents = studentsStore.getStudentsByUserId(userIdForStudent)
+    const student = userStudents.find(s => s.id === studentId)
+    const studentName = student ? student.name : '未知学生'
+
+    // 动态导入所需库
+    const [jsPDFModule, html2canvasModule] = await Promise.all([
+      import('jspdf'),
+      import('html2canvas')
+    ])
     const jsPDF = jsPDFModule.jsPDF || jsPDFModule.default
-    
-    // 创建PDF文档 - 启用Unicode支持
-    const doc = new jsPDF({
-      orientation: 'landscape', // 横向，方便放置3个表格
-      unit: 'mm',
-      format: 'a4',
-      compress: true
+    const html2canvas = html2canvasModule.default
+
+    ElMessage.info('正在生成PDF报告，请稍候...')
+
+    // 创建临时HTML容器
+    const htmlContent = createPDFHtmlContent(words, studentName)
+    const tempDiv = document.createElement('div')
+    tempDiv.innerHTML = htmlContent
+    tempDiv.style.position = 'absolute'
+    tempDiv.style.left = '-9999px'
+    tempDiv.style.top = '0'
+    document.body.appendChild(tempDiv)
+
+    // 等待字体加载
+    await new Promise(resolve => setTimeout(resolve, 100))
+
+    // 使用html2canvas将HTML转换为canvas
+    const canvas = await html2canvas(tempDiv.firstElementChild as HTMLElement, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false
     })
-    
-    // 设置默认字体和编码
-    doc.setFont('helvetica')
-    
-    // 设置文档属性支持Unicode
-    try {
-      doc.setLanguage('zh-CN')
-    } catch (e) {
-      console.warn('Language setting failed:', e)
+
+    // 移除临时元素
+    document.body.removeChild(tempDiv)
+
+    // 创建PDF
+    const imgWidth = 297 // A4横向宽度(mm)
+    const imgHeight = (canvas.height * imgWidth) / canvas.width
+    const pdf = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    })
+
+    // 将canvas转换为图片并添加到PDF
+    const imgData = canvas.toDataURL('image/png')
+
+    // 如果内容超过一页，需要分页
+    const pageHeight = 210 // A4横向高度(mm)
+    let heightLeft = imgHeight
+    let position = 0
+
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+    heightLeft -= pageHeight
+
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight
+      pdf.addPage()
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      heightLeft -= pageHeight
     }
-    
-    // 添加标题
-    doc.setFontSize(16)
-    processChinese('单词学习报告', doc, 20, 20)
-    
-    let yPosition = 40
-    
-    // 按5个单词为一组进行处理
-    for (let groupIndex = 0; groupIndex < words.length; groupIndex += 15) { // 每页最多3组(15个单词)
-      if (yPosition > 160) { // 如果超过页面高度，创建新页面
-        doc.addPage()
-        yPosition = 20
-      }
-      
-      // 获取当前页面的3组单词（每组5个）
-      const pageGroups = []
-      for (let i = 0; i < 3; i++) {
-        const startIndex = groupIndex + (i * 5)
-        if (startIndex < words.length) {
-          const group = words.slice(startIndex, Math.min(startIndex + 5, words.length))
-          pageGroups.push(group)
-        }
-      }
-      
-      // 绘制3个并列的单词表格
-      drawWordTables(doc, pageGroups, yPosition)
-      yPosition += 80 // 单词表格高度
-      
-      // 在每页最后添加复习进度表格和信息表格
-      if (groupIndex + 15 >= words.length || yPosition > 160) {
-        yPosition += 10
-        drawReviewProgressTable(doc, yPosition)
-        yPosition += 60
-        
-        drawInfoTable(doc, yPosition, words.length)
-        yPosition = 300 // 强制下一组换页
-      }
-    }
-    
-    // 在浏览器中显示PDF而不是直接下载
-    const pdfBlob = doc.output('blob')
-    const pdfUrl = URL.createObjectURL(pdfBlob)
-    
+
     // 在新标签页中打开PDF
+    const pdfBlob = pdf.output('blob')
+    const pdfUrl = URL.createObjectURL(pdfBlob)
     const newWindow = window.open(pdfUrl, '_blank')
     if (newWindow) {
       newWindow.document.title = `单词学习报告_${new Date().toISOString().split('T')[0]}`
     }
-    
+
+    ElMessage.success('PDF报告已生成')
+
     // 提供下载选项
     setTimeout(() => {
       ElMessageBox.confirm(
@@ -875,162 +851,19 @@ const generateWordsReport = async (words: any[]) => {
           type: 'info'
         }
       ).then(() => {
-        const fileName = `单词学习报告_${new Date().toISOString().split('T')[0]}.pdf`
-        doc.save(fileName)
+        const fileName = `单词学习报告_${studentName}_${new Date().toISOString().split('T')[0]}.pdf`
+        pdf.save(fileName)
         ElMessage.success(`PDF报告已下载: ${fileName}`)
       }).catch(() => {
-        // 用户选择不下载，清理URL
         URL.revokeObjectURL(pdfUrl)
       })
     }, 1000)
-    
-    ElMessage.success('PDF报告已在新标签页中打开')
-    
+
   } catch (error) {
     console.error('生成PDF失败:', error)
-    
-    // 如果jsPDF不可用，使用备用方案：生成简单的文本报告
-    generateSimpleTextReport(words)
+    ElMessage.error('生成PDF失败，请重试')
   }
 }
-
-const drawWordTables = (doc: any, pageGroups: any[][], yStart: number) => {
-  const tableWidth = 85 // 每个表格宽度
-  const tableSpacing = 95 // 表格间距
-  const rowHeight = 15 // 行高
-  const startX = 20
-  
-  for (let tableIndex = 0; tableIndex < pageGroups.length; tableIndex++) {
-    const group = pageGroups[tableIndex]
-    const tableX = startX + (tableIndex * tableSpacing)
-    
-    // 绘制单词行（不要标题行）
-    for (let rowIndex = 0; rowIndex < group.length; rowIndex++) {
-      const word = group[rowIndex]
-      const rowY = yStart + (rowIndex * rowHeight)
-      
-      // 绘制行边框
-      doc.setLineWidth(0.5)
-      doc.rect(tableX, rowY, tableWidth, rowHeight)
-      
-      // 绘制分隔线（中间分隔英文和中文）
-      doc.line(tableX + 40, rowY, tableX + 40, rowY + rowHeight)
-      
-      // 添加单词内容
-      doc.setFontSize(10)
-      
-      // 英文部分
-      const englishText = word.english || ''
-      doc.text(englishText, tableX + 2, rowY + 10)
-      
-      // 中文部分 - 使用帮助函数处理
-      const chineseText = word.chinese || ''
-      // 传递null作为fallback，让系统自己转换
-      processChinese(chineseText, doc, tableX + 42, rowY + 10)
-    }
-  }
-}
-
-const drawReviewProgressTable = (doc: any, yStart: number) => {
-  const cellWidth = 25 // 每个单元格宽度
-  const cellHeight = 15 // 单元格高度
-  const startX = 20
-  
-  // 生成抗遗忘日期（第1、2、3、5、7、9、12、14、17、21天）
-  const antiForgetDays = [1, 2, 3, 5, 7, 9, 12, 14, 17, 21]
-  const today = new Date()
-  
-  // 绘制表格框架（3行11列）
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 11; col++) {
-      const x = startX + (col * cellWidth)
-      const y = yStart + (row * cellHeight)
-      
-      doc.setLineWidth(0.5)
-      doc.rect(x, y, cellWidth, cellHeight)
-      
-      doc.setFontSize(9)
-      
-      if (row === 0) {
-        // 第一行：标签列 + 天数数据
-        if (col === 0) {
-          processChinese('第几天', doc, x + 2, y + 10)
-        } else if (col - 1 < antiForgetDays.length) {
-          doc.text(antiForgetDays[col - 1].toString(), x + 8, y + 10)
-        }
-      } else if (row === 1) {
-        // 第二行：标签列 + 复习日期
-        if (col === 0) {
-          processChinese('复习日期', doc, x + 2, y + 10)
-        } else if (col - 1 < antiForgetDays.length) {
-          const targetDate = new Date(today)
-          targetDate.setDate(today.getDate() + antiForgetDays[col - 1])
-          const dateStr = `${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`
-          doc.text(dateStr, x + 3, y + 10)
-        }
-      } else if (row === 2) {
-        // 第三行：标签列 + 遗忘词数（留空供填写）
-        if (col === 0) {
-          processChinese('遗忘词数', doc, x + 2, y + 10)
-        }
-        // 其他列留空供用户填写
-      }
-    }
-  }
-}
-
-const drawInfoTable = (doc: any, yStart: number, totalWords: number) => {
-  const tableWidth = 270 // 表格宽度
-  const tableHeight = 40 // 表格高度
-  const startX = 20
-  
-  // 绘制大框
-  doc.setLineWidth(0.5)
-  doc.rect(startX, yStart, tableWidth, tableHeight)
-  
-  // 获取学生姓名
-  const studentId = parseInt(route.params.studentId as string)
-  const currentUser = authStore.currentUser
-  if (!currentUser) {
-    ElMessage.error('用户未登录')
-    return
-  }
-  
-  const userStudents = studentsStore.getStudentsByUserId(currentUser.id)
-  const student = userStudents.find(s => s.id === studentId)
-  const studentName = student ? student.name : '未知学生'
-  
-  // 填写信息
-  doc.setFontSize(12)
-  processChinese(`学生姓名: ${studentName}`, doc, startX + 10, yStart + 15)
-  processChinese('陪练姓名: lyb', doc, startX + 120, yStart + 15)
-  processChinese(`总单词数: ${totalWords}`, doc, startX + 200, yStart + 15)
-  processChinese(`打印时间: ${new Date().toLocaleDateString('zh-CN')}`, doc, startX + 10, yStart + 30)
-
-}
-
-const generateSimpleTextReport = (words: any[]) => {
-  // 备用方案：生成简单的文本报告
-  let content = `单词学习报告\n生成时间: ${new Date().toLocaleString('zh-CN')}\n总单词数: ${words.length}\n\n`
-  
-  words.forEach((word, index) => {
-    content += `${index + 1}. ${word.english} - ${word.chinese}\n`
-  })
-  
-  // 创建下载链接
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `单词学习报告_${new Date().toISOString().split('T')[0]}.txt`
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
-  
-  ElMessage.success('文本报告已生成下载')
-}
-
 
 // 初始化数据
 const initializeWords = () => {
