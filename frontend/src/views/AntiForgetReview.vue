@@ -69,11 +69,11 @@
           <div
             class="word-card"
             :class="{ 'starred': word.isStarred }"
-            @click="playPronunciation(word.english)"
+            @click="toggleWordDisplay(index)"
           >
             <div class="word-content">
               <div class="word-text">
-                {{ word.english }}
+                {{ word.showChinese ? word.chinese : word.english }}
               </div>
             </div>
           </div>
