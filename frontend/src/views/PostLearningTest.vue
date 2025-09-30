@@ -1035,11 +1035,21 @@ const initializeWords = () => {
   const totalWords = parseInt(route.query.totalWords as string) || 10
   const startIndex = parseInt(route.query.startIndex as string) || 0
   const studentId = parseInt(route.params.studentId as string)
+  const teacherId = route.query.teacherId as string
 
-  // 获取指定单词集的单词
-  let sourceWords = wordSetName
-    ? wordsStore.getWordsBySet(wordSetName)
-    : wordsStore.words
+  // 获取指定单词集的单词（支持跨用户访问）
+  let sourceWords = []
+  if (teacherId && wordSetName) {
+    // 如果有teacherId，使用教师的单词数据
+    sourceWords = wordsStore.getWordsBySetForUser(teacherId, wordSetName)
+    console.log(`从教师 ${teacherId} 加载单词集 "${wordSetName}"，单词数: ${sourceWords.length}`)
+  } else if (wordSetName) {
+    // 否则使用当前用户的单词数据
+    sourceWords = wordsStore.getWordsBySet(wordSetName)
+    console.log(`从当前用户加载单词集 "${wordSetName}"，单词数: ${sourceWords.length}`)
+  } else {
+    sourceWords = wordsStore.words
+  }
 
   // 获取本次学习的所有单词
   sourceWords = sourceWords.slice(startIndex, startIndex + totalWords)
