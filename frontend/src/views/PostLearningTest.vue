@@ -658,7 +658,7 @@ const createAntiForgetSchedule = async (session: any, time: string) => {
 }
 
 // 创建HTML内容用于PDF生成
-const createPDFHtmlContent = (words: any[], studentName: string): string => {
+const createPDFHtmlContent = (words: any[], studentName: string, teacherName: string): string => {
   const antiForgetDays = [1, 2, 3, 5, 7, 9, 12, 14, 17, 21]
   const today = new Date()
 
@@ -722,7 +722,7 @@ const createPDFHtmlContent = (words: any[], studentName: string): string => {
         <tr>
           <td style="border: 1px solid #333; padding: 15px;">
             <div style="margin-bottom: 10px;"><strong>学生姓名:</strong> ${studentName}</div>
-            <div style="margin-bottom: 10px;"><strong>陪练姓名:</strong> lyb</div>
+            <div style="margin-bottom: 10px;"><strong>教师姓名:</strong> ${teacherName}</div>
             <div style="margin-bottom: 10px;"><strong>总单词数:</strong> ${words.length}</div>
             <div><strong>打印时间:</strong> ${new Date().toLocaleDateString('zh-CN')}</div>
           </td>
@@ -756,19 +756,23 @@ const createPDFHtmlContent = (words: any[], studentName: string): string => {
 
 const generateWordsReport = async (words: any[]) => {
   try {
-    // 获取学生姓名
-    const studentId = parseInt(route.params.studentId as string)
+    // 获取当前登录用户信息
     const currentUser = authStore.currentUser
     if (!currentUser) {
       ElMessage.error('用户未登录')
       return
     }
 
+    // 获取学生信息
+    const studentId = parseInt(route.params.studentId as string)
     const teacherId = route.query.teacherId as string
     const userIdForStudent = teacherId || currentUser.id
     const userStudents = studentsStore.getStudentsByUserId(userIdForStudent)
     const student = userStudents.find(s => s.id === studentId)
     const studentName = student ? student.name : '未知学生'
+
+    // 获取教师姓名（当前登录用户的用户名）
+    const teacherName = currentUser.username || '未知教师'
 
     // 动态导入所需库
     const [jsPDFModule, html2canvasModule] = await Promise.all([
@@ -781,7 +785,7 @@ const generateWordsReport = async (words: any[]) => {
     ElMessage.info('正在生成PDF报告，请稍候...')
 
     // 创建临时HTML容器
-    const htmlContent = createPDFHtmlContent(words, studentName)
+    const htmlContent = createPDFHtmlContent(words, studentName, teacherName)
     const tempDiv = document.createElement('div')
     tempDiv.innerHTML = htmlContent
     tempDiv.style.position = 'absolute'
