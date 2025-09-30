@@ -394,41 +394,58 @@ const startStudy = (schedule: any) => {
   
   if (schedule.type === 'review') {
     console.log('进入抗遗忘模式:', schedule)
-    
+
     // 查找现有的抗遗忘会话
     const currentUser = authStore.currentUser
     if (!currentUser) {
       ElMessage.error('用户未登录')
       return
     }
-    
+
+    // 尝试查找抗遗忘会话
+    // 先用当前用户ID查找，如果找不到且当前用户不是管理员，则尝试用管理员ID查找
     let existingSession = antiForgetStore.getActiveSession(
-      schedule.studentId, 
-      schedule.wordSet, 
+      schedule.studentId,
+      schedule.wordSet,
       currentUser.id
     )
-    
+
+    let sessionTeacherId = currentUser.id
+
+    // 如果当前用户是老师且没找到会话，尝试查找管理员创建的会话
+    if (!existingSession && !authStore.isAdmin) {
+      console.log('当前用户未找到会话，尝试查找管理员创建的会话...')
+      // 获取所有会话，查找匹配的
+      const allSessions = antiForgetStore.sessions
+      existingSession = allSessions.find(session =>
+        session.studentId === schedule.studentId &&
+        session.wordSetName === schedule.wordSet &&
+        session.reviewCount < session.totalReviews
+      )
+
+      if (existingSession) {
+        sessionTeacherId = existingSession.teacherId
+        console.log(`找到会话，teacherId: ${sessionTeacherId}`)
+      }
+    }
+
     // 如果没有现有会话，说明这是第一次抗遗忘复习
     // 抗遗忘会话应该已经在学习完成时创建，这里只是获取
     if (!existingSession) {
       ElMessage.error('未找到抗遗忘复习数据，请确认已完成相关学习并创建了抗遗忘计划')
       return
     }
-    
-    if (existingSession) {
-      // 跳转到抗遗忘复习页面
-      router.push({
-        name: 'AntiForgetReview',
-        params: { studentId: schedule.studentId },
-        query: { 
-          wordSet: schedule.wordSet,
-          teacherId: currentUser.id,
-          sessionId: existingSession.id
-        }
-      })
-    } else {
-      ElMessage.error('无法创建或获取抗遗忘会话')
-    }
+
+    // 跳转到抗遗忘复习页面
+    router.push({
+      name: 'AntiForgetReview',
+      params: { studentId: schedule.studentId },
+      query: {
+        wordSet: schedule.wordSet,
+        teacherId: sessionTeacherId,
+        sessionId: existingSession.id
+      }
+    })
   } else if (schedule.type === 'learning') {
     // 跳转到学习准备页面，显示九宫格和选择学习单词数
     router.push({

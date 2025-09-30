@@ -584,43 +584,47 @@ const createAntiForgetSchedule = async (session: any, time: string) => {
   try {
     const { useScheduleStore } = await import('@/stores/schedule')
     const scheduleStore = useScheduleStore()
-    
+
     // 抗遗忘的时间间隔（天数）
     const antiForgetDays = [1, 2, 3, 5, 7, 9, 12, 14, 17, 21]
-    
+
     const today = new Date()
     const studentId = parseInt(route.params.studentId as string)
-    
+    const teacherId = route.query.teacherId as string // 获取教师ID
+
     // 使用当前用户的权限获取学生数据
     const currentUser = authStore.currentUser
     if (!currentUser) {
       throw new Error('用户未登录')
     }
-    
-    // 获取该老师的所有学生
-    const userStudents = studentsStore.getStudentsByUserId(currentUser.id)
+
+    // 使用teacherId获取学生数据（支持跨用户访问）
+    const userIdForStudent = teacherId || currentUser.id
+    const userStudents = studentsStore.getStudentsByUserId(userIdForStudent)
     const student = userStudents.find(s => s.id === studentId)
-    
+
     if (!student) {
       throw new Error('找不到学生信息')
     }
-    
+
     // 创建抗遗忘复习会话，使用学习会话中的单词数据
     const sessionWords = session.words.map(word => ({
       id: word.id,
       english: word.english,
       chinese: word.chinese
     }))
-    
+
+    // 使用teacherId作为会话的创建者（保持数据一致性）
+    const sessionTeacherId = teacherId || currentUser.id
     const antiForgetSessionId = antiForgetStore.createAntiForgetSession(
       studentId,
       getMainWordSetName(session.words),
-      currentUser.id,
+      sessionTeacherId,
       sessionWords
     )
-    
-    console.log(`已创建抗遗忘复习会话，会话ID: ${antiForgetSessionId}，单词数: ${sessionWords.length}`)
-    
+
+    console.log(`已创建抗遗忘复习会话，会话ID: ${antiForgetSessionId}，teacherId: ${sessionTeacherId}，单词数: ${sessionWords.length}`)
+
     // 为每个抗遗忘日期创建课程
     antiForgetDays.forEach(dayOffset => {
       const targetDate = new Date(today)

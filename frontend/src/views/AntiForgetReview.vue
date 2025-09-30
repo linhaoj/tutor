@@ -318,17 +318,31 @@ const loadReviewData = () => {
     studentId: studentId.value,
     sessionId: sessionId.value
   })
-  
-  // 获取学生信息
-  const student = studentsStore.students.find(s => s.id === studentId.value)
-  if (student) {
-    studentName.value = student.name
-  }
-  
+
   // 获取路由参数
   wordSetName.value = route.query.wordSet as string || ''
   teacherId.value = route.query.teacherId as string || ''
   sessionId.value = route.query.sessionId as string || ''
+
+  // 获取学生信息（支持跨用户访问）
+  let student = null
+  if (teacherId.value) {
+    // 从教师的学生列表中查找
+    const teacherStudents = studentsStore.getStudentsByUserId(teacherId.value)
+    student = teacherStudents.find(s => s.id === studentId.value)
+    console.log(`从教师 ${teacherId.value} 的学生列表中查找学生 ${studentId.value}:`, student ? '找到' : '未找到')
+  } else {
+    // 从当前用户的学生列表中查找
+    student = studentsStore.students.find(s => s.id === studentId.value)
+    console.log(`从当前用户的学生列表中查找学生 ${studentId.value}:`, student ? '找到' : '未找到')
+  }
+
+  if (student) {
+    studentName.value = student.name
+  } else {
+    console.warn('未找到学生信息，使用默认名称')
+    studentName.value = '学生'
+  }
   
   // 获取会话数据
   const session = antiForgetStore.getSession(sessionId.value)
