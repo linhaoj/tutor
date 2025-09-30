@@ -658,7 +658,8 @@ const createAntiForgetSchedule = async (session: any, time: string) => {
 }
 
 // 创建HTML内容用于PDF生成
-const createPDFHtmlContent = (words: any[], studentName: string, teacherName: string): string => {
+// mode: 'both' = 中英对照, 'english' = 只显示英文, 'chinese' = 只显示中文
+const createPDFHtmlContent = (words: any[], studentName: string, teacherName: string, mode: 'both' | 'english' | 'chinese' = 'both'): string => {
   const antiForgetDays = [1, 2, 3, 5, 7, 9, 12, 14, 17, 21]
   const today = new Date()
 
@@ -671,12 +672,35 @@ const createPDFHtmlContent = (words: any[], studentName: string, teacherName: st
       if (startIdx >= pageWords.length) break
 
       const wordsInTable = pageWords.slice(startIdx, endIdx)
-      const rows = wordsInTable.map(word => `
-        <tr>
-          <td style="width: 40%; padding: 8px; border: 1px solid #333;">${word.english}</td>
-          <td style="width: 60%; padding: 8px; border: 1px solid #333;">${word.chinese}</td>
-        </tr>
-      `).join('')
+
+      // 根据mode决定显示内容
+      const rows = wordsInTable.map(word => {
+        if (mode === 'both') {
+          // 中英对照：两列
+          return `
+            <tr>
+              <td style="width: 40%; padding: 8px; border: 1px solid #333;">${word.english}</td>
+              <td style="width: 60%; padding: 8px; border: 1px solid #333;">${word.chinese}</td>
+            </tr>
+          `
+        } else if (mode === 'english') {
+          // 只显示英文：左边英文，右边留白
+          return `
+            <tr>
+              <td style="width: 40%; padding: 8px; border: 1px solid #333;">${word.english}</td>
+              <td style="width: 60%; padding: 8px; border: 1px solid #333;">&nbsp;</td>
+            </tr>
+          `
+        } else {
+          // 只显示中文：左边留白，右边中文
+          return `
+            <tr>
+              <td style="width: 40%; padding: 8px; border: 1px solid #333;">&nbsp;</td>
+              <td style="width: 60%; padding: 8px; border: 1px solid #333;">${word.chinese}</td>
+            </tr>
+          `
+        }
+      }).join('')
 
       tables.push(`
         <table style="width: 30%; border-collapse: collapse; margin-right: 15px; display: inline-table; vertical-align: top;">
@@ -782,86 +806,77 @@ const generateWordsReport = async (words: any[]) => {
     const jsPDF = jsPDFModule.jsPDF || jsPDFModule.default
     const html2canvas = html2canvasModule.default
 
-    ElMessage.info('正在生成PDF报告，请稍候...')
+    ElMessage.info('正在生成3个PDF报告（中英对照、纯英文、纯中文），请稍候...')
 
-    // 创建临时HTML容器
-    const htmlContent = createPDFHtmlContent(words, studentName, teacherName)
-    const tempDiv = document.createElement('div')
-    tempDiv.innerHTML = htmlContent
-    tempDiv.style.position = 'absolute'
-    tempDiv.style.left = '-9999px'
-    tempDiv.style.top = '0'
-    document.body.appendChild(tempDiv)
+    // 辅助函数：生成单个PDF
+    const generateSinglePDF = async (mode: 'both' | 'english' | 'chinese', suffix: string) => {
+      // 创建临时HTML容器
+      const htmlContent = createPDFHtmlContent(words, studentName, teacherName, mode)
+      const tempDiv = document.createElement('div')
+      tempDiv.innerHTML = htmlContent
+      tempDiv.style.position = 'absolute'
+      tempDiv.style.left = '-9999px'
+      tempDiv.style.top = '0'
+      document.body.appendChild(tempDiv)
 
-    // 等待字体加载
-    await new Promise(resolve => setTimeout(resolve, 100))
+      // 等待字体加载
+      await new Promise(resolve => setTimeout(resolve, 100))
 
-    // 使用html2canvas将HTML转换为canvas
-    const canvas = await html2canvas(tempDiv.firstElementChild as HTMLElement, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: '#ffffff',
-      logging: false
-    })
+      // 使用html2canvas将HTML转换为canvas
+      const canvas = await html2canvas(tempDiv.firstElementChild as HTMLElement, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false
+      })
 
-    // 移除临时元素
-    document.body.removeChild(tempDiv)
+      // 移除临时元素
+      document.body.removeChild(tempDiv)
 
-    // 创建PDF
-    const imgWidth = 297 // A4横向宽度(mm)
-    const imgHeight = (canvas.height * imgWidth) / canvas.width
-    const pdf = new jsPDF({
-      orientation: 'landscape',
-      unit: 'mm',
-      format: 'a4'
-    })
+      // 创建PDF
+      const imgWidth = 297 // A4横向宽度(mm)
+      const imgHeight = (canvas.height * imgWidth) / canvas.width
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      })
 
-    // 将canvas转换为图片并添加到PDF
-    const imgData = canvas.toDataURL('image/png')
+      // 将canvas转换为图片并添加到PDF
+      const imgData = canvas.toDataURL('image/png')
 
-    // 如果内容超过一页，需要分页
-    const pageHeight = 210 // A4横向高度(mm)
-    let heightLeft = imgHeight
-    let position = 0
+      // 如果内容超过一页，需要分页
+      const pageHeight = 210 // A4横向高度(mm)
+      let heightLeft = imgHeight
+      let position = 0
 
-    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-    heightLeft -= pageHeight
-
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight
-      pdf.addPage()
       pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
       heightLeft -= pageHeight
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight
+        pdf.addPage()
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+        heightLeft -= pageHeight
+      }
+
+      return pdf
     }
 
-    // 在新标签页中打开PDF
-    const pdfBlob = pdf.output('blob')
-    const pdfUrl = URL.createObjectURL(pdfBlob)
-    const newWindow = window.open(pdfUrl, '_blank')
-    if (newWindow) {
-      newWindow.document.title = `单词学习报告_${new Date().toISOString().split('T')[0]}`
-    }
+    // 生成三个PDF
+    const dateStr = new Date().toISOString().split('T')[0]
+    const [pdfBoth, pdfEnglish, pdfChinese] = await Promise.all([
+      generateSinglePDF('both', '中英对照'),
+      generateSinglePDF('english', '纯英文'),
+      generateSinglePDF('chinese', '纯中文')
+    ])
 
-    ElMessage.success('PDF报告已生成')
+    // 直接下载三个PDF，不预览
+    pdfBoth.save(`单词学习报告_${studentName}_中英对照_${dateStr}.pdf`)
+    pdfEnglish.save(`单词学习报告_${studentName}_纯英文_${dateStr}.pdf`)
+    pdfChinese.save(`单词学习报告_${studentName}_纯中文_${dateStr}.pdf`)
 
-    // 提供下载选项
-    setTimeout(() => {
-      ElMessageBox.confirm(
-        '预览PDF报告完成，是否下载保存？',
-        '下载PDF',
-        {
-          confirmButtonText: '下载',
-          cancelButtonText: '不需要',
-          type: 'info'
-        }
-      ).then(() => {
-        const fileName = `单词学习报告_${studentName}_${new Date().toISOString().split('T')[0]}.pdf`
-        pdf.save(fileName)
-        ElMessage.success(`PDF报告已下载: ${fileName}`)
-      }).catch(() => {
-        URL.revokeObjectURL(pdfUrl)
-      })
-    }, 1000)
+    ElMessage.success('3个PDF报告已生成并下载完成！')
 
   } catch (error) {
     console.error('生成PDF失败:', error)
