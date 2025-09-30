@@ -1,5 +1,52 @@
 # 英语陪练系统开发记录
 
+## 🚀 快速部署指南（SSH方式）
+
+### 本地操作（提交代码）
+```bash
+# 1. 提交本地更改
+cd /Users/laovexl/Downloads/tutor
+git add .
+git commit -m "描述更新内容"
+git push origin main
+```
+
+### 服务器操作（部署更新）
+```bash
+# 1. 连接服务器
+ssh root@47.108.248.168
+
+# 2. 停止服务
+pm2 stop all
+
+# 3. 更新代码
+cd /var/www/tutor
+git pull origin main
+
+# 4. 重新构建前端
+cd frontend
+npm run build-only
+
+# 5. 重启服务
+cd /var/www/tutor
+pm2 start backend/main.py --name backend --interpreter python3
+pm2 start --name frontend --cwd frontend/dist "python3 -m http.server 5173"
+
+# 6. 检查状态
+pm2 status
+```
+
+### 访问地址
+- 前端: http://47.108.248.168:5173
+- 默认管理员账号: admin / admin123
+
+### 注意事项
+- 如果遇到TypeScript错误，使用 `npm run build-only` 跳过类型检查
+- 如果git拉取失败，检查SSH密钥配置或网络连接
+- 服务器已配置SSH密钥，可直接使用git pull
+
+---
+
 ## 项目概述
 这是一个智能英语单词学习和抗遗忘系统，支持学生管理、单词管理、学习进度跟踪和多阶段学习任务。
 
