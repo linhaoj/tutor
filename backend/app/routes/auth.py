@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.models import User
 from app.logger import get_logger
+from app.database_safety import safe_transaction
 
 logger = get_logger("auth")
 
@@ -153,6 +154,7 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/register", response_model=UserResponse)
+@safe_transaction("注册新用户")
 async def register_user(
     user_data: UserCreate,
     current_user: User = Depends(get_current_active_admin),

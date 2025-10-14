@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models import Student, User
 from app.routes.auth import get_current_user
 from app.logger import get_logger
+from app.database_safety import safe_transaction, validate_business_rule
 
 logger = get_logger("students")
 
@@ -41,6 +42,7 @@ class StudentResponse(BaseModel):
 
 
 @router.post("", response_model=StudentResponse)
+@safe_transaction("创建学生")
 async def create_student(
     student_data: StudentCreate,
     current_user: User = Depends(get_current_user),
@@ -55,6 +57,12 @@ async def create_student(
         if existing:
             logger.warning(f"创建学生失败: 邮箱已被使用 - {student_data.email}")
             raise HTTPException(status_code=400, detail="邮箱已被使用")
+
+    # 验证课时数有效性
+    validate_business_rule(
+        student_data.remaining_hours >= 0,
+        f"课时数不能为负数: {student_data.remaining_hours}"
+    )
 
     student = Student(
         teacher_id=current_user.id,
@@ -129,6 +137,7 @@ async def get_student(
 
 
 @router.put("/{student_id}", response_model=StudentResponse)
+@safe_transaction("更新学生信息")
 async def update_student(
     student_id: int,
     student_update: StudentUpdate,
@@ -158,6 +167,11 @@ async def update_student(
                 raise HTTPException(status_code=400, detail="邮箱已被使用")
         student.email = student_update.email
     if student_update.remaining_hours is not None:
+        # 验证课时数有效性
+        validate_business_rule(
+            student_update.remaining_hours >= 0,
+            f"课时数不能为负数: {student_update.remaining_hours}"
+        )
         student.remaining_hours = student_update.remaining_hours
 
     student.updated_at = datetime.utcnow()
@@ -197,13 +211,21 @@ async def delete_student(
 
 
 @router.post("/{student_id}/deduct-hours")
+@safe_transaction("扣减学生课时")
 async def deduct_student_hours(
     student_id: int,
     hours: float,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """扣减学生课时"""
+    """
+    扣减学生课时 - 核心业务操作
+
+    事务安全保证:
+    1. 扣减失败自动回滚
+    2. 课时不会变成负数
+    3. 并发操作安全
+    """
     student = db.query(Student).filter(
         Student.id == student_id,
         Student.teacher_id == current_user.id
@@ -213,19 +235,36 @@ async def deduct_student_hours(
         logger.warning(f"扣减课时失败: 学生不存在 - ID={student_id}, 教师={current_user.username}")
         raise HTTPException(status_code=404, detail="学生不存在")
 
-    if student.remaining_hours < hours:
-        logger.warning(f"扣减课时失败: 剩余课时不足 - 学生={student.name}, 当前课时={student.remaining_hours}h, 需要扣减={hours}h")
-        raise HTTPException(status_code=400, detail="剩余课时不足")
+    # 业务规则验证：课时数有效性
+    validate_business_rule(
+        hours > 0,
+        f"扣减课时必须大于0: {hours}h"
+    )
 
+    validate_business_rule(
+        hours <= 10,
+        f"单次扣减课时不能超过10小时: {hours}h (防止误操作)"
+    )
+
+    # 业务规则验证：余额充足
+    validate_business_rule(
+        student.remaining_hours >= hours,
+        f"剩余课时不足: 当前{student.remaining_hours}h，需要{hours}h"
+    )
+
+    # 执行扣减（记录原值用于日志）
     old_hours = student.remaining_hours
     student.remaining_hours -= hours
     student.updated_at = datetime.utcnow()
+
     db.commit()
     db.refresh(student)
 
-    logger.info(f"课时扣减成功: 学生={student.name}, 扣减={hours}h, {old_hours}h → {student.remaining_hours}h")
+    logger.info(f"课时扣减成功: 学生={student.name}, 扣减={hours}h, {old_hours}h → {student.remaining_hours}h, 操作人={current_user.username}")
 
     return {
         "message": "课时扣减成功",
-        "remaining_hours": student.remaining_hours
+        "remaining_hours": student.remaining_hours,
+        "deducted_hours": hours,
+        "previous_hours": old_hours
     }

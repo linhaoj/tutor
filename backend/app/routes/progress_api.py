@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models import LearningProgress, Student, User
 from app.routes.auth import get_current_user
 from app.logger import get_logger
+from app.database_safety import safe_transaction
 
 logger = get_logger("progress")
 
@@ -34,6 +35,7 @@ class ProgressResponse(BaseModel):
 
 
 @router.post("", response_model=ProgressResponse)
+@safe_transaction("保存学习进度")
 async def create_or_update_progress(
     progress_data: ProgressCreate,
     current_user: User = Depends(get_current_user),

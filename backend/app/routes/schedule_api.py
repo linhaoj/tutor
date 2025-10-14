@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models import Schedule, Student, User
 from app.routes.auth import get_current_user
 from app.logger import get_logger
+from app.database_safety import safe_transaction
 
 logger = get_logger("schedule")
 
@@ -39,6 +40,7 @@ class ScheduleResponse(BaseModel):
 
 
 @router.post("", response_model=ScheduleResponse)
+@safe_transaction("创建课程安排")
 async def create_schedule(
     schedule_data: ScheduleCreate,
     current_user: User = Depends(get_current_user),
