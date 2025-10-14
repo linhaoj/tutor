@@ -9,7 +9,7 @@ from app.models import (
     Schedule, LearningSession, LearningRecord,
     LearningProgress, AntiForgetSession, StudentReview
 )
-from app.routes import auth
+from app.routes import auth, students_api, words_api, schedule_api, progress_api
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -41,6 +41,10 @@ async def startup_event():
 
 # 注册路由
 app.include_router(auth.router)
+app.include_router(students_api.router)
+app.include_router(words_api.router)
+app.include_router(schedule_api.router)
+app.include_router(progress_api.router)
 
 @app.get("/")
 async def root():
