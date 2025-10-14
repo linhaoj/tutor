@@ -53,8 +53,8 @@
         
         <!-- 右侧按钮区域 -->
         <div class="test-actions" v-if="word.status === 'unchecked'">
-          <el-button 
-            type="success" 
+          <el-button
+            type="success"
             :icon="Check"
             size="large"
             @click="markWordStatus(index, 'passed')"
@@ -62,15 +62,26 @@
           >
             通过
           </el-button>
-          
-          <el-button 
-            type="danger" 
+
+          <el-button
+            type="danger"
             :icon="Close"
             size="large"
             @click="markWordStatus(index, 'failed')"
             class="fail-button"
           >
             不通过
+          </el-button>
+
+          <!-- 发音按钮 -->
+          <el-button
+            type="primary"
+            :icon="VideoPlay"
+            size="large"
+            @click="speakWord(word.english)"
+            class="speak-button"
+          >
+            发音
           </el-button>
         </div>
         
@@ -130,7 +141,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Check, Close } from '@element-plus/icons-vue'
+import { Check, Close, VideoPlay } from '@element-plus/icons-vue'
 import { useWordsStore } from '@/stores/words'
 import { useStudentsStore } from '@/stores/students'
 import { useLearningProgressStore } from '@/stores/learningProgress'
@@ -193,6 +204,31 @@ const failedWords = computed(() => {
 const toggleWordDisplay = (index: number) => {
   if (allWords.value[index]) {
     allWords.value[index].showChinese = !allWords.value[index].showChinese
+  }
+}
+
+const speakWord = (text: string) => {
+  if ('speechSynthesis' in window) {
+    // 停止当前正在播放的语音
+    window.speechSynthesis.cancel()
+
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = 'en-US' // 设置为英语
+    utterance.rate = 0.8 // 语速稍慢一些，便于学习
+    utterance.volume = 1 // 音量最大
+
+    utterance.onstart = () => {
+      ElMessage.info(`正在播放: ${text}`)
+    }
+
+    utterance.onerror = (event) => {
+      ElMessage.error('语音播放失败')
+      console.error('Speech synthesis error:', event)
+    }
+
+    window.speechSynthesis.speak(utterance)
+  } else {
+    ElMessage.warning('您的浏览器不支持语音功能')
   }
 }
 
@@ -1162,14 +1198,14 @@ onMounted(() => {
 .test-actions {
   display: flex;
   flex-direction: row;
-  gap: 15px;
-  min-width: 200px;
+  gap: 10px;
+  min-width: 280px;
 }
 
-.pass-button, .fail-button {
+.pass-button, .fail-button, .speak-button {
   flex: 1;
   height: 50px;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
 }
 

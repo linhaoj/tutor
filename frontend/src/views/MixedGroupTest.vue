@@ -81,8 +81,8 @@
         
         <!-- 右侧按钮区域 -->
         <div class="card-actions" v-if="word.status === 'unchecked'">
-          <el-button 
-            type="success" 
+          <el-button
+            type="success"
             :icon="Check"
             size="large"
             @click="markWordStatus(index, 'mastered')"
@@ -90,15 +90,26 @@
           >
             掌握了
           </el-button>
-          
-          <el-button 
-            type="danger" 
+
+          <el-button
+            type="danger"
             :icon="Close"
             size="large"
             @click="markWordStatus(index, 'need-review')"
             class="review-button"
           >
             需要复习
+          </el-button>
+
+          <!-- 发音按钮 -->
+          <el-button
+            type="primary"
+            :icon="VideoPlay"
+            size="large"
+            @click="speakWord(word.english)"
+            class="speak-button"
+          >
+            发音
           </el-button>
         </div>
         
@@ -167,7 +178,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Check, Close } from '@element-plus/icons-vue'
+import { Check, Close, VideoPlay } from '@element-plus/icons-vue'
 import { useWordsStore } from '@/stores/words'
 import { useStudentsStore } from '@/stores/students'
 import { useUIStore } from '@/stores/ui'
@@ -261,6 +272,31 @@ const markWordStatus = (index: number, status: 'mastered' | 'need-review') => {
     if (allGroupsCompleted.value) {
       ElMessage.success('所有组检测完成！可以进入最后一步')
     }
+  }
+}
+
+const speakWord = (text: string) => {
+  if ('speechSynthesis' in window) {
+    // 停止当前正在播放的语音
+    window.speechSynthesis.cancel()
+
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = 'en-US' // 设置为英语
+    utterance.rate = 0.8 // 语速稍慢一些，便于学习
+    utterance.volume = 1 // 音量最大
+
+    utterance.onstart = () => {
+      ElMessage.info(`正在播放: ${text}`)
+    }
+
+    utterance.onerror = (event) => {
+      ElMessage.error('语音播放失败')
+      console.error('Speech synthesis error:', event)
+    }
+
+    window.speechSynthesis.speak(utterance)
+  } else {
+    ElMessage.warning('您的浏览器不支持语音功能')
   }
 }
 
@@ -635,7 +671,7 @@ onMounted(() => {
   min-width: 130px;
 }
 
-.master-button, .review-button {
+.master-button, .review-button, .speak-button {
   width: 100%;
   height: 44px;
   font-size: 14px;

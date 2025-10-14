@@ -8,14 +8,6 @@
       <el-card>
         <div class="header-content">
           <h2>{{ studentName }} - 单词学习</h2>
-          <div class="progress-info">
-            <span>进度: {{ completedWords }}/{{ totalWords }}</span>
-            <el-progress 
-              :percentage="progressPercentage" 
-              :stroke-width="6"
-              :show-text="false"
-            />
-          </div>
         </div>
       </el-card>
     </div>
@@ -483,27 +475,12 @@ onMounted(() => {
 }
 
 .header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  text-align: center;
 }
 
 .header-content h2 {
   margin: 0;
   color: #303133;
-}
-
-.progress-info {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  min-width: 250px;
-}
-
-.progress-info span {
-  font-size: 14px;
-  color: #606266;
-  white-space: nowrap;
 }
 
 /* 单词卡区域 */
