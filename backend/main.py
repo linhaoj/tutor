@@ -4,7 +4,11 @@ from sqlalchemy.orm import Session
 import uvicorn
 
 from app.database import get_db, create_tables
-from app.models import Student, Word, StudentWord, LearningSession
+from app.models import (
+    User, Student, WordSet, Word, StudentWord,
+    Schedule, LearningSession, LearningRecord,
+    LearningProgress, AntiForgetSession, StudentReview
+)
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -16,7 +20,11 @@ app = FastAPI(
 # 添加CORS中间件
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://47.108.248.168:5173",
+        "http://127.0.0.1:5173"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
