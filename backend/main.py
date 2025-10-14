@@ -9,6 +9,7 @@ from app.models import (
     Schedule, LearningSession, LearningRecord,
     LearningProgress, AntiForgetSession, StudentReview
 )
+from app.routes import auth
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -34,6 +35,12 @@ app.add_middleware(
 async def startup_event():
     """应用启动时创建数据库表"""
     create_tables()
+    # 初始化默认管理员
+    from app.init_db import create_default_admin
+    create_default_admin()
+
+# 注册路由
+app.include_router(auth.router)
 
 @app.get("/")
 async def root():
