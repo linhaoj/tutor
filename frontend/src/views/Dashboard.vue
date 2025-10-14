@@ -42,23 +42,29 @@
                 >
                   <div class="schedule-time">{{ schedule.time }}</div>
                   <div class="schedule-content">
-                    <div class="schedule-title">{{ schedule.wordSet }}</div>
+                    <div class="schedule-title">
+                      {{ schedule.wordSet }}
+                      <span class="word-count-badge">{{ getWordCount(schedule) }}词</span>
+                    </div>
                     <div class="schedule-student">{{ schedule.studentName }}</div>
                     <div class="schedule-meta">
-                      <el-tag 
-                        :type="schedule.type === 'review' ? 'warning' : 'success'" 
+                      <el-tag
+                        :type="schedule.type === 'review' ? 'warning' : 'success'"
                         size="small"
                       >
                         {{ schedule.type === 'review' ? '抗遗忘' : '单词学习' }}
                       </el-tag>
-                      <el-tag 
-                        :type="schedule.classType === 'big' ? 'primary' : 'info'" 
+                      <el-tag
+                        :type="schedule.classType === 'big' ? 'primary' : 'info'"
                         size="small"
                         style="margin-left: 8px"
                       >
                         {{ schedule.classType === 'big' ? '大课' : '小课' }}
                       </el-tag>
                       <span class="duration-text">{{ schedule.duration || (schedule.classType === 'big' ? 60 : 30) }}分钟</span>
+                      <span v-if="getLastReviewTime(schedule)" class="last-review-text">
+                        · 最后复习: {{ getLastReviewTime(schedule) }}
+                      </span>
                     </div>
                   </div>
                   <div class="schedule-actions">
@@ -97,17 +103,20 @@
                 >
                   <div class="schedule-time">{{ schedule.time }}</div>
                   <div class="schedule-content">
-                    <div class="schedule-title">{{ schedule.wordSet }}</div>
+                    <div class="schedule-title">
+                      {{ schedule.wordSet }}
+                      <span class="word-count-badge">{{ getWordCount(schedule) }}词</span>
+                    </div>
                     <div class="schedule-student">{{ schedule.studentName }}</div>
                     <div class="schedule-meta">
-                      <el-tag 
-                        :type="schedule.type === 'review' ? 'warning' : 'success'" 
+                      <el-tag
+                        :type="schedule.type === 'review' ? 'warning' : 'success'"
                         size="small"
                       >
                         {{ schedule.type === 'review' ? '抗遗忘' : '单词学习' }}
                       </el-tag>
-                      <el-tag 
-                        :type="schedule.classType === 'big' ? 'primary' : 'info'" 
+                      <el-tag
+                        :type="schedule.classType === 'big' ? 'primary' : 'info'"
                         size="small"
                         style="margin-left: 8px"
                       >
@@ -117,6 +126,9 @@
                       <el-tag type="success" size="small" style="margin-left: 8px">
                         ✓ 已完成
                       </el-tag>
+                      <span v-if="getLastReviewTime(schedule)" class="last-review-text">
+                        · 最后复习: {{ getLastReviewTime(schedule) }}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -136,23 +148,29 @@
             >
               <div class="schedule-time">{{ schedule.time }}</div>
               <div class="schedule-content">
-                <div class="schedule-title">{{ schedule.wordSet }}</div>
+                <div class="schedule-title">
+                  {{ schedule.wordSet }}
+                  <span class="word-count-badge">{{ getWordCount(schedule) }}词</span>
+                </div>
                 <div class="schedule-student">{{ schedule.studentName }}</div>
                 <div class="schedule-meta">
-                  <el-tag 
-                    :type="schedule.type === 'review' ? 'warning' : 'success'" 
+                  <el-tag
+                    :type="schedule.type === 'review' ? 'warning' : 'success'"
                     size="small"
                   >
                     {{ schedule.type === 'review' ? '抗遗忘' : '单词学习' }}
                   </el-tag>
-                  <el-tag 
-                    :type="schedule.classType === 'big' ? 'primary' : 'info'" 
+                  <el-tag
+                    :type="schedule.classType === 'big' ? 'primary' : 'info'"
                     size="small"
                     style="margin-left: 8px"
                   >
                     {{ schedule.classType === 'big' ? '大课' : '小课' }}
                   </el-tag>
                   <span class="duration-text">{{ schedule.duration || (schedule.classType === 'big' ? 60 : 30) }}分钟</span>
+                  <span v-if="getLastReviewTime(schedule)" class="last-review-text">
+                    · 最后复习: {{ getLastReviewTime(schedule) }}
+                  </span>
                 </div>
               </div>
               <div class="schedule-actions">
@@ -387,9 +405,14 @@ const getTodayCompletedSchedules = (schedules: any[]) => {
 }
 
 const startStudy = (schedule: any) => {
-  // 记录课程开始时间
-  const startTime = Date.now()
-  sessionStorage.setItem('courseStartTime', startTime.toString())
+  // 记录课程开始时间（只在首次设置）
+  if (!sessionStorage.getItem('courseStartTime')) {
+    const startTime = Date.now()
+    sessionStorage.setItem('courseStartTime', startTime.toString())
+    console.log('设置课程开始时间:', new Date().toLocaleTimeString())
+  } else {
+    console.log('课程已在进行中，继续计时')
+  }
   sessionStorage.setItem('currentScheduleId', schedule.id.toString())
   
   if (schedule.type === 'review') {
@@ -412,7 +435,7 @@ const startStudy = (schedule: any) => {
 
     let sessionTeacherId = currentUser.id
 
-    // 如果当前用户是老师且没找到会话，尝试查找管理员创建的会话
+    // 如果当前用户是教师且没找到会话，尝试查找管理员创建的会话
     if (!existingSession && !authStore.isAdmin) {
       console.log('当前用户未找到会话，尝试查找管理员创建的会话...')
       // 获取所有会话，查找匹配的
@@ -525,14 +548,81 @@ const addCourse = async () => {
 const deleteSchedule = async (schedule: any) => {
   try {
     await ElMessageBox.confirm(
-      `确定要删除 ${schedule.studentName} 的课程吗？`, 
-      '确认删除', 
+      `确定要删除 ${schedule.studentName} 的课程吗？`,
+      '确认删除',
       { type: 'warning' }
     )
-    
+
     scheduleStore.deleteSchedule(schedule.id)
     ElMessage.success('课程删除成功')
   } catch {}
+}
+
+// 获取单词集的单词数量（本次复习的单词数）
+const getWordCount = (schedule: any) => {
+  const currentUser = authStore.currentUser
+  if (!currentUser) return 0
+
+  // 如果是抗遗忘课程，返回本次复习的单词数
+  if (schedule.type === 'review') {
+    const session = antiForgetStore.getActiveSession(
+      schedule.studentId,
+      schedule.wordSet,
+      currentUser.id
+    )
+
+    if (session) {
+      return session.words.length
+    }
+
+    // 如果当前用户是教师，尝试查找管理员创建的会话
+    if (!authStore.isAdmin) {
+      const allSessions = antiForgetStore.sessions
+      const existingSession = allSessions.find(s =>
+        s.studentId === schedule.studentId &&
+        s.wordSetName === schedule.wordSet &&
+        s.reviewCount < s.totalReviews
+      )
+
+      if (existingSession) {
+        return existingSession.words.length
+      }
+    }
+  }
+
+  // 如果是学习课程，返回整个单词库的单词数
+  const words = wordsStore.getWordsBySetForUser(currentUser.id, schedule.wordSet)
+  return words.length
+}
+
+// 获取最后复习时间
+const getLastReviewTime = (schedule: any) => {
+  if (schedule.type !== 'review') {
+    return null
+  }
+
+  // 从 antiForget store 获取最后复习时间
+  const currentUser = authStore.currentUser
+  if (!currentUser) return null
+
+  const session = antiForgetStore.getActiveSession(
+    schedule.studentId,
+    schedule.wordSet,
+    currentUser.id
+  )
+
+  if (!session || !session.lastReviewDate) {
+    return null
+  }
+
+  // 格式化日期时间
+  const date = new Date(session.lastReviewDate)
+  return date.toLocaleString('zh-CN', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 onMounted(() => {
@@ -749,5 +839,23 @@ onMounted(() => {
   color: #909399;
   font-size: 12px;
   margin-left: 4px;
+}
+
+.word-count-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-left: 8px;
+  font-weight: 500;
+}
+
+.last-review-text {
+  color: #67c23a;
+  font-size: 12px;
+  margin-left: 4px;
+  font-weight: 500;
 }
 </style>

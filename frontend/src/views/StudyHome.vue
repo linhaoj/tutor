@@ -228,7 +228,7 @@ const loadRealGridStats = async () => {
   }
   
   try {
-    // 获取当前单词集的所有单词（使用老师的用户ID）
+    // 获取当前单词集的所有单词（使用教师的用户ID）
     console.log('StudyHome - 准备获取单词:', {
       teacherId: teacherId.value,
       currentWordSet: currentWordSet.value,

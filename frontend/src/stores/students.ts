@@ -9,6 +9,9 @@ export interface Student {
   total_words?: number
   learned_words?: number
   remainingHours?: number  // 剩余课程时长，以小时为单位
+  username?: string // 学生账号用户名
+  hasAccount?: boolean // 是否已创建账号
+  userId?: string // 关联的User ID
 }
 
 export const useStudentsStore = defineStore('students', () => {

@@ -5,11 +5,12 @@ import tutorDB from '@/utils/localDatabase'
 export interface User {
   id: string
   username: string
-  role: 'admin' | 'teacher' // admin可以管理用户，teacher是普通老师
+  role: 'admin' | 'teacher' | 'student' // admin可以管理用户，teacher是普通教师，student是学生
   displayName: string
   email?: string
   createdAt: string
   lastLoginAt?: string
+  studentId?: number // 如果是学生角色，关联到学生ID
 }
 
 export interface LoginCredentials {
@@ -22,6 +23,7 @@ export const useAuthStore = defineStore('auth', () => {
   const currentUser = ref<User | null>(null)
   const isLoggedIn = computed(() => !!currentUser.value)
   const isAdmin = computed(() => currentUser.value?.role === 'admin')
+  const isStudent = computed(() => currentUser.value?.role === 'student')
 
   // 从localStorage加载用户数据（简化版）
   const loadUsersFromStorage = (): User[] => {
@@ -165,8 +167,9 @@ export const useAuthStore = defineStore('auth', () => {
     username: string
     password: string
     displayName: string
-    role: 'admin' | 'teacher'
+    role: 'admin' | 'teacher' | 'student'
     email?: string
+    studentId?: number // 如果是学生角色，关联学生ID
   }): Promise<{ success: boolean, message: string }> => {
     if (!isAdmin.value) {
       return { success: false, message: '权限不足' }
@@ -188,7 +191,8 @@ export const useAuthStore = defineStore('auth', () => {
         role: userData.role,
         displayName: userData.displayName,
         email: userData.email,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        studentId: userData.studentId // 如果是学生角色，保存学生ID
       }
 
       users.push(newUser)
@@ -344,6 +348,7 @@ export const useAuthStore = defineStore('auth', () => {
     currentUser,
     isLoggedIn,
     isAdmin,
+    isStudent,
 
     // 方法
     login,

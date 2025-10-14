@@ -179,6 +179,17 @@ export const useScheduleStore = defineStore('schedule', () => {
     localStorage.setItem(`schedule_${userId}`, JSON.stringify(updatedSchedules))
   }
 
+  // 跨用户标记课程完成
+  const completeScheduleForUser = (userId: string, scheduleId: number) => {
+    const userSchedules = getSchedulesByUserId(userId)
+    const schedule = userSchedules.find(s => s.id === scheduleId)
+    if (schedule) {
+      schedule.completed = true
+      localStorage.setItem(`schedule_${userId}`, JSON.stringify(userSchedules))
+      console.log(`课程已标记为完成 (用户${userId}, 课程${scheduleId})`)
+    }
+  }
+
   // 获取指定用户的按日期分组的日程
   const getGroupedSchedulesByUserId = (userId: string): DateGroup[] => {
     const userSchedules = getSchedulesByUserId(userId)
@@ -216,6 +227,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     reloadUserData,
     getSchedulesByUserId,
     deleteScheduleForUser,
+    completeScheduleForUser,
     getGroupedSchedulesByUserId
   }
 })

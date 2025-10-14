@@ -248,6 +248,62 @@ export const useLearningProgressStore = defineStore('learningProgress', () => {
     studentProgresses.value = loadProgressFromStorage()
   }
 
+  // 管理员专用：跨用户操作方法
+  const getProgressByUserId = (userId: string, studentId: number, wordSet: string) => {
+    try {
+      const saved = localStorage.getItem(`learningProgress_${userId}`)
+      if (!saved) return null
+      const progresses: StudentProgress[] = JSON.parse(saved)
+      return progresses.find(p => p.studentId === studentId && p.wordSet === wordSet) || null
+    } catch {
+      return null
+    }
+  }
+
+  const updateWordProgressForUser = (userId: string, studentId: number, wordSet: string, wordIndex: number, newStage: number) => {
+    try {
+      const saved = localStorage.getItem(`learningProgress_${userId}`)
+      if (!saved) return false
+      const progresses: StudentProgress[] = JSON.parse(saved)
+
+      const progress = progresses.find(p => p.studentId === studentId && p.wordSet === wordSet)
+      if (!progress) return false
+
+      // 确保wordProgresses数组存在
+      if (!progress.wordProgresses) {
+        progress.wordProgresses = []
+      }
+
+      // 查找或创建单词进度
+      let wordProgress = progress.wordProgresses.find(wp => wp.wordIndex === wordIndex)
+
+      if (!wordProgress) {
+        wordProgress = {
+          wordIndex,
+          currentStage: 0,
+          lastUpdated: new Date().toISOString()
+        }
+        progress.wordProgresses.push(wordProgress)
+      }
+
+      // 更新阶段和时间
+      wordProgress.currentStage = Math.max(0, Math.min(7, newStage))
+      wordProgress.lastUpdated = new Date().toISOString()
+
+      // 保存回localStorage
+      localStorage.setItem(`learningProgress_${userId}`, JSON.stringify(progresses))
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const getWordProgressForUser = (userId: string, studentId: number, wordSet: string, wordIndex: number) => {
+    const progress = getProgressByUserId(userId, studentId, wordSet)
+    if (!progress || !progress.wordProgresses) return null
+    return progress.wordProgresses.find(wp => wp.wordIndex === wordIndex) || null
+  }
+
   return {
     studentProgresses,
     startLearningProgress,
@@ -259,6 +315,9 @@ export const useLearningProgressStore = defineStore('learningProgress', () => {
     getWordProgress,
     getWordProgressStats,
     resetProgress,
-    reloadUserData
+    reloadUserData,
+    getProgressByUserId,
+    updateWordProgressForUser,
+    getWordProgressForUser
   }
 })

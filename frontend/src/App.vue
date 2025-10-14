@@ -22,7 +22,39 @@
       <router-view />
     </div>
 
-    <!-- 主应用布局 -->
+    <!-- 学生端布局（无侧边栏） -->
+    <el-container v-else-if="authStore.isStudent" class="student-container">
+      <el-header class="header">
+        <div class="header-content">
+          <h3>{{ pageTitle }}</h3>
+          <div class="header-actions">
+            <!-- 用户信息和操作 -->
+            <div class="user-info">
+              <el-dropdown @command="handleUserCommand">
+                <el-button type="text" class="user-button">
+                  <el-icon><Avatar /></el-icon>
+                  {{ authStore.currentUser?.displayName }}
+                  <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="logout" divided>
+                      退出登录
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+          </div>
+        </div>
+      </el-header>
+
+      <el-main class="main-content">
+        <router-view />
+      </el-main>
+    </el-container>
+
+    <!-- 主应用布局（教师和管理员） -->
     <el-container v-else class="app-container">
       <!-- 侧边导航 -->
       <el-aside width="250px" class="sidebar">
@@ -37,11 +69,11 @@
           text-color="#bfcbd9"
           active-text-color="#409EFF"
         >
-          <!-- 老师菜单 (只有teacher角色可见) -->
+          <!-- 教师菜单 (只有teacher角色可见) -->
           <template v-if="!authStore.isAdmin">
             <el-menu-item index="/teacher">
               <el-icon><User /></el-icon>
-              <span>老师工作台</span>
+              <span>教师工作台</span>
             </el-menu-item>
             
             <el-menu-item index="/">
@@ -150,10 +182,15 @@ const pageTitles: Record<string, string> = {
   '/learning': '学习中心',
   '/stats': '统计分析',
   '/admin': '系统管理',
-  '/teacher': '老师工作台'
+  '/teacher': '教师工作台',
+  '/student': ''
 }
 
 const pageTitle = computed(() => {
+  // 学生端：不显示任何标题
+  if (authStore.isStudent) {
+    return ''
+  }
   return pageTitles[route.path] || '英语陪练系统'
 })
 
@@ -308,5 +345,24 @@ onMounted(() => {
   top: 20px;
   left: 20px;
   z-index: 1000;
+}
+
+/* 学生端布局样式 */
+.student-container {
+  height: 100vh;
+  flex-direction: column;
+}
+
+.student-container .header {
+  background-color: #fff;
+  border-bottom: 1px solid #e4e7ed;
+  padding: 0 20px;
+}
+
+.student-container .main-content {
+  background-color: #f5f5f5;
+  padding: 20px;
+  flex: 1;
+  overflow-y: auto;
 }
 </style>

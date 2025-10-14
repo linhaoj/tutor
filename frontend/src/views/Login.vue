@@ -102,10 +102,12 @@ const handleLogin = async () => {
     
     if (result.success) {
       ElMessage.success(result.message)
-      
+
       // 根据用户角色跳转到不同页面
       if (authStore.isAdmin) {
         router.push('/admin')
+      } else if (authStore.isStudent) {
+        router.push('/student')
       } else {
         router.push('/teacher')
       }
@@ -131,8 +133,10 @@ onMounted(() => {
   if (authStore.isLoggedIn) {
     if (authStore.isAdmin) {
       router.push('/admin')
+    } else if (authStore.isStudent) {
+      router.push('/student')
     } else {
-      router.push('/')
+      router.push('/teacher')
     }
   }
 })

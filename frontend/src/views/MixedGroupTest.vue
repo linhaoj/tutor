@@ -328,22 +328,38 @@ const completeAllTests = () => {
     ElMessage.warning('请先完成所有组的检测')
     return
   }
-  
+
   // 跳转到训后检测页面
   const studentId = route.params.studentId
   const wordSet = route.query.wordSet as string
   const totalWordsCount = totalLearningGroups.value * 5
-  
+
+  // 计算当前批次的起始组号和组数
+  // completedGroups 表示已经完成了多少组的检测
+  // 我们需要传递本次学习的组的范围
+  const currentBatchStartGroup = route.query.currentBatchStartGroup
+    ? parseInt(route.query.currentBatchStartGroup as string)
+    : 1
+  const currentBatchGroupCount = totalGroups.value - (currentBatchStartGroup - 1)
+
+  console.log('MixedGroupTest完成 - 跳转到训后检测', {
+    currentBatchStartGroup,
+    currentBatchGroupCount,
+    totalGroups: totalGroups.value
+  })
+
   ElMessage.success('混组检测全部完成！进入训后检测阶段')
-  
+
   router.push({
     name: 'PostLearningTest',
     params: { studentId },
-    query: { 
+    query: {
       wordSet,
       totalWords: totalWordsCount,
-      startIndex: 0, // 从第0个单词开始，检测所有学过的单词
-      teacherId: route.query.teacherId || '' // 传递teacherId
+      startIndex: 0,
+      teacherId: route.query.teacherId || '',
+      currentBatchStartGroup: currentBatchStartGroup, // 当前批次起始组号
+      currentBatchGroupCount: currentBatchGroupCount // 当前批次组数
     }
   })
 }
@@ -396,34 +412,45 @@ const initializeWords = () => {
   const teacherId = route.query.teacherId as string || ''
   const completedGroupsCount = parseInt(route.query.completedGroups as string) || 1
   const totalWordsCount = parseInt(route.query.totalWords as string) || completedGroupsCount * 5
-  
+
   console.log('MixedGroupTest - 初始化参数:', {
     wordSetName,
     teacherId,
     completedGroupsCount,
     totalWordsCount
   })
-  
+
   // 计算总学习组数
   totalLearningGroups.value = Math.ceil(totalWordsCount / 5)
-  
-  // 获取指定单词集的单词（支持跨用户访问）
-  let sourceWords = wordSetName 
-    ? (teacherId ? wordsStore.getWordsBySetForUser(teacherId, wordSetName) : wordsStore.getWordsBySet(wordSetName))
-    : wordsStore.words
-  
-  console.log('MixedGroupTest - 获取到的单词数量:', sourceWords?.length || 0)
-  
+
   // 按组分配单词（每组5个）并打乱顺序
   const groupedWords: TestWord[][] = []
-  
+
   for (let i = 0; i < completedGroupsCount; i++) {
-    const groupStartIndex = i * 5 // 每组的实际起始位置
-    const originalGroupWords = sourceWords.slice(groupStartIndex, groupStartIndex + 5)
-    
+    const groupNumber = i + 1
+    const sessionKey = `simpleStudyGroup_${groupNumber}`
+    const savedWords = sessionStorage.getItem(sessionKey)
+
+    let originalGroupWords = []
+
+    if (savedWords) {
+      // 从sessionStorage加载之前学习的单词
+      originalGroupWords = JSON.parse(savedWords)
+      console.log(`MixedGroupTest - 从sessionStorage加载第${groupNumber}组单词:`, originalGroupWords.map(w => w.english))
+    } else {
+      // 备用逻辑：从单词库加载
+      console.warn(`MixedGroupTest - 第${groupNumber}组未找到sessionStorage数据，使用备用逻辑`)
+      const sourceWords = wordSetName
+        ? (teacherId ? wordsStore.getWordsBySetForUser(teacherId, wordSetName) : wordsStore.getWordsBySet(wordSetName))
+        : wordsStore.words
+
+      const groupStartIndex = i * 5
+      originalGroupWords = sourceWords.slice(groupStartIndex, groupStartIndex + 5)
+    }
+
     // 对每组的5个单词进行打乱
     const shuffledGroupWords = shuffleArray(originalGroupWords)
-    
+
     const groupWords = shuffledGroupWords.map((word, index) => ({
       id: word.id,
       english: word.english,
@@ -432,11 +459,11 @@ const initializeWords = () => {
       status: 'unchecked' as const,
       groupNumber: i + 1
     }))
-    
-    console.log(`MixedGroupTest - 第${i + 1}组单词已打乱:`, groupWords.map(w => w.english))
+
+    console.log(`MixedGroupTest - 第${groupNumber}组单词已打乱:`, groupWords.map(w => w.english))
     groupedWords.push(groupWords)
   }
-  
+
   allGroupWords.value = groupedWords
   totalGroups.value = completedGroupsCount
   currentTestingGroup.value = 1

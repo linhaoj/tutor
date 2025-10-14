@@ -164,7 +164,13 @@ const getAvailableReplacementWords = (excludeWords: Word[]): Word[] => {
 
   // 过滤出真正需要学习的单词（格子0-6的单词）
   return availableWords.filter((_, index) => {
-    const wordProgress = progressStore.getWordProgress(studentId.value, wordSetName.value, allWords.findIndex(w => w.id === _.id))
+    const wordIndex = allWords.findIndex(w => w.id === _.id)
+    const wordProgress = progressStore.getWordProgressForUser(
+      teacherId.value,
+      studentId.value,
+      wordSetName.value,
+      wordIndex
+    )
     const stage = wordProgress ? wordProgress.currentStage : 0
     return stage >= 0 && stage <= 6
   })
@@ -284,16 +290,71 @@ const startLearning = () => {
   // 将筛选后的单词存储到sessionStorage中，供学习页面使用
   const wordsForLearning = currentWords.value.slice(0, wordsCount.value)
   sessionStorage.setItem('filteredWords', JSON.stringify(wordsForLearning))
-  
+
+  // 检查是否是继续练习（从训后检测返回）
+  const continueSession = route.query.continueSession === 'true'
+
+  let nextGroupNumber = 1
+
+  if (continueSession) {
+    // 继续练习：计算下一个 groupNumber
+    for (let i = 1; i <= 100; i++) {
+      const key = `simpleStudyGroup_${i}`
+      if (!sessionStorage.getItem(key)) {
+        nextGroupNumber = i
+        break
+      }
+    }
+    console.log(`继续练习 - 计算出的下一个 groupNumber: ${nextGroupNumber}`)
+  } else {
+    // 首次学习：清空之前的 sessionStorage group keys
+    for (let i = 1; i <= 100; i++) {
+      const key = `simpleStudyGroup_${i}`
+      sessionStorage.removeItem(key)
+    }
+    nextGroupNumber = 1
+  }
+
   // 跳转到第一个学习任务
   router.push({
     name: 'SimpleWordStudy',
     params: { studentId: studentId.value },
-    query: { 
+    query: {
       wordSet: wordSetName.value,
       wordsCount: wordsCount.value,
       teacherId: teacherId.value,
-      filtered: 'true' // 标记这些单词已经过筛选
+      filtered: 'true', // 标记这些单词已经过筛选
+      groupNumber: nextGroupNumber.toString()
+    }
+  })
+}
+
+// 跳过筛选，直接开始学习（用于继续练习）
+const skipFilterAndStartLearning = () => {
+  // 计算下一个 groupNumber
+  // 通过检查 sessionStorage 中已有的 group key 来确定
+  let nextGroupNumber = 1
+  for (let i = 1; i <= 100; i++) {
+    const key = `simpleStudyGroup_${i}`
+    if (!sessionStorage.getItem(key)) {
+      nextGroupNumber = i
+      break
+    }
+  }
+
+  console.log(`继续练习 - 计算出的下一个 groupNumber: ${nextGroupNumber}`)
+
+  // sessionStorage 中已经有更新后的 filteredWords
+  // 直接跳转到学习页面
+  router.push({
+    name: 'SimpleWordStudy',
+    params: { studentId: studentId.value },
+    query: {
+      wordSet: wordSetName.value,
+      wordsCount: currentWords.value.length,
+      teacherId: teacherId.value,
+      filtered: 'true',
+      groupNumber: nextGroupNumber // 传递正确的 groupNumber
     }
   })
 }
@@ -302,8 +363,18 @@ const startLearning = () => {
 // 初始化单词列表
 const initializeWords = () => {
   try {
+    // 检查是否是继续练习（从训后检测返回）
+    const continueSession = route.query.continueSession === 'true'
+
+    if (continueSession) {
+      // 继续练习：清空之前的筛选，重新从所有可学习的单词中筛选
+      console.log('继续练习模式：重新初始化单词列表')
+      // 不使用 savedWords，而是重新从单词库加载
+      // 继续下面的正常初始化流程
+    }
+
     let allWords: Word[] = []
-    
+
     if (teacherId.value) {
       allWords = wordsStore.getWordsBySetForUser(teacherId.value, wordSetName.value)
     } else {
@@ -326,7 +397,12 @@ const initializeWords = () => {
 
     // 过滤出需要学习的单词（格子0-6）
     const wordsToLearn = allWords.filter((_, index) => {
-      const wordProgress = progressStore.getWordProgress(studentId.value, wordSetName.value, index)
+      const wordProgress = progressStore.getWordProgressForUser(
+        teacherId.value,
+        studentId.value,
+        wordSetName.value,
+        index
+      )
       const stage = wordProgress ? wordProgress.currentStage : 0
       return stage >= 0 && stage <= 6
     })

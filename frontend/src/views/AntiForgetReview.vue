@@ -300,8 +300,8 @@ const markAntiForgetCourseAsCompleted = () => {
         }
       }
       
-      // 标记课程为已完成
-      scheduleStore.completeSchedule(scheduleId)
+      // 使用跨用户方法标记课程为已完成
+      scheduleStore.completeScheduleForUser(teacherId.value, scheduleId)
       console.log('抗遗忘课程已标记为完成:', scheduleId)
     } else {
       console.warn('缺少课程完成所需信息', { scheduleIdStr, teacherId: teacherId.value, studentId: studentId.value })

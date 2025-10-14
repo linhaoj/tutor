@@ -16,6 +16,8 @@ import AntiForgetReview from '@/views/AntiForgetReview.vue'
 import WordFilter from '@/views/WordFilter.vue'
 import Login from '@/views/Login.vue'
 import Admin from '@/views/Admin.vue'
+import StudentDashboard from '@/views/StudentDashboard.vue'
+import StudentReview from '@/views/StudentReview.vue'
 
 // 导入认证Store用于路由守卫
 import { useAuthStore } from '@/stores/auth'
@@ -34,6 +36,19 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '日程管理', requiresAuth: true, requiresTeacher: true }
   },
   {
+    path: '/student',
+    name: 'StudentDashboard',
+    component: StudentDashboard,
+    meta: { title: '学生复习', requiresAuth: true, requiresStudent: true }
+  },
+  {
+    path: '/student-review/:reviewId',
+    name: 'StudentReview',
+    component: StudentReview,
+    meta: { title: '单词复习', requiresAuth: true, requiresStudent: true },
+    props: true
+  },
+  {
     path: '/admin',
     name: 'Admin',
     component: Admin,
@@ -43,7 +58,7 @@ const routes: RouteRecordRaw[] = [
     path: '/teacher',
     name: 'TeacherHome',
     component: () => import('../views/TeacherHome.vue'),
-    meta: { title: '老师首页', requiresAuth: true }
+    meta: { title: '教师首页', requiresAuth: true }
   },
   {
     path: '/data-management',
@@ -160,24 +175,50 @@ router.beforeEach(async (to, _from, next) => {
     // 需要管理员权限但不是管理员，跳转到对应首页
     if (authStore.currentUser?.role === 'teacher') {
       next('/teacher')
+    } else if (authStore.currentUser?.role === 'student') {
+      next('/student')
     } else {
       next('/login')
     }
     return
   }
-  
-  // 检查是否需要老师权限
-  if (to.meta.requiresTeacher && authStore.isAdmin) {
-    // 需要老师权限但是管理员，跳转到管理员首页
-    next('/admin')
+
+  // 检查是否需要教师权限
+  if (to.meta.requiresTeacher && !authStore.currentUser) {
+    next('/login')
     return
   }
-  
+
+  if (to.meta.requiresTeacher && (authStore.isAdmin || authStore.isStudent)) {
+    // 需要教师权限但是管理员或学生，跳转到对应首页
+    if (authStore.isAdmin) {
+      next('/admin')
+    } else {
+      next('/student')
+    }
+    return
+  }
+
+  // 检查是否需要学生权限
+  if (to.meta.requiresStudent && !authStore.isStudent) {
+    // 需要学生权限但不是学生，跳转到对应首页
+    if (authStore.isAdmin) {
+      next('/admin')
+    } else if (authStore.currentUser?.role === 'teacher') {
+      next('/')
+    } else {
+      next('/login')
+    }
+    return
+  }
+
   // 检查是否需要访客身份（如登录页）
   if (to.meta.requiresGuest && authStore.isLoggedIn) {
     // 已登录用户访问登录页，跳转到对应首页
     if (authStore.isAdmin) {
       next('/admin')
+    } else if (authStore.isStudent) {
+      next('/student')
     } else {
       next('/teacher')
     }

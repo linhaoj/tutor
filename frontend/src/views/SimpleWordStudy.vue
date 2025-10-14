@@ -282,30 +282,40 @@ const goToNextTask = () => {
     ElMessage.warning('请先完成当前组的所有单词')
     return
   }
-  
+
+  // 保存当前组的单词到sessionStorage，供WordCheckTask使用
+  const groupNumber = parseInt(route.query.groupNumber as string) || 1
+  const sessionKey = `simpleStudyGroup_${groupNumber}`
+  const currentGroupWords = displayWords.value.map(word => ({
+    id: word.id,
+    english: word.english,
+    chinese: word.chinese
+  }))
+  sessionStorage.setItem(sessionKey, JSON.stringify(currentGroupWords))
+  console.log(`SimpleWordStudy - 已保存第${groupNumber}组单词到sessionStorage:`, currentGroupWords.map(w => w.english))
+
   // 标记第一个任务完成
   const studentId = parseInt(route.params.studentId as string)
   const wordSet = route.query.wordSet as string
-  const groupNumber = parseInt(route.query.groupNumber as string) || 1
   progressStore.completeTask(studentId, wordSet, groupNumber, 1)
-  
+
   // 获取总学习单词数
   const totalWordsCount = parseInt(route.query.totalWords as string) || allWords.value.length
-  
+
   // 跳转到第二个学习任务（检查任务）
   router.push({
     name: 'WordCheckTask',
     params: { studentId: route.params.studentId },
-    query: { 
+    query: {
       wordSet: route.query.wordSet,
       wordsCount: 5,
       groupNumber,
       totalWords: totalWordsCount, // 传递总学习单词数
       startIndex: route.query.startIndex, // 传递起始位置
-      teacherId: route.query.teacherId // 传递老师ID
+      teacherId: route.query.teacherId // 传递教师ID
     }
   })
-  
+
   ElMessage.success('第一个任务完成！进入第二个学习任务：检查阶段')
 }
 
@@ -329,12 +339,22 @@ const shuffleArray = <T>(array: T[]): T[] => {
 }
 
 const loadNextGroup = () => {
+  console.log('=== 加载新组单词 ===')
+  console.log('allWords 总数:', allWords.value.length)
+  console.log('allWords 内容:', allWords.value.map(w => `${w.english}(moved:${w.movedToBox})`))
+  console.log('remainingWords 数量:', remainingWords.value.length)
+  console.log('remainingWords 内容:', remainingWords.value.map(w => w.english))
+
   const wordsToLoad = remainingWords.value.slice(0, 5)
+  console.log('本组将加载的单词（加载前）:', wordsToLoad.map(w => w.english))
+
   // 打乱这组5个单词的顺序
   const shuffledWords = shuffleArray(wordsToLoad)
+  console.log('本组将加载的单词（打乱后）:', shuffledWords.map(w => w.english))
+
   displayWords.value = shuffledWords.map(word => ({ ...word, showChinese: false }))
-  
-  console.log('SimpleWordStudy - 加载新组单词（已打乱）:', shuffledWords.map(w => w.english))
+
+  console.log('displayWords 已更新:', displayWords.value.map(w => w.english))
 }
 
 
@@ -393,7 +413,11 @@ const initializeWords = () => {
   
   // 打乱单词顺序，确保每次学习顺序都不同
   const shuffledWords = shuffleArray(sourceWords)
-  
+
+  console.log('=== 初始化单词 ===')
+  console.log('源单词（打乱前）:', sourceWords.map((w: any) => w.english))
+  console.log('源单词（打乱后）:', shuffledWords.map((w: any) => w.english))
+
   // 转换为学习用的单词格式
   allWords.value = shuffledWords.map((word: any) => ({
     id: word.id,
@@ -402,8 +426,9 @@ const initializeWords = () => {
     showChinese: false,
     movedToBox: false
   }))
-  
+
   console.log('SimpleWordStudy - 单词已打乱顺序，准备学习:', allWords.value.length)
+  console.log('allWords 初始内容:', allWords.value.map(w => w.english))
   
   // 加载第一组的5个单词
   loadNextGroup()

@@ -2,8 +2,8 @@
   <div class="teacher-home">
     <div class="page-header">
       <div class="header-left">
-        <h1>老师工作台</h1>
-        <el-tag type="success" size="large">老师</el-tag>
+        <h1>教师工作台</h1>
+        <el-tag type="success" size="large">教师</el-tag>
       </div>
       <div class="header-right">
         <span class="welcome-text">欢迎，{{ authStore.currentUser?.displayName }}</span>
@@ -209,7 +209,7 @@ const studentsStore = useStudentsStore()
 const wordsStore = useWordsStore()
 const scheduleStore = useScheduleStore()
 
-// 老师数据
+// 教师数据
 const teacherStudents = ref<Student[]>([])
 const teacherWordSets = ref<WordSet[]>([])
 const teacherSchedules = ref<Schedule[]>([])
@@ -251,18 +251,18 @@ const totalLearningHours = computed(() => {
 const loadTeacherData = () => {
   if (!authStore.currentUser) return
   
-  console.log('老师登录 - 当前用户ID:', authStore.currentUser.id)
-  console.log('老师登录 - 查找的学生数据key:', `students_${authStore.currentUser.id}`)
-  console.log('老师登录 - localStorage中的所有key:', Object.keys(localStorage).filter(key => key.startsWith('students_')))
+  console.log('教师登录 - 当前用户ID:', authStore.currentUser.id)
+  console.log('教师登录 - 查找的学生数据key:', `students_${authStore.currentUser.id}`)
+  console.log('教师登录 - localStorage中的所有key:', Object.keys(localStorage).filter(key => key.startsWith('students_')))
   
   // 使用按用户隔离的数据获取方法
   teacherStudents.value = studentsStore.getStudentsByUserId(authStore.currentUser.id)
   teacherWordSets.value = wordsStore.getWordSetsByUserId(authStore.currentUser.id)
   teacherSchedules.value = scheduleStore.getSchedulesByUserId(authStore.currentUser.id)
   
-  console.log('老师登录 - 加载到的学生数量:', teacherStudents.value.length)
-  console.log('老师登录 - 加载到的单词集数量:', teacherWordSets.value.length)
-  console.log('老师登录 - 加载到的日程数量:', teacherSchedules.value.length)
+  console.log('教师登录 - 加载到的学生数量:', teacherStudents.value.length)
+  console.log('教师登录 - 加载到的单词集数量:', teacherWordSets.value.length)
+  console.log('教师登录 - 加载到的日程数量:', teacherSchedules.value.length)
 }
 
 const handleCommand = (command: string) => {

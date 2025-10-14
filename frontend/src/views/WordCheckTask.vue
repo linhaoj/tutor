@@ -281,30 +281,48 @@ const goToNextTask = () => {
     ElMessage.warning('请确保所有单词都已过关')
     return
   }
-  
+
   // 标记第二个任务完成
   const studentId = parseInt(route.params.studentId as string)
   const wordSet = route.query.wordSet as string
   const groupNumber = parseInt(route.query.groupNumber as string) || 1
-  
+
   progressStore.completeTask(studentId, wordSet, groupNumber, 2)
-  
+
   // 获取总学习单词数（从localStorage或其他方式）
   const totalWordsCount = parseInt(route.query.totalWords as string) || groupNumber * 5
-  
+
+  // 计算当前批次的起始组号
+  // 通过检查sessionStorage来确定本次学习开始的组号
+  let currentBatchStartGroup = 1
+  for (let i = 1; i <= 100; i++) {
+    const key = `simpleStudyGroup_${i}`
+    if (sessionStorage.getItem(key)) {
+      currentBatchStartGroup = i
+      break
+    }
+  }
+
+  console.log('WordCheckTask完成 - 跳转到MixedGroupTest', {
+    groupNumber,
+    currentBatchStartGroup,
+    totalWordsCount
+  })
+
   // 跳转到混组检测页面，检测到当前组为止的所有组
   router.push({
     name: 'MixedGroupTest',
     params: { studentId: route.params.studentId },
-    query: { 
+    query: {
       wordSet: route.query.wordSet,
       completedGroups: groupNumber, // 传递当前完成的组号
       totalWords: totalWordsCount, // 传递总学习单词数
       startIndex: route.query.startIndex, // 传递起始位置信息
-      teacherId: route.query.teacherId // 传递老师ID
+      teacherId: route.query.teacherId, // 传递教师ID
+      currentBatchStartGroup: currentBatchStartGroup // 传递当前批次起始组号
     }
   })
-  
+
   ElMessage.success('第二个任务完成！进入第三个学习任务：混组检测')
 }
 
@@ -321,25 +339,38 @@ const shuffleArray = <T>(array: T[]): T[] => {
 
 // 初始化数据
 const initializeWords = () => {
-  // 从路由参数获取信息
-  const wordSetName = route.query.wordSet as string || ''
-  const wordsCount = 5 // 固定5个单词
-  const startIndex = parseInt(route.query.startIndex as string) || 0 // 新增：起始位置
-  const teacherId = route.query.teacherId as string || ''
-  
-  // 获取指定单词集的单词（使用老师的用户ID）
-  let sourceWords = wordSetName 
-    ? (teacherId ? wordsStore.getWordsBySetForUser(teacherId, wordSetName) : wordsStore.getWordsBySet(wordSetName))
-    : wordsStore.words
-  
-  // 从指定位置开始，取5个单词（与第一个任务保持一致）
-  sourceWords = sourceWords.slice(startIndex, startIndex + wordsCount)
-  
+  const groupNumber = parseInt(route.query.groupNumber as string) || 1
+
+  // 尝试从sessionStorage获取当前组的学习单词
+  const sessionKey = `simpleStudyGroup_${groupNumber}`
+  const savedWords = sessionStorage.getItem(sessionKey)
+
+  let sourceWords = []
+
+  if (savedWords) {
+    // 使用SimpleWordStudy保存的单词
+    sourceWords = JSON.parse(savedWords)
+    console.log(`WordCheckTask - 从sessionStorage加载第${groupNumber}组单词:`, sourceWords.map(w => w.english))
+  } else {
+    // 备用逻辑：如果sessionStorage没有数据，从单词库加载（但这不应该发生）
+    console.warn('WordCheckTask - 未找到SimpleWordStudy保存的单词，使用备用逻辑')
+    const wordSetName = route.query.wordSet as string || ''
+    const wordsCount = 5
+    const startIndex = parseInt(route.query.startIndex as string) || 0
+    const teacherId = route.query.teacherId as string || ''
+
+    let allWordsInSet = wordSetName
+      ? (teacherId ? wordsStore.getWordsBySetForUser(teacherId, wordSetName) : wordsStore.getWordsBySet(wordSetName))
+      : wordsStore.words
+
+    sourceWords = allWordsInSet.slice(startIndex, startIndex + wordsCount)
+  }
+
   // 打乱这5个单词的顺序
   const shuffledWords = shuffleArray(sourceWords)
-  
+
   console.log('WordCheckTask - 加载单词（已打乱）:', shuffledWords.map(w => w.english))
-  
+
   // 转换为检查用的单词格式
   allWords.value = shuffledWords.map(word => ({
     id: word.id,
@@ -348,11 +379,10 @@ const initializeWords = () => {
     showChinese: false,
     status: 'unchecked' as const
   }))
-  
+
   // 显示这5个单词
   displayWords.value = [...allWords.value]
-  
-  const groupNumber = parseInt(route.query.groupNumber as string) || 1
+
   ElMessage.success(`开始第${groupNumber}组检查任务，检查 ${allWords.value.length} 个单词`)
 }
 
