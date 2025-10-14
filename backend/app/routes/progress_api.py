@@ -7,6 +7,9 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.models import LearningProgress, Student, User
 from app.routes.auth import get_current_user
+from app.logger import get_logger
+
+logger = get_logger("progress")
 
 router = APIRouter(prefix="/api/progress", tags=["学习进度"])
 
@@ -43,6 +46,7 @@ async def create_or_update_progress(
         Student.teacher_id == current_user.id
     ).first()
     if not student:
+        logger.warning(f"保存进度失败: 学生不存在 - ID={progress_data.student_id}, 教师={current_user.username}")
         raise HTTPException(status_code=404, detail="学生不存在")
 
     # 查找现有进度
@@ -51,6 +55,8 @@ async def create_or_update_progress(
         LearningProgress.word_set_name == progress_data.word_set_name,
         LearningProgress.word_index == progress_data.word_index
     ).first()
+
+    action = "更新" if progress else "创建"
 
     if progress:
         # 更新
@@ -64,6 +70,8 @@ async def create_or_update_progress(
 
     db.commit()
     db.refresh(progress)
+
+    logger.info(f"学习进度{action}成功: 学生={student.name}, 单词集={progress_data.word_set_name}, 单词索引={progress_data.word_index}, 阶段={progress_data.current_stage}/{progress_data.total_groups}")
 
     return ProgressResponse(
         id=progress.id,

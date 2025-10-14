@@ -9,6 +9,9 @@ import io
 from app.database import get_db
 from app.models import WordSet, Word, User
 from app.routes.auth import get_current_user
+from app.logger import get_logger
+
+logger = get_logger("words")
 
 router = APIRouter(prefix="/api/words", tags=["单词管理"])
 
@@ -149,8 +152,11 @@ async def import_words_from_excel(
     db: Session = Depends(get_db)
 ):
     """从Excel导入单词"""
+    logger.info(f"教师 {current_user.username} 开始导入单词: 单词集={word_set_name}, 文件={file.filename}")
+
     word_set = db.query(WordSet).filter(WordSet.name == word_set_name).first()
     if not word_set:
+        logger.warning(f"导入单词失败: 单词集不存在 - {word_set_name}")
         raise HTTPException(status_code=404, detail="单词集不存在")
 
     try:
@@ -158,6 +164,7 @@ async def import_words_from_excel(
         df = pd.read_excel(io.BytesIO(contents))
 
         if 'english' not in df.columns or 'chinese' not in df.columns:
+            logger.warning(f"导入单词失败: Excel格式错误 - 缺少english或chinese列")
             raise HTTPException(status_code=400, detail="Excel文件必须包含english和chinese列")
 
         imported_count = 0
@@ -171,9 +178,11 @@ async def import_words_from_excel(
             imported_count += 1
 
         db.commit()
+        logger.info(f"单词导入成功: 单词集={word_set_name}, 导入数量={imported_count}, 教师={current_user.username}")
         return {"message": f"成功导入 {imported_count} 个单词"}
 
     except Exception as e:
+        logger.error(f"导入单词失败: 单词集={word_set_name}, 错误={str(e)}")
         raise HTTPException(status_code=400, detail=f"导入失败: {str(e)}")
 
 

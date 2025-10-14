@@ -9,6 +9,9 @@ from pydantic import BaseModel
 
 from app.database import get_db
 from app.models import User
+from app.logger import get_logger
+
+logger = get_logger("auth")
 
 # JWT配置
 SECRET_KEY = "your-secret-key-change-this-in-production"  # 生产环境需要更换
@@ -108,9 +111,12 @@ async def get_current_active_admin(current_user: User = Depends(get_current_user
 @router.post("/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """用户登录"""
+    logger.info(f"用户尝试登录: {form_data.username}")
+
     user = db.query(User).filter(User.username == form_data.username).first()
 
     if not user or not user.verify_password(form_data.password):
+        logger.warning(f"登录失败: 用户名或密码错误 - {form_data.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户名或密码错误",
@@ -127,6 +133,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
         data={"sub": user.username}, expires_delta=access_token_expires
     )
 
+    logger.info(f"登录成功: 用户={user.username}, 角色={user.role}, ID={user.id}")
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -152,15 +159,19 @@ async def register_user(
     db: Session = Depends(get_db)
 ):
     """注册新用户（仅管理员）"""
+    logger.info(f"管理员 {current_user.username} 尝试创建新用户: {user_data.username}")
+
     # 检查用户名是否已存在
     existing_user = db.query(User).filter(User.username == user_data.username).first()
     if existing_user:
+        logger.warning(f"创建用户失败: 用户名已存在 - {user_data.username}")
         raise HTTPException(status_code=400, detail="用户名已存在")
 
     # 检查邮箱是否已存在
     if user_data.email:
         existing_email = db.query(User).filter(User.email == user_data.email).first()
         if existing_email:
+            logger.warning(f"创建用户失败: 邮箱已被使用 - {user_data.email}")
             raise HTTPException(status_code=400, detail="邮箱已被使用")
 
     # 创建新用户
@@ -177,6 +188,8 @@ async def register_user(
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+
+    logger.info(f"新用户创建成功: 用户名={new_user.username}, 角色={new_user.role}, ID={new_user.id}")
 
     return UserResponse(
         id=new_user.id,
@@ -220,15 +233,19 @@ async def delete_user(
 ):
     """删除用户（仅管理员）"""
     if user_id == current_user.id:
+        logger.warning(f"用户 {current_user.username} 尝试删除自己的账号")
         raise HTTPException(status_code=400, detail="不能删除自己的账号")
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
+        logger.warning(f"删除用户失败: 用户不存在 - ID={user_id}")
         raise HTTPException(status_code=404, detail="用户不存在")
 
+    deleted_username = user.username
     db.delete(user)
     db.commit()
 
+    logger.info(f"用户删除成功: 管理员={current_user.username}, 被删除用户={deleted_username}, ID={user_id}")
     return {"message": "用户删除成功"}
 
 

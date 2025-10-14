@@ -8,6 +8,9 @@ from datetime import date
 from app.database import get_db
 from app.models import Schedule, Student, User
 from app.routes.auth import get_current_user
+from app.logger import get_logger
+
+logger = get_logger("schedule")
 
 router = APIRouter(prefix="/api/schedules", tags=["课程安排"])
 
@@ -47,6 +50,7 @@ async def create_schedule(
         Student.teacher_id == current_user.id
     ).first()
     if not student:
+        logger.warning(f"创建课程失败: 学生不存在 - ID={schedule_data.student_id}, 教师={current_user.username}")
         raise HTTPException(status_code=404, detail="学生不存在")
 
     schedule = Schedule(
@@ -64,6 +68,8 @@ async def create_schedule(
     db.add(schedule)
     db.commit()
     db.refresh(schedule)
+
+    logger.info(f"课程创建成功: 学生={student.name}, 日期={schedule_data.date}, 时间={schedule_data.time}, 类型={schedule_data.course_type}, 时长={schedule_data.duration}分钟")
 
     return ScheduleResponse(
         id=schedule.id,
@@ -115,10 +121,13 @@ async def complete_schedule(
         Schedule.teacher_id == current_user.id
     ).first()
     if not schedule:
+        logger.warning(f"完成课程失败: 课程不存在 - ID={schedule_id}, 教师={current_user.username}")
         raise HTTPException(status_code=404, detail="课程不存在")
 
     schedule.completed = True
     db.commit()
+
+    logger.info(f"课程标记完成: 学生={schedule.student_name}, 日期={schedule.date}, 类型={schedule.course_type}")
     return {"message": "课程已标记为完成"}
 
 

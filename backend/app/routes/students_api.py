@@ -8,6 +8,9 @@ from datetime import datetime
 from app.database import get_db
 from app.models import Student, User
 from app.routes.auth import get_current_user
+from app.logger import get_logger
+
+logger = get_logger("students")
 
 router = APIRouter(prefix="/api/students", tags=["学生管理"])
 
@@ -44,10 +47,13 @@ async def create_student(
     db: Session = Depends(get_db)
 ):
     """创建学生"""
+    logger.info(f"教师 {current_user.username} 尝试创建学生: {student_data.name}")
+
     # 检查邮箱是否已存在
     if student_data.email:
         existing = db.query(Student).filter(Student.email == student_data.email).first()
         if existing:
+            logger.warning(f"创建学生失败: 邮箱已被使用 - {student_data.email}")
             raise HTTPException(status_code=400, detail="邮箱已被使用")
 
     student = Student(
@@ -60,6 +66,8 @@ async def create_student(
     db.add(student)
     db.commit()
     db.refresh(student)
+
+    logger.info(f"学生创建成功: 教师={current_user.username}, 学生={student.name}, ID={student.id}, 课时={student.remaining_hours}h")
 
     return StudentResponse(
         id=student.id,
@@ -202,15 +210,20 @@ async def deduct_student_hours(
     ).first()
 
     if not student:
+        logger.warning(f"扣减课时失败: 学生不存在 - ID={student_id}, 教师={current_user.username}")
         raise HTTPException(status_code=404, detail="学生不存在")
 
     if student.remaining_hours < hours:
+        logger.warning(f"扣减课时失败: 剩余课时不足 - 学生={student.name}, 当前课时={student.remaining_hours}h, 需要扣减={hours}h")
         raise HTTPException(status_code=400, detail="剩余课时不足")
 
+    old_hours = student.remaining_hours
     student.remaining_hours -= hours
     student.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(student)
+
+    logger.info(f"课时扣减成功: 学生={student.name}, 扣减={hours}h, {old_hours}h → {student.remaining_hours}h")
 
     return {
         "message": "课时扣减成功",
