@@ -1,213 +1,230 @@
+/**
+ * 单词Store - 连接后端API
+ */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import api from '@/api/config'
 
 export interface Word {
   id: number
   english: string
   chinese: string
-  word_set?: string
+  word_set_name: string
 }
 
 export interface WordSet {
+  id: number
   name: string
-  words?: Word[]
+  owner_id: string
+  is_global: boolean
+  word_count: number
 }
 
 export const useWordsStore = defineStore('words', () => {
-  // 从localStorage加载单词数据
-  const loadWordsFromStorage = () => {
+  const words = ref<Word[]>([])
+  const wordSets = ref<WordSet[]>([])
+  const loading = ref(false)
+  const currentWordSetName = ref<string | null>(null)
+
+  /**
+   * 获取所有单词集（全局共享）
+   */
+  const fetchWordSets = async () => {
+    loading.value = true
     try {
-      const saved = localStorage.getItem('words')
-      return saved ? JSON.parse(saved) : []
-    } catch {
-      return []
+      const response = await api.get('/api/words/sets')
+      wordSets.value = response.data
+    } catch (error) {
+      console.error('Fetch word sets error:', error)
+    } finally {
+      loading.value = false
     }
   }
 
-  // 从localStorage加载单词集数据
-  const loadWordSetsFromStorage = () => {
+  /**
+   * 获取指定单词集的所有单词
+   */
+  const fetchWords = async (wordSetName: string) => {
+    loading.value = true
     try {
-      const saved = localStorage.getItem('wordSets')
-      return saved ? JSON.parse(saved) : []
-    } catch {
-      return []
+      const response = await api.get(`/api/words/sets/${encodeURIComponent(wordSetName)}/words`)
+      words.value = response.data
+      currentWordSetName.value = wordSetName
+    } catch (error) {
+      console.error('Fetch words error:', error)
+      words.value = []
+    } finally {
+      loading.value = false
     }
   }
 
-  const words = ref<Word[]>(loadWordsFromStorage())
-  const wordSets = ref<WordSet[]>(loadWordSetsFromStorage())
-
-  // 保存到localStorage
-  const saveWordsToStorage = () => {
-    localStorage.setItem('words', JSON.stringify(words.value))
-  }
-
-  const saveWordSetsToStorage = () => {
-    localStorage.setItem('wordSets', JSON.stringify(wordSets.value))
-  }
-
-  const addWord = (word: Word) => {
-    words.value.push(word)
-    saveWordsToStorage()
-    
-    // 如果是新的单词集，也要添加到wordSets中
-    if (word.word_set && !wordSets.value.find(s => s.name === word.word_set)) {
-      wordSets.value.push({ name: word.word_set })
-      saveWordSetsToStorage()
-    }
-  }
-
-  const updateWord = (id: number, updatedWord: Partial<Word>) => {
-    const index = words.value.findIndex(w => w.id === id)
-    if (index !== -1) {
-      const oldWordSet = words.value[index].word_set
-      words.value[index] = { ...words.value[index], ...updatedWord }
-      saveWordsToStorage()
-      
-      // 如果是新的单词集，添加到wordSets中
-      if (updatedWord.word_set && updatedWord.word_set !== oldWordSet && 
-          !wordSets.value.find(s => s.name === updatedWord.word_set)) {
-        wordSets.value.push({ name: updatedWord.word_set })
-        saveWordSetsToStorage()
+  /**
+   * 创建单词集
+   */
+  const createWordSet = async (data: {
+    name: string
+    is_global?: boolean
+  }): Promise<{ success: boolean, message: string }> => {
+    try {
+      const response = await api.post('/api/words/sets', data)
+      wordSets.value.push(response.data)
+      return { success: true, message: '单词集创建成功' }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '创建单词集失败'
       }
     }
   }
 
-  const deleteWord = (id: number) => {
-    const index = words.value.findIndex(w => w.id === id)
-    if (index !== -1) {
-      words.value.splice(index, 1)
-      saveWordsToStorage()
-    }
-  }
-  
+  /**
+   * 添加单词到单词集
+   */
+  const addWord = async (wordSetName: string, wordData: {
+    english: string
+    chinese: string
+  }): Promise<{ success: boolean, message: string }> => {
+    try {
+      const response = await api.post(
+        `/api/words/sets/${encodeURIComponent(wordSetName)}/words`,
+        wordData
+      )
 
-  const deleteWordSet = (wordSetName: string) => {
-    // 删除该单词集下的所有单词
-    words.value = words.value.filter(w => w.word_set !== wordSetName)
-    saveWordsToStorage()
-    
-    // 从单词集列表中移除
-    const setIndex = wordSets.value.findIndex(s => s.name === wordSetName)
-    if (setIndex !== -1) {
-      wordSets.value.splice(setIndex, 1)
-      saveWordSetsToStorage()
-    }
-  }
-
-  const importWords = (newWords: Word[]) => {
-    words.value.push(...newWords)
-    saveWordsToStorage()
-    
-    // 更新单词集列表
-    newWords.forEach(word => {
-      if (word.word_set && !wordSets.value.find(s => s.name === word.word_set)) {
-        wordSets.value.push({ name: word.word_set })
+      // 如果当前正在查看这个单词集，添加到本地列表
+      if (currentWordSetName.value === wordSetName) {
+        words.value.push(response.data)
       }
-    })
-    saveWordSetsToStorage()
+
+      // 更新单词集的单词数量
+      const wordSet = wordSets.value.find(ws => ws.name === wordSetName)
+      if (wordSet) {
+        wordSet.word_count++
+      }
+
+      return { success: true, message: '单词添加成功' }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '添加单词失败'
+      }
+    }
   }
 
-  const getWordsBySet = (wordSetName: string) => {
-    return words.value.filter(w => w.word_set === wordSetName)
+  /**
+   * 删除单词
+   */
+  const deleteWord = async (wordId: number): Promise<{ success: boolean, message: string }> => {
+    try {
+      await api.delete(`/api/words/words/${wordId}`)
+
+      // 从本地列表移除
+      const wordIndex = words.value.findIndex(w => w.id === wordId)
+      if (wordIndex !== -1) {
+        const wordSetName = words.value[wordIndex].word_set_name
+        words.value.splice(wordIndex, 1)
+
+        // 更新单词集的单词数量
+        const wordSet = wordSets.value.find(ws => ws.name === wordSetName)
+        if (wordSet && wordSet.word_count > 0) {
+          wordSet.word_count--
+        }
+      }
+
+      return { success: true, message: '单词删除成功' }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '删除单词失败'
+      }
+    }
   }
 
-  const getWord = (id: number) => {
+  /**
+   * Excel导入单词
+   */
+  const importWordsFromExcel = async (
+    wordSetName: string,
+    file: File
+  ): Promise<{ success: boolean, message: string }> => {
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await api.post(
+        `/api/words/sets/${encodeURIComponent(wordSetName)}/import-excel`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      )
+
+      // 刷新单词列表
+      if (currentWordSetName.value === wordSetName) {
+        await fetchWords(wordSetName)
+      }
+
+      // 刷新单词集列表（更新word_count）
+      await fetchWordSets()
+
+      return {
+        success: true,
+        message: response.data.message || 'Excel导入成功'
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || 'Excel导入失败'
+      }
+    }
+  }
+
+  /**
+   * 获取单词集的单词（不改变当前状态，用于临时查询）
+   */
+  const getWordsBySet = async (wordSetName: string): Promise<Word[]> => {
+    try {
+      const response = await api.get(`/api/words/sets/${encodeURIComponent(wordSetName)}/words`)
+      return response.data
+    } catch (error) {
+      console.error('Get words by set error:', error)
+      return []
+    }
+  }
+
+  /**
+   * 获取单个单词
+   */
+  const getWord = (id: number): Word | undefined => {
     return words.value.find(w => w.id === id)
   }
 
-  // 管理员专用：跨用户操作方法
-  const getWordSetsByUserId = (userId: string): WordSet[] => {
-    try {
-      // 先尝试从用户特定的数据中加载
-      const saved = localStorage.getItem(`wordSets_${userId}`) || 
-                   localStorage.getItem(`backup_wordSets_${userId}`)
-      
-      if (saved) {
-        const userWordSets = JSON.parse(saved)
-        console.log(`Words Store - 用户 ${userId} 的原始数据:`, userWordSets)
-        
-        // 为每个单词集加载其单词（如果单词集本身包含words字段就直接使用）
-        const result = userWordSets.map((wordSet: any) => ({
-          name: wordSet.name,
-          description: wordSet.description || '',
-          created_at: wordSet.created_at || '',
-          userId: wordSet.userId || userId,
-          words: wordSet.words || []
-        }))
-        
-        console.log(`Words Store - 用户 ${userId} 的处理后数据:`, result)
-        console.log(`Words Store - 第一个单词集的words:`, result[0]?.words)
-        
-        return result
-      }
-      
-      return []
-    } catch (error) {
-      console.error('获取用户单词集失败:', error)
-      return []
+  /**
+   * 批量导入单词（兼容旧代码）
+   */
+  const importWords = async (wordSetName: string, newWords: Array<{ english: string, chinese: string }>) => {
+    const results = []
+    for (const word of newWords) {
+      const result = await addWord(wordSetName, word)
+      results.push(result)
     }
+    return results
   }
 
-  const getWordsBySetForUser = (userId: string, wordSetName: string): Word[] => {
-    console.log('=== getWordsBySetForUser 开始执行 ===', { userId, wordSetName })
-    try {
-      // 尝试多个可能的localStorage键
-      const possibleKeys = [
-        `words_${userId}`,
-        `backup_words_${userId}`,
-        `wordSets_${userId}`,
-        `backup_wordSets_${userId}`
-      ]
-      
-      console.log('getWordsBySetForUser - 查找单词:', { userId, wordSetName, possibleKeys })
-      
-      // 检查每个可能的键
-      for (const key of possibleKeys) {
-        const saved = localStorage.getItem(key)
-        if (saved) {
-          console.log(`getWordsBySetForUser - 找到数据在键 ${key}:`, saved.substring(0, 100) + '...')
-          const data = JSON.parse(saved)
-          
-          // 如果是单词集格式，需要从words字段中过滤
-          if (Array.isArray(data) && data.length > 0 && data[0].words) {
-            console.log('getWordsBySetForUser - 检测到单词集格式，查找单词集:', data.map(ws => ws.name))
-            const wordSet = data.find((ws: any) => ws.name === wordSetName)
-            if (wordSet && wordSet.words) {
-              console.log(`getWordsBySetForUser - 找到单词集 "${wordSetName}"，单词数:`, wordSet.words.length)
-              return wordSet.words
-            }
-          } else if (Array.isArray(data)) {
-            // 如果是直接的单词数组格式
-            const filteredWords = data.filter((w: Word) => w.word_set === wordSetName)
-            if (filteredWords.length > 0) {
-              console.log(`getWordsBySetForUser - 找到单词（直接格式），数量:`, filteredWords.length)
-              return filteredWords
-            }
-          }
-        }
-      }
-      
-      console.log(`getWordsBySetForUser - 未找到单词集 "${wordSetName}"`)
-      return []
-    } catch (error) {
-      console.error('getWordsBySetForUser - 发生异常:', error)
-      console.error('getWordsBySetForUser - 异常详情:', error.message, error.stack)
-      return []
-    }
-  }
-
-  return { 
-    words, 
+  return {
+    words,
     wordSets,
-    addWord, 
-    updateWord, 
-    deleteWord, 
-    deleteWordSet,
-    importWords,
+    loading,
+    currentWordSetName,
+    fetchWordSets,
+    fetchWords,
+    createWordSet,
+    addWord,
+    deleteWord,
+    importWordsFromExcel,
     getWordsBySet,
     getWord,
-    getWordSetsByUserId,
-    getWordsBySetForUser
+    importWords
   }
 })

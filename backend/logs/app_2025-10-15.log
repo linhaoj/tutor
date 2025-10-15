@@ -1,0 +1,4 @@
+2025-10-15 05:32:18 | INFO     | auth:115 | 用户尝试登录: admin
+2025-10-15 05:32:18 | INFO     | auth:137 | 登录成功: 用户=admin, 角色=admin, ID=admin-001
+2025-10-15 05:34:49 | INFO     | auth:115 | 用户尝试登录: admin
+2025-10-15 05:34:49 | INFO     | auth:137 | 登录成功: 用户=admin, 角色=admin, ID=admin-001
