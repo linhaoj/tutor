@@ -193,9 +193,15 @@ export const useAuthStore = defineStore('auth', () => {
    * 修改密码
    */
   const changePassword = async (
+    userId: string,
     oldPassword: string,
     newPassword: string
   ): Promise<{ success: boolean, message: string }> => {
+    // 如果是管理员重置密码(oldPassword为空),使用reset API
+    if (!oldPassword && isAdmin.value) {
+      return resetUserPassword(userId, newPassword)
+    }
+
     try {
       await api.post('/api/auth/change-password', {
         old_password: oldPassword,

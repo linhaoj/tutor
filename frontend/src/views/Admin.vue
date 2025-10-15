@@ -997,7 +997,7 @@ const submitAddUser = async () => {
     const result = await authStore.registerUser({
       username: userForm.username,
       password: userForm.password,
-      displayName: userForm.displayName,
+      display_name: userForm.displayName,
       role: userForm.role as 'admin' | 'teacher',
       email: userForm.email || undefined
     })
@@ -1289,10 +1289,10 @@ const submitAddStudent = async () => {
     const result = await authStore.registerUser({
       username: studentForm.username,
       password: studentForm.password,
-      displayName: studentForm.name,
+      display_name: studentForm.name,
       role: 'student',
       email: studentForm.email,
-      studentId: studentId
+      student_id: studentId
     })
 
     if (!result.success) {
