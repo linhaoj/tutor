@@ -6,7 +6,7 @@
         <el-tag type="danger" size="large">管理员</el-tag>
       </div>
       <div class="header-right">
-        <span class="welcome-text">欢迎，{{ authStore.currentUser?.displayName }}</span>
+        <span class="welcome-text">欢迎，{{ authStore.currentUser?.display_name }}</span>
         <el-dropdown @command="handleCommand">
           <el-button type="primary">
             <el-icon><Avatar /></el-icon>
@@ -39,7 +39,7 @@
 
         <div class="users-list">
           <el-table :data="users" style="width: 100%">
-            <el-table-column prop="displayName" label="姓名" />
+            <el-table-column prop="display_name" label="姓名" />
             <el-table-column prop="username" label="用户名" />
             <el-table-column prop="role" label="角色">
               <template #default="scope">
@@ -116,7 +116,7 @@
                     <el-option
                       v-for="teacher in teachers"
                       :key="teacher.id"
-                      :label="teacher.displayName"
+                      :label="teacher.display_name"
                       :value="teacher.id"
                     />
                   </el-select>
@@ -1020,7 +1020,7 @@ const editUser = (user: User) => {
   Object.assign(editForm, {
     id: user.id,
     username: user.username,
-    displayName: user.displayName,
+    displayName: user.display_name,
     role: user.role,
     email: user.email || ''
   })
@@ -1035,7 +1035,7 @@ const submitEditUser = async () => {
     submitting.value = true
     
     const result = await authStore.updateUser(editForm.id, {
-      displayName: editForm.displayName,
+      display_name: editForm.displayName,
       role: editForm.role as 'admin' | 'teacher',
       email: editForm.email || undefined
     })
@@ -1090,7 +1090,7 @@ const submitResetPassword = async () => {
 const deleteUser = async (user: User) => {
   try {
     await ElMessageBox.confirm(
-      `确定要删除用户 "${user.displayName}" (${user.username}) 吗？\n\n删除后该用户的所有数据将被永久清除！`,
+      `确定要删除用户 "${user.display_name}" (${user.username}) 吗？\n\n删除后该用户的所有数据将被永久清除！`,
       '确认删除用户',
       {
         type: 'warning',
@@ -1149,7 +1149,7 @@ const clearTeacherData = () => {
 
 const getSelectedTeacherName = () => {
   const teacher = teachers.value.find(t => t.id === selectedTeacherId.value)
-  return teacher ? teacher.displayName : ''
+  return teacher ? teacher.display_name : ''
 }
 
 const selectWordSet = (wordSetName: string) => {
@@ -1416,7 +1416,7 @@ const getHoursClass = (hours: number) => {
 
 const selectedTeacherName = computed(() => {
   const teacher = users.value.find(u => u.id === selectedTeacherId.value)
-  return teacher?.displayName || ''
+  return teacher?.display_name || ''
 })
 
 const submitHoursAdjustment = async () => {
