@@ -113,11 +113,26 @@ async def create_student(
 
 @router.get("", response_model=List[StudentResponse])
 async def get_students(
+    teacher_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """获取当前用户的所有学生"""
-    students = db.query(Student).filter(Student.teacher_id == current_user.id).all()
+    """获取学生列表
+
+    - 教师：获取自己的学生
+    - 管理员：可通过teacher_id参数获取指定教师的学生
+    """
+    # 确定查询的teacher_id
+    if teacher_id:
+        # 管理员查询指定教师的学生
+        if current_user.role != "admin":
+            raise HTTPException(status_code=403, detail="只有管理员可以查询其他教师的学生")
+        query_teacher_id = teacher_id
+    else:
+        # 查询当前用户的学生
+        query_teacher_id = current_user.id
+
+    students = db.query(Student).filter(Student.teacher_id == query_teacher_id).all()
 
     return [
         StudentResponse(

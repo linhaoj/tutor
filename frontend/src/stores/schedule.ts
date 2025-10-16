@@ -31,11 +31,13 @@ export const useScheduleStore = defineStore('schedule', () => {
 
   /**
    * 获取所有课程
+   * @param teacherId 可选：管理员可以指定教师ID查询该教师的课程
    */
-  const fetchSchedules = async () => {
+  const fetchSchedules = async (teacherId?: string) => {
     loading.value = true
     try {
-      const response = await api.get('/api/schedules')
+      const params = teacherId ? { teacher_id: teacherId } : {}
+      const response = await api.get('/api/schedules', { params })
       schedules.value = response.data
     } catch (error) {
       console.error('Fetch schedules error:', error)

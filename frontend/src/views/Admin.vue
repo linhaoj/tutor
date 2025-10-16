@@ -1121,19 +1121,19 @@ const loadTeacherData = async () => {
     clearTeacherData()
     return
   }
-  
+
   try {
-    // 加载教师的学生数据
-    teacherStudents.value = studentsStore.getStudentsByUserId(selectedTeacherId.value)
-    
-    // 加载教师的单词数据（使用全局单词库，但按用户过滤）
-    teacherWordSets.value = wordsStore.getWordSetsByUserId(selectedTeacherId.value)
-    console.log(`加载教师 ${selectedTeacherId.value} 的单词集:`, teacherWordSets.value)
-    console.log('第一个单词集的详细信息:', teacherWordSets.value[0])
-    console.log('第一个单词集的words长度:', teacherWordSets.value[0]?.words?.length)
-    
-    // 加载教师的日程数据
-    teacherSchedules.value = scheduleStore.getSchedulesByUserId(selectedTeacherId.value)
+    // 加载教师的学生数据 - 使用API
+    await studentsStore.fetchStudents(selectedTeacherId.value)
+    teacherStudents.value = studentsStore.students
+
+    // 加载教师的单词数据 - 使用全局单词集
+    await wordsStore.fetchWordSets()
+    teacherWordSets.value = wordsStore.wordSets
+
+    // 加载教师的日程数据 - 使用API
+    await scheduleStore.fetchSchedules(selectedTeacherId.value)
+    teacherSchedules.value = scheduleStore.schedules
   } catch (error) {
     console.error('加载教师数据失败:', error)
     ElMessage.error('加载教师数据失败')

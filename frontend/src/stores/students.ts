@@ -21,11 +21,13 @@ export const useStudentsStore = defineStore('students', () => {
 
   /**
    * 获取所有学生
+   * @param teacherId 可选：管理员可以指定教师ID查询该教师的学生
    */
-  const fetchStudents = async () => {
+  const fetchStudents = async (teacherId?: string) => {
     loading.value = true
     try {
-      const response = await api.get('/api/students')
+      const params = teacherId ? { teacher_id: teacherId } : {}
+      const response = await api.get('/api/students', { params })
       students.value = response.data
     } catch (error) {
       console.error('Fetch students error:', error)

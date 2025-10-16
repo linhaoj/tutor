@@ -1,7 +1,7 @@
 """课程安排API - 简化版"""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 from datetime import date
 
@@ -89,11 +89,26 @@ async def create_schedule(
 
 @router.get("", response_model=List[ScheduleResponse])
 async def get_schedules(
+    teacher_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """获取当前用户的所有课程"""
-    schedules = db.query(Schedule).filter(Schedule.teacher_id == current_user.id).all()
+    """获取课程列表
+
+    - 教师：获取自己的课程
+    - 管理员：可通过teacher_id参数获取指定教师的课程
+    """
+    # 确定查询的teacher_id
+    if teacher_id:
+        # 管理员查询指定教师的课程
+        if current_user.role != "admin":
+            raise HTTPException(status_code=403, detail="只有管理员可以查询其他教师的课程")
+        query_teacher_id = teacher_id
+    else:
+        # 查询当前用户的课程
+        query_teacher_id = current_user.id
+
+    schedules = db.query(Schedule).filter(Schedule.teacher_id == query_teacher_id).all()
     return [
         ScheduleResponse(
             id=s.id,
