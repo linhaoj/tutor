@@ -20,6 +20,7 @@ class StudentCreate(BaseModel):
     name: str
     email: Optional[str] = None
     remaining_hours: float = 0
+    teacher_id: Optional[str] = None  # 管理员可以指定教师ID
 
 
 class StudentUpdate(BaseModel):
@@ -48,8 +49,30 @@ async def create_student(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """创建学生"""
-    logger.info(f"教师 {current_user.username} 尝试创建学生: {student_data.name}")
+    """创建学生
+
+    - 教师：为自己创建学生
+    - 管理员：可以通过teacher_id参数为指定教师创建学生
+    """
+    # 确定teacher_id
+    if student_data.teacher_id:
+        # 管理员为指定教师创建学生
+        if current_user.role != "admin":
+            raise HTTPException(status_code=403, detail="只有管理员可以为其他教师创建学生")
+
+        # 验证教师存在
+        teacher = db.query(User).filter(User.id == student_data.teacher_id).first()
+        if not teacher or teacher.role != "teacher":
+            raise HTTPException(status_code=404, detail="指定的教师不存在")
+
+        teacher_id = student_data.teacher_id
+        logger.info(f"管理员 {current_user.username} 为教师 {teacher.username} 创建学生: {student_data.name}")
+    else:
+        # 教师为自己创建学生
+        if current_user.role not in ["teacher", "admin"]:
+            raise HTTPException(status_code=403, detail="权限不足")
+        teacher_id = current_user.id
+        logger.info(f"教师 {current_user.username} 创建学生: {student_data.name}")
 
     # 检查邮箱是否已存在
     if student_data.email:
@@ -65,7 +88,7 @@ async def create_student(
     )
 
     student = Student(
-        teacher_id=current_user.id,
+        teacher_id=teacher_id,
         name=student_data.name,
         email=student_data.email,
         remaining_hours=student_data.remaining_hours
@@ -75,7 +98,7 @@ async def create_student(
     db.commit()
     db.refresh(student)
 
-    logger.info(f"学生创建成功: 教师={current_user.username}, 学生={student.name}, ID={student.id}, 课时={student.remaining_hours}h")
+    logger.info(f"学生创建成功: 教师ID={teacher_id}, 学生={student.name}, ID={student.id}, 课时={student.remaining_hours}h")
 
     return StudentResponse(
         id=student.id,

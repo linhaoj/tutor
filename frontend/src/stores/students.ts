@@ -54,6 +54,7 @@ export const useStudentsStore = defineStore('students', () => {
     name: string
     email?: string
     remaining_hours?: number
+    teacher_id?: string  // 管理员可以指定教师ID
   }): Promise<{ success: boolean, message: string }> => {
     try {
       const response = await api.post('/api/students', studentData)

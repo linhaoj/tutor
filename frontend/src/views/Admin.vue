@@ -1284,43 +1284,41 @@ const submitAddStudent = async () => {
   submitting.value = true
 
   try {
-    // 1. 先在auth store中创建用户账号
-    const studentId = Date.now()
-    const result = await authStore.registerUser({
+    // 流程说明：
+    // 1. 创建student记录（会自动关联到当前选中的教师）
+    // 2. 创建user账号（关联到上面创建的student）
+    // 注意：这里是管理员为教师创建学生，所以需要指定教师ID
+
+    // 第1步：在students API中创建学生记录（会自动关联到selectedTeacherId）
+    // 但因为students API使用current_user作为teacher_id，我们需要用teacher的token
+    // 所以这里先创建user账号，再创建student记录
+
+    // 第1步：创建学生user账号
+    const userResult = await authStore.registerUser({
       username: studentForm.username,
       password: studentForm.password,
       display_name: studentForm.name,
       role: 'student',
-      email: studentForm.email,
-      student_id: studentId
+      email: studentForm.email || undefined
     })
 
-    if (!result.success) {
-      ElMessage.error(result.message)
-      submitting.value = false
+    if (!userResult.success) {
+      ElMessage.error(userResult.message)
       return
     }
 
-    // 2. 在students store中创建学生记录
-    const newStudent = {
-      id: studentId,
+    // 第2步：使用studentsStore创建学生记录，指定教师ID
+    const studentResult = await studentsStore.addStudent({
       name: studentForm.name,
-      username: studentForm.username,
-      email: studentForm.email,
-      total_words: 0,
-      learned_words: 0,
-      remainingHours: studentForm.remainingHours || 0,
-      hasAccount: true,
-      userId: `user-${studentId}` // 关联User ID
+      email: studentForm.email || undefined,
+      remaining_hours: studentForm.remainingHours || 0,
+      teacher_id: selectedTeacherId.value  // 指定所属教师
+    })
+
+    if (!studentResult.success) {
+      ElMessage.error(studentResult.message)
+      return
     }
-
-    // 添加学生到选中教师的数据中
-    const currentStudents = studentsStore.getStudentsByUserId(selectedTeacherId.value)
-    currentStudents.push(newStudent)
-
-    // 保存到localStorage
-    localStorage.setItem(`students_${selectedTeacherId.value}`, JSON.stringify(currentStudents))
-    localStorage.setItem(`backup_students_${selectedTeacherId.value}`, JSON.stringify(currentStudents))
 
     ElMessage.success('学生账号创建成功！学生可使用账号密码登录')
     addStudentDialogVisible.value = false
