@@ -201,15 +201,68 @@ export const useWordsStore = defineStore('words', () => {
   }
 
   /**
+   * 批量添加单词
+   */
+  const batchAddWords = async (
+    wordSetName: string,
+    words: Array<{ english: string, chinese: string }>
+  ): Promise<{ success: boolean, message: string }> => {
+    try {
+      const response = await api.post(
+        `/api/words/sets/${encodeURIComponent(wordSetName)}/batch-add`,
+        words
+      )
+
+      // 刷新单词列表
+      if (currentWordSetName.value === wordSetName) {
+        await fetchWords(wordSetName)
+      }
+
+      // 刷新单词集列表（更新word_count）
+      await fetchWordSets()
+
+      return {
+        success: true,
+        message: response.data.message || '批量添加成功'
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '批量添加失败'
+      }
+    }
+  }
+
+  /**
+   * 删除单词集
+   */
+  const deleteWordSet = async (wordSetName: string): Promise<{ success: boolean, message: string }> => {
+    try {
+      await api.delete(`/api/words/sets/${encodeURIComponent(wordSetName)}`)
+
+      // 从本地列表移除
+      wordSets.value = wordSets.value.filter(ws => ws.name !== wordSetName)
+
+      // 如果删除的是当前单词集，清空单词列表
+      if (currentWordSetName.value === wordSetName) {
+        words.value = []
+        currentWordSetName.value = null
+      }
+
+      return { success: true, message: '单词集删除成功' }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '删除单词集失败'
+      }
+    }
+  }
+
+  /**
    * 批量导入单词（兼容旧代码）
    */
   const importWords = async (wordSetName: string, newWords: Array<{ english: string, chinese: string }>) => {
-    const results = []
-    for (const word of newWords) {
-      const result = await addWord(wordSetName, word)
-      results.push(result)
-    }
-    return results
+    return await batchAddWords(wordSetName, newWords)
   }
 
   return {
@@ -222,9 +275,11 @@ export const useWordsStore = defineStore('words', () => {
     createWordSet,
     addWord,
     deleteWord,
+    deleteWordSet,
     importWordsFromExcel,
     getWordsBySet,
     getWord,
-    importWords
+    importWords,
+    batchAddWords
   }
 })

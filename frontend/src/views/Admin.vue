@@ -1152,16 +1152,15 @@ const getSelectedTeacherName = () => {
   return teacher ? teacher.display_name : ''
 }
 
-const selectWordSet = (wordSetName: string) => {
+const selectWordSet = async (wordSetName: string) => {
   selectedWordSet.value = wordSetName
+  // 加载该单词集的单词
+  await wordsStore.fetchWords(wordSetName)
 }
 
 const getCurrentWords = () => {
-  const wordSet = teacherWordSets.value.find(ws => ws.name === selectedWordSet.value)
-  console.log(`获取单词集 "${selectedWordSet.value}" 的单词:`, wordSet?.words)
-  console.log('当前选中的单词集名称:', selectedWordSet.value)
-  console.log('所有可用的单词集:', teacherWordSets.value.map(ws => ws.name))
-  return wordSet?.words || []
+  // 从wordsStore获取当前单词集的单词
+  return wordsStore.words || []
 }
 
 // 学生管理状态
@@ -1537,47 +1536,46 @@ const submitAddWordSet = async () => {
     ElMessage.error('请输入单词集名称和单词列表')
     return
   }
-  
+
   try {
-    // 解析单词列表
-    const words = wordSetForm.wordsText.trim().split('\n').map((line, index) => {
+    // 1. 创建单词集
+    const createResult = await wordsStore.createWordSet({
+      name: wordSetForm.name,
+      is_global: true
+    })
+
+    if (!createResult.success) {
+      ElMessage.error(createResult.message)
+      return
+    }
+
+    // 2. 解析单词列表
+    const words = wordSetForm.wordsText.trim().split('\n').map(line => {
       const parts = line.trim().split(/\s+/)
       if (parts.length >= 2) {
         return {
-          id: Date.now() + index,
           english: parts[0],
           chinese: parts.slice(1).join(' ')
         }
       }
       return null
-    }).filter(word => word !== null)
-    
+    }).filter(word => word !== null) as Array<{ english: string, chinese: string }>
+
     if (words.length === 0) {
       ElMessage.error('请输入有效的单词列表')
       return
     }
-    
-    const newWordSet = {
-      name: wordSetForm.name,
-      description: wordSetForm.description || '',
-      words,
-      created_at: new Date().toISOString().split('T')[0],
-      userId: selectedTeacherId.value
+
+    // 3. 批量添加单词
+    const addResult = await wordsStore.batchAddWords(wordSetForm.name, words)
+
+    if (addResult.success) {
+      ElMessage.success(`单词集添加成功，共 ${words.length} 个单词`)
+      addWordSetDialogVisible.value = false
+      await loadTeacherData()
+    } else {
+      ElMessage.error(addResult.message)
     }
-    
-    // 获取当前用户的单词集（返回新数组，避免直接修改原数组）
-    const currentWordSets = [...wordsStore.getWordSetsByUserId(selectedTeacherId.value)]
-    currentWordSets.push(newWordSet)
-    
-    console.log('手动添加 - 保存前的单词集:', currentWordSets)
-    
-    // 保存到用户特定的localStorage
-    localStorage.setItem(`wordSets_${selectedTeacherId.value}`, JSON.stringify(currentWordSets))
-    localStorage.setItem(`backup_wordSets_${selectedTeacherId.value}`, JSON.stringify(currentWordSets))
-    
-    ElMessage.success('单词集添加成功')
-    addWordSetDialogVisible.value = false
-    await loadTeacherData()
   } catch (error) {
     console.error('添加单词集失败:', error)
     ElMessage.error('添加单词集失败')
@@ -1660,60 +1658,47 @@ const importWordsFromExcel = async () => {
     ElMessage.error('请选择文件')
     return
   }
-  
+
   importing.value = true
-  
+
   try {
     const selectedSheets = excelSheets.value.filter(sheet => sheet.selected)
-    
+
     if (selectedSheets.length === 0) {
       ElMessage.error('请至少选择一个Sheet导入')
       return
     }
-    
-    const allImportedWords: any[] = []
-    
+
+    let totalWords = 0
+
     for (const sheet of selectedSheets) {
       const wordSetName = sheet.customName || sheet.name
-      
-      // 将sheet数据转换为WordSet格式
-      const newWordSet = {
+
+      // 1. 创建单词集
+      const createResult = await wordsStore.createWordSet({
         name: wordSetName,
-        description: `从 Excel 导入（${sheet.name}）`,
-        words: sheet.data.map((wordData, index) => ({
-          id: Date.now() + index,
-          english: wordData.english,
-          chinese: wordData.chinese
-        })),
-        created_at: new Date().toISOString().split('T')[0],
-        userId: selectedTeacherId.value
+        is_global: true
+      })
+
+      if (!createResult.success) {
+        ElMessage.error(`创建单词集 "${wordSetName}" 失败: ${createResult.message}`)
+        continue
       }
-      
-      console.log(`创建新单词集 "${wordSetName}":`, newWordSet)
-      console.log(`新单词集的words长度:`, newWordSet.words.length)
-      console.log(`sheet.data内容:`, sheet.data)
-      
-      allImportedWords.push(newWordSet)
+
+      // 2. 批量添加单词
+      const addResult = await wordsStore.batchAddWords(wordSetName, sheet.data)
+
+      if (addResult.success) {
+        totalWords += sheet.data.length
+      } else {
+        ElMessage.error(`导入单词失败: ${addResult.message}`)
+      }
     }
-    
-    // 获取当前用户的单词集（返回新数组，避免直接修改原数组）
-    const currentUserWordSets = [...wordsStore.getWordSetsByUserId(selectedTeacherId.value)]
-    currentUserWordSets.push(...allImportedWords)
-    
-    console.log('Excel导入 - 新导入的单词集数据:', allImportedWords)
-    console.log('Excel导入 - 新导入的第一个单词集的words:', allImportedWords[0]?.words)
-    console.log('Excel导入 - 保存前的全部单词集:', currentUserWordSets)
-    console.log('Excel导入 - 最后一个(新导入)单词集的words:', currentUserWordSets[currentUserWordSets.length - 1]?.words)
-    
-    // 保存到用户特定的localStorage
-    localStorage.setItem(`wordSets_${selectedTeacherId.value}`, JSON.stringify(currentUserWordSets))
-    localStorage.setItem(`backup_wordSets_${selectedTeacherId.value}`, JSON.stringify(currentUserWordSets))
-    
-    const totalWords = allImportedWords.reduce((sum, ws) => sum + ws.words.length, 0)
+
     ElMessage.success(`成功导入 ${totalWords} 个单词，来自 ${selectedSheets.length} 个Sheet`)
     importWordsDialogVisible.value = false
     await loadTeacherData()
-    
+
   } catch (error) {
     ElMessage.error('导入失败')
     console.error('导入错误:', error)
@@ -1725,7 +1710,7 @@ const importWordsFromExcel = async () => {
 const deleteWordSet = async (wordSet: any) => {
   try {
     await ElMessageBox.confirm(
-      `确定要删除单词集 "${wordSet.name}" 吗？这将删除该单词集下的所有 ${wordSet.words?.length || 0} 个单词。`,
+      `确定要删除单词集 "${wordSet.name}" 吗？这将删除该单词集下的所有 ${wordSet.word_count || 0} 个单词。`,
       '确认删除单词集',
       {
         type: 'warning',
@@ -1733,22 +1718,20 @@ const deleteWordSet = async (wordSet: any) => {
         cancelButtonText: '取消'
       }
     )
-    
-    // 从当前用户的单词集中删除
-    const currentWordSets = [...wordsStore.getWordSetsByUserId(selectedTeacherId.value)]
-    const filteredWordSets = currentWordSets.filter(ws => ws.name !== wordSet.name)
-    
-    // 保存到localStorage
-    localStorage.setItem(`wordSets_${selectedTeacherId.value}`, JSON.stringify(filteredWordSets))
-    localStorage.setItem(`backup_wordSets_${selectedTeacherId.value}`, JSON.stringify(filteredWordSets))
-    
-    // 如果删除的是当前选中的单词集，清空选择
-    if (selectedWordSet.value === wordSet.name) {
-      selectedWordSet.value = ''
+
+    const result = await wordsStore.deleteWordSet(wordSet.name)
+
+    if (result.success) {
+      // 如果删除的是当前选中的单词集，清空选择
+      if (selectedWordSet.value === wordSet.name) {
+        selectedWordSet.value = ''
+      }
+
+      ElMessage.success(result.message)
+      await loadTeacherData()
+    } else {
+      ElMessage.error(result.message)
     }
-    
-    ElMessage.success(`单词集 "${wordSet.name}" 已删除`)
-    await loadTeacherData()
   } catch {
     // 用户取消删除
   }

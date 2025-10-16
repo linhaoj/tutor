@@ -200,3 +200,47 @@ async def delete_word(
     db.delete(word)
     db.commit()
     return {"message": "单词删除成功"}
+
+
+@router.delete("/sets/{word_set_name}")
+async def delete_word_set(
+    word_set_name: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """删除单词集"""
+    word_set = db.query(WordSet).filter(WordSet.name == word_set_name).first()
+    if not word_set:
+        raise HTTPException(status_code=404, detail="单词集不存在")
+
+    logger.info(f"删除单词集: 单词集={word_set_name}, 教师={current_user.username}")
+    db.delete(word_set)
+    db.commit()
+    return {"message": "单词集删除成功"}
+
+
+@router.post("/sets/{word_set_name}/batch-add")
+async def batch_add_words(
+    word_set_name: str,
+    words: List[WordCreate],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """批量添加单词到单词集"""
+    word_set = db.query(WordSet).filter(WordSet.name == word_set_name).first()
+    if not word_set:
+        raise HTTPException(status_code=404, detail="单词集不存在")
+
+    added_count = 0
+    for word_data in words:
+        word = Word(
+            word_set_id=word_set.id,
+            english=word_data.english,
+            chinese=word_data.chinese
+        )
+        db.add(word)
+        added_count += 1
+
+    db.commit()
+    logger.info(f"批量添加单词: 单词集={word_set_name}, 数量={added_count}, 教师={current_user.username}")
+    return {"message": f"成功添加 {added_count} 个单词"}
