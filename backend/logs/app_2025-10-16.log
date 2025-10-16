@@ -31,3 +31,13 @@
 2025-10-16 05:46:29 | INFO     | students:101 | 学生创建成功: 教师ID=user-1760629263024, 学生=小明, ID=1, 课时=10.0h
 2025-10-16 05:46:30 | INFO     | auth:115 | 用户尝试登录: teacher3
 2025-10-16 05:46:30 | INFO     | auth:137 | 登录成功: 用户=teacher3, 角色=teacher, ID=user-1760629263024
+2025-10-16 07:13:09 | INFO     | auth:115 | 用户尝试登录: admin
+2025-10-16 07:13:10 | INFO     | auth:137 | 登录成功: 用户=admin, 角色=admin, ID=admin-001
+2025-10-16 07:13:13 | INFO     | auth:250 | 用户删除成功: 管理员=admin, 被删除用户=student1, ID=user-1760629589741
+2025-10-16 07:13:15 | INFO     | auth:250 | 用户删除成功: 管理员=admin, 被删除用户=jlhstu, ID=user-1760629358342
+2025-10-16 07:13:50 | INFO     | auth:164 | 管理员 admin 尝试创建新用户: jlhjlh
+2025-10-16 07:13:50 | INFO     | auth:194 | 新用户创建成功: 用户名=jlhjlh, 角色=teacher, ID=user-1760634830547
+2025-10-16 07:14:07 | INFO     | auth:164 | 管理员 admin 尝试创建新用户: jlhstu
+2025-10-16 07:14:08 | INFO     | auth:194 | 新用户创建成功: 用户名=jlhstu, 角色=student, ID=user-1760634847899
+2025-10-16 07:14:08 | INFO     | students:69 | 管理员 admin 为教师 jlhjlh 创建学生: linhao
+2025-10-16 07:14:08 | INFO     | students:101 | 学生创建成功: 教师ID=user-1760634830547, 学生=linhao, ID=2, 课时=20.0h

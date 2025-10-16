@@ -1349,24 +1349,17 @@ const submitEditStudent = async () => {
   }
 
   try {
-    const currentStudents = studentsStore.getStudentsByUserId(selectedTeacherId.value)
-    const studentIndex = currentStudents.findIndex(s => s.id === editStudentForm.id)
+    const result = await studentsStore.updateStudent(editStudentForm.id, {
+      name: editStudentForm.name,
+      email: editStudentForm.email || undefined
+    })
 
-    if (studentIndex !== -1) {
-      // 保留原有数据，只更新可编辑字段
-      currentStudents[studentIndex] = {
-        ...currentStudents[studentIndex],
-        name: editStudentForm.name,
-        email: editStudentForm.email
-      }
-
-      // 保存到localStorage
-      localStorage.setItem(`students_${selectedTeacherId.value}`, JSON.stringify(currentStudents))
-      localStorage.setItem(`backup_students_${selectedTeacherId.value}`, JSON.stringify(currentStudents))
-
-      ElMessage.success('学生信息更新成功')
+    if (result.success) {
+      ElMessage.success(result.message)
       editStudentDialogVisible.value = false
       await loadTeacherData()
+    } else {
+      ElMessage.error(result.message)
     }
   } catch (error) {
     console.error('更新学生信息失败:', error)
@@ -1419,19 +1412,18 @@ const selectedTeacherName = computed(() => {
 
 const submitHoursAdjustment = async () => {
   const value = hoursAdjustmentValue.value || 0
-  
+
   if (value < 0) {
     ElMessage.error('调整数值不能为负数')
     return
   }
-  
+
   savingHours.value = true
-  
+
   try {
-    // 计算新的课时值
     let newHours = 0
     const currentHours = editHoursForm.currentHours || 0
-    
+
     switch (hoursAdjustmentType.value) {
       case 'set':
         newHours = value
@@ -1445,39 +1437,20 @@ const submitHoursAdjustment = async () => {
       default:
         newHours = currentHours
     }
-    
-    // 更新学生的课时信息
-    const currentStudents = studentsStore.getStudentsByUserId(selectedTeacherId.value)
-    const studentIndex = currentStudents.findIndex(s => s.id === editHoursForm.id)
-    
-    if (studentIndex !== -1) {
-      const updatedStudent = {
-        ...currentStudents[studentIndex],
-        remainingHours: newHours
-      }
-      
-      // 使用studentsStore的updateStudent方法（需要先切换到对应用户）
-      const originalStudent = currentStudents[studentIndex]
-      const userStudents = studentsStore.getStudentsByUserId(selectedTeacherId.value)
-      const updatedStudents = userStudents.map(s => 
-        s.id === editHoursForm.id ? { ...s, remainingHours: newHours } : s
-      )
-      
-      // 直接更新localStorage
-      localStorage.setItem(`students_${selectedTeacherId.value}`, JSON.stringify(updatedStudents))
-      
-      // 重新加载数据
+
+    const result = await studentsStore.updateStudent(editHoursForm.id, {
+      remaining_hours: newHours
+    })
+
+    if (result.success) {
       await loadTeacherData()
-      
-      const actionText = hoursAdjustmentType.value === 'set' ? '设置' : 
+      const actionText = hoursAdjustmentType.value === 'set' ? '设置' :
                         hoursAdjustmentType.value === 'add' ? '增加' : '扣除'
-      ElMessage.success(`学生课时${actionText}成功：${originalStudent.name} 现剩余 ${newHours.toFixed(1)}h`)
-      
+      ElMessage.success(`学生课时${actionText}成功：${editHoursForm.name} 现剩余 ${newHours.toFixed(1)}h`)
       editHoursDialogVisible.value = false
     } else {
-      ElMessage.error('找不到对应的学生信息')
+      ElMessage.error(result.message)
     }
-    
   } catch (error) {
     console.error('课时调整失败:', error)
     ElMessage.error('课时调整失败')
@@ -1531,19 +1504,14 @@ const deleteStudent = async (student: Student) => {
       { type: 'warning' }
     )
 
-    // 1. 如果有账号，先删除用户账号
-    if (student.hasAccount && student.userId) {
-      const users = await authStore.getAllUsers()
-      const user = users.find((u: any) => u.studentId === student.id)
-      if (user) {
-        await authStore.deleteUser(user.id)
-      }
-    }
+    const result = await studentsStore.deleteStudent(student.id)
 
-    // 2. 删除学生记录
-    studentsStore.deleteStudentForUser(selectedTeacherId.value, student.id)
-    loadTeacherData()
-    ElMessage.success('学生删除成功')
+    if (result.success) {
+      ElMessage.success(result.message)
+      await loadTeacherData()
+    } else {
+      ElMessage.error(result.message)
+    }
   } catch {
     // 用户取消
   }
@@ -1822,37 +1790,27 @@ const submitAddSchedule = async () => {
     ElMessage.error('请填写完整的课程信息')
     return
   }
-  
+
   try {
-    const student = teacherStudents.value.find(s => s.id === parseInt(scheduleForm.studentId))
     const dateStr = new Date(scheduleForm.date).toISOString().split('T')[0]
-    const timeStr = scheduleForm.time
-    
-    const newSchedule = {
-      id: Date.now(),
-      time: timeStr,
+
+    const result = await scheduleStore.addSchedule({
+      student_id: parseInt(scheduleForm.studentId),
       date: dateStr,
-      wordSet: scheduleForm.wordSet,
-      studentName: student?.name || '',
-      studentId: parseInt(scheduleForm.studentId),
-      type: scheduleForm.type as 'learning' | 'review',
+      time: scheduleForm.time,
+      word_set_name: scheduleForm.wordSet,
+      course_type: scheduleForm.type,
       duration: scheduleForm.duration,
-      classType: scheduleForm.classType as 'big' | 'small',
-      completed: false,
-      created_at: new Date().toISOString()
+      class_type: scheduleForm.classType
+    })
+
+    if (result.success) {
+      ElMessage.success(result.message)
+      addScheduleDialogVisible.value = false
+      await loadTeacherData()
+    } else {
+      ElMessage.error(result.message)
     }
-    
-    // 添加课程到选中教师的数据中
-    const currentSchedules = scheduleStore.getSchedulesByUserId(selectedTeacherId.value)
-    currentSchedules.push(newSchedule)
-    
-    // 保存到localStorage
-    localStorage.setItem(`schedule_${selectedTeacherId.value}`, JSON.stringify(currentSchedules))
-    localStorage.setItem(`backup_schedule_${selectedTeacherId.value}`, JSON.stringify(currentSchedules))
-    
-    ElMessage.success('课程添加成功')
-    addScheduleDialogVisible.value = false
-    await loadTeacherData()
   } catch (error) {
     console.error('添加课程失败:', error)
     ElMessage.error('添加课程失败')
@@ -1870,10 +1828,15 @@ const deleteSchedule = async (schedule: Schedule) => {
       '确认删除',
       { type: 'warning' }
     )
-    
-    scheduleStore.deleteScheduleForUser(selectedTeacherId.value, schedule.id)
-    loadTeacherData()
-    ElMessage.success('课程删除成功')
+
+    const result = await scheduleStore.deleteSchedule(schedule.id)
+
+    if (result.success) {
+      ElMessage.success(result.message)
+      await loadTeacherData()
+    } else {
+      ElMessage.error(result.message)
+    }
   } catch {
     // 用户取消
   }
