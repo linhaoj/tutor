@@ -2,41 +2,31 @@
   <div class="students-page">
     <div class="page-header">
       <h1>学生管理</h1>
-      <el-button v-if="authStore.isAdmin" type="primary" @click="showAddDialog">
+      <el-button type="primary" @click="showAddDialog">
         <el-icon><Plus /></el-icon>
-        创建学生账号
+        添加学生
       </el-button>
     </div>
 
     <!-- 学生列表 -->
-    <el-table :data="students" style="width: 100%">
+    <el-table :data="studentsStore.students" style="width: 100%" v-loading="studentsStore.loading">
       <el-table-column prop="name" label="姓名" width="150" />
-      <el-table-column label="账号状态" width="120">
-        <template #default="scope">
-          <el-tag v-if="scope.row.hasAccount" type="success">已创建</el-tag>
-          <el-tag v-else type="info">未创建</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="username" label="用户名" width="150" />
       <el-table-column prop="email" label="邮箱" />
       <el-table-column label="剩余课时" width="120">
         <template #default="scope">
-          <span :class="getHoursClass(scope.row.remainingHours)">
-            {{ (scope.row.remainingHours || 0).toFixed(1) }}h
+          <span :class="getHoursClass(scope.row.remaining_hours)">
+            {{ scope.row.remaining_hours.toFixed(1) }}h
           </span>
         </template>
       </el-table-column>
-      <el-table-column v-if="authStore.isAdmin" label="操作" width="250">
+      <el-table-column label="创建时间" width="180">
+        <template #default="scope">
+          {{ formatDate(scope.row.created_at) }}
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="200">
         <template #default="scope">
           <el-button size="small" @click="editStudent(scope.row)">编辑</el-button>
-          <el-button
-            v-if="scope.row.hasAccount"
-            size="small"
-            type="warning"
-            @click="resetPassword(scope.row)"
-          >
-            重置密码
-          </el-button>
           <el-button
             size="small"
             type="danger"
@@ -48,10 +38,10 @@
       </el-table-column>
     </el-table>
 
-    <!-- 创建/编辑学生账号对话框 -->
+    <!-- 创建/编辑学生对话框 -->
     <el-dialog
       v-model="dialogVisible"
-      :title="isEditing ? '编辑学生信息' : '创建学生账号'"
+      :title="isEditing ? '编辑学生信息' : '添加学生'"
       width="450px"
     >
       <el-form :model="studentForm" label-width="100px">
@@ -59,33 +49,13 @@
           <el-input v-model="studentForm.name" placeholder="请输入学生姓名" />
         </el-form-item>
 
-        <el-form-item label="用户名" required>
-          <el-input
-            v-model="studentForm.username"
-            placeholder="请输入登录用户名"
-            :disabled="isEditing && studentForm.hasAccount"
-          />
-          <div v-if="isEditing && studentForm.hasAccount" style="font-size: 12px; color: #909399; margin-top: 5px;">
-            账号已创建，不可修改用户名
-          </div>
-        </el-form-item>
-
-        <el-form-item v-if="!isEditing || !studentForm.hasAccount" label="密码" required>
-          <el-input
-            v-model="studentForm.password"
-            type="password"
-            placeholder="请输入密码"
-            show-password
-          />
-        </el-form-item>
-
         <el-form-item label="邮箱">
           <el-input v-model="studentForm.email" placeholder="请输入邮箱（可选）" />
         </el-form-item>
 
-        <el-form-item v-if="authStore.isAdmin" label="剩余课时">
+        <el-form-item label="剩余课时">
           <el-input-number
-            v-model="studentForm.remainingHours"
+            v-model="studentForm.remaining_hours"
             :precision="1"
             :step="0.5"
             :min="0"
@@ -95,6 +65,21 @@
           />
           <div style="font-size: 12px; color: #909399; margin-top: 5px;">
             大课60分钟 = 1.0h，小课30分钟 = 0.5h
+          </div>
+        </el-form-item>
+
+        <!-- 管理员可以为其他教师创建学生 -->
+        <el-form-item v-if="authStore.isAdmin && !isEditing" label="所属教师">
+          <el-select v-model="studentForm.teacher_id" placeholder="选择教师" style="width: 100%">
+            <el-option
+              v-for="teacher in teachers"
+              :key="teacher.id"
+              :label="teacher.display_name"
+              :value="teacher.id"
+            />
+          </el-select>
+          <div style="font-size: 12px; color: #909399; margin-top: 5px;">
+            留空则为当前登录用户创建学生
           </div>
         </el-form-item>
       </el-form>
@@ -110,7 +95,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { useStudentsStore } from '../stores/students'
@@ -119,23 +104,17 @@ import { useAuthStore } from '../stores/auth'
 const studentsStore = useStudentsStore()
 const authStore = useAuthStore()
 
-const students = computed(() => {
-  const currentUser = authStore.currentUser
-  return currentUser ? studentsStore.getStudentsByUserId(currentUser.id) : []
-})
-
 const dialogVisible = ref(false)
 const saving = ref(false)
 const isEditing = ref(false)
+const teachers = ref<any[]>([])
+
 const studentForm = ref({
   id: 0,
   name: '',
-  username: '',
-  password: '',
   email: '',
-  remainingHours: 0,
-  hasAccount: false,
-  userId: ''
+  remaining_hours: 0,
+  teacher_id: ''
 })
 
 const getHoursClass = (hours: number) => {
@@ -145,24 +124,39 @@ const getHoursClass = (hours: number) => {
   return 'hours-high'
 }
 
-const showAddDialog = () => {
+const formatDate = (dateStr: string) => {
+  const date = new Date(dateStr)
+  return date.toLocaleString('zh-CN')
+}
+
+const showAddDialog = async () => {
   isEditing.value = false
   studentForm.value = {
     id: 0,
     name: '',
-    username: '',
-    password: '',
     email: '',
-    remainingHours: 0,
-    hasAccount: false,
-    userId: ''
+    remaining_hours: 0,
+    teacher_id: ''
   }
+
+  // 如果是管理员，加载教师列表
+  if (authStore.isAdmin) {
+    const users = await authStore.getAllUsers()
+    teachers.value = users.filter((u: any) => u.role === 'teacher')
+  }
+
   dialogVisible.value = true
 }
 
 const editStudent = (student: any) => {
   isEditing.value = true
-  studentForm.value = { ...student, password: '' }
+  studentForm.value = {
+    id: student.id,
+    name: student.name,
+    email: student.email || '',
+    remaining_hours: student.remaining_hours,
+    teacher_id: student.teacher_id
+  }
   dialogVisible.value = true
 }
 
@@ -172,64 +166,39 @@ const saveStudent = async () => {
     return
   }
 
-  if (!studentForm.value.username) {
-    ElMessage.error('请输入用户名')
-    return
-  }
-
-  if (!isEditing.value && !studentForm.value.password) {
-    ElMessage.error('请输入密码')
-    return
-  }
-
   saving.value = true
 
   try {
     if (isEditing.value) {
       // 更新学生信息
-      studentsStore.updateStudent(studentForm.value.id, {
+      const result = await studentsStore.updateStudent(studentForm.value.id, {
         name: studentForm.value.name,
-        email: studentForm.value.email,
-        remainingHours: studentForm.value.remainingHours
-      })
-      ElMessage.success('学生信息更新成功')
-    } else {
-      // 创建新学生账号
-      // 1. 先在auth store中创建用户账号
-      const studentId = Date.now()
-      const result = await authStore.registerUser({
-        username: studentForm.value.username,
-        password: studentForm.value.password,
-        displayName: studentForm.value.name,
-        role: 'student',
-        email: studentForm.value.email,
-        studentId: studentId
+        email: studentForm.value.email || undefined,
+        remaining_hours: studentForm.value.remaining_hours
       })
 
-      if (!result.success) {
+      if (result.success) {
+        ElMessage.success('学生信息更新成功')
+        dialogVisible.value = false
+      } else {
         ElMessage.error(result.message)
-        saving.value = false
-        return
       }
-
-      // 2. 在students store中创建学生记录
-      const newStudent = {
-        id: studentId,
+    } else {
+      // 创建新学生
+      const result = await studentsStore.addStudent({
         name: studentForm.value.name,
-        username: studentForm.value.username,
-        email: studentForm.value.email,
-        total_words: 0,
-        learned_words: 0,
-        remainingHours: studentForm.value.remainingHours || 0,
-        hasAccount: true,
-        userId: `user-${studentId}` // 关联User ID
+        email: studentForm.value.email || undefined,
+        remaining_hours: studentForm.value.remaining_hours,
+        teacher_id: studentForm.value.teacher_id || undefined
+      })
+
+      if (result.success) {
+        ElMessage.success('学生添加成功')
+        dialogVisible.value = false
+      } else {
+        ElMessage.error(result.message)
       }
-
-      studentsStore.addStudent(newStudent)
-      ElMessage.success('学生账号创建成功！学生可使用账号密码登录')
     }
-
-    dialogVisible.value = false
   } catch (error) {
     console.error('保存学生失败:', error)
     ElMessage.error('操作失败')
@@ -238,47 +207,10 @@ const saveStudent = async () => {
   }
 }
 
-const resetPassword = async (student: any) => {
-  try {
-    const { value: newPassword } = await ElMessageBox.prompt(
-      `为学生 ${student.name} 设置新密码`,
-      '重置密码',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        inputPlaceholder: '请输入新密码',
-        inputType: 'password'
-      }
-    )
-
-    if (!newPassword) {
-      ElMessage.warning('密码不能为空')
-      return
-    }
-
-    // 通过username找到用户并重置密码
-    const users = await authStore.getAllUsers()
-    const user = users.find((u: any) => u.username === student.username)
-
-    if (user) {
-      const result = await authStore.changePassword(user.id, '', newPassword)
-      if (result.success) {
-        ElMessage.success('密码重置成功')
-      } else {
-        ElMessage.error(result.message)
-      }
-    } else {
-      ElMessage.error('未找到对应的用户账号')
-    }
-  } catch {
-    // 用户取消操作
-  }
-}
-
 const deleteStudent = async (student: any) => {
   try {
     await ElMessageBox.confirm(
-      `确定要删除学生 ${student.name} 吗？这将同时删除其账号和所有学习数据。`,
+      `确定要删除学生 ${student.name} 吗？这将删除该学生的所有学习数据。`,
       '确认删除',
       {
         type: 'warning',
@@ -287,29 +219,20 @@ const deleteStudent = async (student: any) => {
       }
     )
 
-    // 1. 如果有账号，先删除用户账号
-    if (student.hasAccount && student.userId) {
-      const users = await authStore.getAllUsers()
-      const user = users.find((u: any) => u.studentId === student.id)
-      if (user) {
-        await authStore.deleteUser(user.id)
-      }
+    const result = await studentsStore.deleteStudent(student.id)
+    if (result.success) {
+      ElMessage.success('学生删除成功')
+    } else {
+      ElMessage.error(result.message)
     }
-
-    // 2. 删除学生记录
-    const currentUser = authStore.currentUser
-    if (currentUser) {
-      studentsStore.deleteStudentForUser(currentUser.id, student.id)
-    }
-
-    ElMessage.success('学生删除成功')
   } catch {
     // 用户取消删除
   }
 }
 
-onMounted(() => {
-  // 初始化加载
+onMounted(async () => {
+  // 加载学生列表
+  await studentsStore.fetchStudents()
 })
 </script>
 

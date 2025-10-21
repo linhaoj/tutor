@@ -248,18 +248,20 @@ const totalLearningHours = computed(() => {
 })
 
 // 方法
-const loadTeacherData = () => {
+const loadTeacherData = async () => {
   if (!authStore.currentUser) return
-  
+
   console.log('教师登录 - 当前用户ID:', authStore.currentUser.id)
-  console.log('教师登录 - 查找的学生数据key:', `students_${authStore.currentUser.id}`)
-  console.log('教师登录 - localStorage中的所有key:', Object.keys(localStorage).filter(key => key.startsWith('students_')))
-  
-  // 使用按用户隔离的数据获取方法
-  teacherStudents.value = studentsStore.getStudentsByUserId(authStore.currentUser.id)
-  teacherWordSets.value = wordsStore.getWordSetsByUserId(authStore.currentUser.id)
-  teacherSchedules.value = scheduleStore.getSchedulesByUserId(authStore.currentUser.id)
-  
+
+  // 直接使用store的reactive属性（后端API已经按用户过滤）
+  await studentsStore.fetchStudents()
+  await wordsStore.fetchWordSets()
+  await scheduleStore.fetchSchedules()
+
+  teacherStudents.value = studentsStore.students
+  teacherWordSets.value = wordsStore.wordSets
+  teacherSchedules.value = scheduleStore.schedules
+
   console.log('教师登录 - 加载到的学生数量:', teacherStudents.value.length)
   console.log('教师登录 - 加载到的单词集数量:', teacherWordSets.value.length)
   console.log('教师登录 - 加载到的日程数量:', teacherSchedules.value.length)

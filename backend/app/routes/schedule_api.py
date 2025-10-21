@@ -24,6 +24,7 @@ class ScheduleCreate(BaseModel):
     course_type: str = "learning"
     duration: int = 60
     class_type: str = "big"
+    teacher_id: Optional[str] = None  # 管理员可以指定教师ID
 
 
 class ScheduleResponse(BaseModel):
@@ -46,17 +47,41 @@ async def create_schedule(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """创建课程安排"""
+    """创建课程安排
+
+    - 教师：为自己的学生创建课程
+    - 管理员：可以通过teacher_id参数为指定教师的学生创建课程
+    """
+    # 确定teacher_id
+    if schedule_data.teacher_id:
+        # 管理员为指定教师创建课程
+        if current_user.role != "admin":
+            raise HTTPException(status_code=403, detail="只有管理员可以为其他教师创建课程")
+
+        # 验证教师存在
+        teacher = db.query(User).filter(User.id == schedule_data.teacher_id).first()
+        if not teacher or teacher.role != "teacher":
+            raise HTTPException(status_code=404, detail="指定的教师不存在")
+
+        teacher_id = schedule_data.teacher_id
+        logger.info(f"管理员 {current_user.username} 为教师 {teacher.username} 创建课程")
+    else:
+        # 教师为自己创建课程
+        if current_user.role not in ["teacher", "admin"]:
+            raise HTTPException(status_code=403, detail="权限不足")
+        teacher_id = current_user.id
+
+    # 验证学生存在且属于该教师
     student = db.query(Student).filter(
         Student.id == schedule_data.student_id,
-        Student.teacher_id == current_user.id
+        Student.teacher_id == teacher_id
     ).first()
     if not student:
-        logger.warning(f"创建课程失败: 学生不存在 - ID={schedule_data.student_id}, 教师={current_user.username}")
-        raise HTTPException(status_code=404, detail="学生不存在")
+        logger.warning(f"创建课程失败: 学生不存在或不属于该教师 - ID={schedule_data.student_id}, 教师ID={teacher_id}")
+        raise HTTPException(status_code=404, detail="学生不存在或不属于该教师")
 
     schedule = Schedule(
-        teacher_id=current_user.id,
+        teacher_id=teacher_id,
         student_id=schedule_data.student_id,
         student_name=student.name,
         date=date.fromisoformat(schedule_data.date),
@@ -71,7 +96,7 @@ async def create_schedule(
     db.commit()
     db.refresh(schedule)
 
-    logger.info(f"课程创建成功: 学生={student.name}, 日期={schedule_data.date}, 时间={schedule_data.time}, 类型={schedule_data.course_type}, 时长={schedule_data.duration}分钟")
+    logger.info(f"课程创建成功: 教师ID={teacher_id}, 学生={student.name}, 日期={schedule_data.date}, 时间={schedule_data.time}, 类型={schedule_data.course_type}, 时长={schedule_data.duration}分钟")
 
     return ScheduleResponse(
         id=schedule.id,

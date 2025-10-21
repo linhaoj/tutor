@@ -19,7 +19,7 @@
       >
         <div
           class="word-card"
-          :class="{ 'show-chinese': word.showChinese, 'starred': word.isStarred }"
+          :class="{ 'show-chinese': word.showChinese, 'starred': word.is_starred }"
           @click="toggleDisplay(index)"
         >
           <div class="word-content">
@@ -31,8 +31,8 @@
 
           <!-- 星星标记按钮 -->
           <div class="star-button" @click.stop="toggleStar(index)">
-            <el-icon :size="24" :class="{ 'starred': word.isStarred }">
-              <StarFilled v-if="word.isStarred" />
+            <el-icon :size="24" :class="{ 'starred': word.is_starred }">
+              <StarFilled v-if="word.is_starred" />
               <Star v-else />
             </el-icon>
           </div>
@@ -90,7 +90,7 @@ const reviewInfo = ref<ReviewInfo>({
 
 // 已标记的单词数量
 const starredCount = computed(() => {
-  return reviewInfo.value.words.filter(w => w.isStarred).length
+  return reviewInfo.value.words.filter(w => w.is_starred).length
 })
 
 // 格式化日期
@@ -113,15 +113,16 @@ const toggleDisplay = (index: number) => {
 }
 
 // 切换星标
-const toggleStar = (index: number) => {
+const toggleStar = async (index: number) => {
   const word = reviewInfo.value.words[index]
   if (word) {
-    word.isStarred = !word.isStarred
+    // 调用API切换星标
+    const newState = await reviewsStore.toggleWordStar(reviewInfo.value.id, word.id)
 
-    // 保存到store
-    reviewsStore.toggleWordStar(reviewInfo.value.id, word.id)
+    // 更新本地显示
+    word.is_starred = newState
 
-    const message = word.isStarred ? '已标记为重点' : '取消重点标记'
+    const message = newState ? '已标记为重点' : '取消重点标记'
     ElMessage.success(message)
   }
 }
@@ -145,7 +146,7 @@ const goBack = () => {
 }
 
 // 初始化
-onMounted(() => {
+onMounted(async () => {
   const reviewId = route.params.reviewId as string
 
   if (!reviewId) {
@@ -154,7 +155,8 @@ onMounted(() => {
     return
   }
 
-  const review = reviewsStore.getReview(reviewId)
+  // 从服务器获取最新数据
+  const review = await reviewsStore.fetchReview(reviewId)
 
   if (!review) {
     ElMessage.error('复习记录不存在')
@@ -165,16 +167,13 @@ onMounted(() => {
   // 加载复习数据
   reviewInfo.value = {
     id: review.id,
-    wordSetName: review.wordSetName,
-    learnDate: review.learnDate,
+    wordSetName: review.word_set_name,
+    learnDate: review.learn_date,
     words: review.words.map(w => ({
       ...w,
       showChinese: false
     }))
   }
-
-  // 更新最后复习时间
-  reviewsStore.updateLastReviewedAt(reviewId)
 
   ElMessage.success(`开始复习 ${review.words.length} 个单词`)
 })

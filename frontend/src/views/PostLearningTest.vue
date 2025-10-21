@@ -232,7 +232,7 @@ const speakWord = (text: string) => {
   }
 }
 
-const markWordStatus = (index: number, status: 'passed' | 'failed') => {
+const markWordStatus = async (index: number, status: 'passed' | 'failed') => {
   const word = allWords.value[index]
   if (word && word.status === 'unchecked') {
     word.status = status
@@ -240,7 +240,7 @@ const markWordStatus = (index: number, status: 'passed' | 'failed') => {
     // 获取当前阶段信息用于显示
     const studentId = parseInt(route.params.studentId as string)
     const wordSet = route.query.wordSet as string
-    const currentProgress = progressStore.getWordProgress(studentId, wordSet, word.originalIndex)
+    const currentProgress = await progressStore.getWordProgress(studentId, wordSet, word.originalIndex)
     const currentStage = currentProgress ? currentProgress.currentStage : 0
 
     const statusText = status === 'passed' ? '通过' : '不通过'
@@ -288,9 +288,9 @@ const resetWordStatus = (index: number) => {
   }
 }
 
-const continuePractice = () => {
+const continuePractice = async () => {
   // 更新学习进度
-  updateLearningProgress()
+  await updateLearningProgress()
 
   // 将通过的单词添加到抗遗忘会话
   recordPassedWordsForAntiForget()
@@ -333,15 +333,15 @@ const clearTestStatusStorage = () => {
   }
 }
 
-const endPracticeAndCreateAntiForget = () => {
+const endPracticeAndCreateAntiForget = async () => {
   // 更新学习进度
-  updateLearningProgress()
+  await updateLearningProgress()
 
   // 创建抗遗忘任务（内部会自动记录通过的单词）
-  createAntiForgetTasks()
+  await createAntiForgetTasks()
 
   // 标记当前课程为已完成
-  markCourseAsCompleted()
+  await markCourseAsCompleted()
 
   // 清理sessionStorage中的检测状态数据
   clearTestStatusStorage()
@@ -350,32 +350,33 @@ const endPracticeAndCreateAntiForget = () => {
   uiStore.endCourse()
 }
 
-const markCourseAsCompleted = () => {
+const markCourseAsCompleted = async () => {
   try {
     const scheduleIdStr = sessionStorage.getItem('currentScheduleId')
     const teacherId = route.query.teacherId as string
     const studentId = parseInt(route.params.studentId as string)
-    
+
     if (scheduleIdStr && teacherId && studentId) {
       const scheduleId = parseInt(scheduleIdStr)
-      
-      // 获取课程信息来确定扣减时长
-      const schedule = scheduleStore.getSchedulesByUserId(teacherId).find(s => s.id === scheduleId)
+
+      // 获取课程信息来确定扣减时长（后端API自动过滤）
+      await scheduleStore.fetchSchedules()
+      const schedule = scheduleStore.schedules.find(s => s.id === scheduleId)
       if (schedule) {
         // 根据课程类型扣减时长：大课(60分钟) = 1.0h，小课(30分钟) = 0.5h
-        const hoursToDeduct = schedule.classType === 'big' ? 1.0 : 0.5
-        
+        const hoursToDeduct = schedule.class_type === 'big' ? 1.0 : 0.5
+
         // 扣减学生课程时长
-        const success = studentsStore.deductStudentHours(studentId, hoursToDeduct, teacherId)
+        const success = await studentsStore.deductStudentHours(studentId, hoursToDeduct)
         if (success) {
-          console.log(`学生课程时长已扣减: ${hoursToDeduct}h (${schedule.classType === 'big' ? '大课' : '小课'})`)
+          console.log(`学生课程时长已扣减: ${hoursToDeduct}h (${schedule.class_type === 'big' ? '大课' : '小课'})`)
         } else {
           console.warn('扣减学生课程时长失败')
         }
       }
-      
-      // 使用跨用户方法标记课程为已完成
-      scheduleStore.completeScheduleForUser(teacherId, scheduleId)
+
+      // 标记课程为已完成（后端API通过JWT自动识别用户）
+      await scheduleStore.completeSchedule(scheduleId)
       console.log('课程已标记为完成:', scheduleId)
     } else {
       console.warn('缺少课程完成所需信息', { scheduleIdStr, teacherId, studentId })
@@ -385,12 +386,11 @@ const markCourseAsCompleted = () => {
   }
 }
 
-const updateLearningProgress = () => {
+const updateLearningProgress = async () => {
   const studentId = parseInt(route.params.studentId as string)
   const wordSet = route.query.wordSet as string
-  const teacherId = route.query.teacherId as string
 
-  if (!studentId || !wordSet || !teacherId) {
+  if (!studentId || !wordSet) {
     ElMessage.error('缺少必要的学习信息')
     return
   }
@@ -400,15 +400,15 @@ const updateLearningProgress = () => {
   let uncheckedCount = 0
 
   // 处理所有单词，不只是有明确状态的单词
-  allWords.value.forEach(word => {
-    // 使用跨用户方法获取当前阶段
-    const currentProgress = progressStore.getWordProgressForUser(teacherId, studentId, wordSet, word.originalIndex)
+  for (const word of allWords.value) {
+    // 获取当前阶段（使用新的API方式，不需要teacherId）
+    const currentProgress = await progressStore.getWordProgress(studentId, wordSet, word.originalIndex)
     const currentStage = currentProgress ? currentProgress.currentStage : 0
 
     if (word.status === 'passed') {
       // 通过的单词 - 阶段+1
       const newStage = Math.min(currentStage + 1, 7)
-      progressStore.updateWordProgressForUser(teacherId, studentId, wordSet, word.originalIndex, newStage)
+      await progressStore.updateWordProgress(studentId, wordSet, word.originalIndex, newStage)
 
       if (newStage > currentStage) {
         promotedCount++
@@ -416,25 +416,25 @@ const updateLearningProgress = () => {
       }
     } else if (word.status === 'failed') {
       // 未通过的单词 - 保持当前阶段不变
-      progressStore.updateWordProgressForUser(teacherId, studentId, wordSet, word.originalIndex, currentStage)
+      await progressStore.updateWordProgress(studentId, wordSet, word.originalIndex, currentStage)
       unchangedCount++
       console.log(`单词 "${word.english}" 保持在阶段${currentStage}（未通过）`)
     } else if (word.status === 'unchecked') {
       // 未检测的单词 - 如果当前阶段是0，提升到阶段1（认为已经学过）
       if (currentStage === 0) {
         const newStage = 1
-        progressStore.updateWordProgressForUser(teacherId, studentId, wordSet, word.originalIndex, newStage)
+        await progressStore.updateWordProgress(studentId, wordSet, word.originalIndex, newStage)
         promotedCount++
         uncheckedCount++
         console.log(`单词 "${word.english}" 从阶段${currentStage}进入阶段${newStage}（未检测视为已学习）`)
       } else {
         // 如果已经不在阶段0，保持当前阶段
-        progressStore.updateWordProgressForUser(teacherId, studentId, wordSet, word.originalIndex, currentStage)
+        await progressStore.updateWordProgress(studentId, wordSet, word.originalIndex, currentStage)
         unchangedCount++
         console.log(`单词 "${word.english}" 保持在阶段${currentStage}（未检测但已学过）`)
       }
     }
-  })
+  }
 
   let message = `学习进度已更新：${promotedCount}个单词进入下一阶段，${unchangedCount}个单词保持当前阶段`
   if (uncheckedCount > 0) {
@@ -645,10 +645,9 @@ const createAntiForgetSchedule = async (session: any, time: string) => {
       throw new Error('用户未登录')
     }
 
-    // 使用teacherId获取学生数据（支持跨用户访问）
-    const userIdForStudent = teacherId || currentUser.id
-    const userStudents = studentsStore.getStudentsByUserId(userIdForStudent)
-    const student = userStudents.find(s => s.id === studentId)
+    // 使用teacherId获取学生数据（后端API自动处理权限）
+    await studentsStore.fetchStudents()
+    const student = studentsStore.students.find(s => s.id === studentId)
 
     if (!student) {
       throw new Error('找不到学生信息')
@@ -666,7 +665,7 @@ const createAntiForgetSchedule = async (session: any, time: string) => {
 
     // 使用teacherId作为会话的创建者（保持数据一致性）
     const sessionTeacherId = teacherId || currentUser.id
-    const antiForgetSessionId = antiForgetStore.createAntiForgetSession(
+    const antiForgetSessionId = await antiForgetStore.createAntiForgetSession(
       studentId,
       currentWordSet,
       sessionTeacherId,
@@ -676,27 +675,25 @@ const createAntiForgetSchedule = async (session: any, time: string) => {
     console.log(`已创建抗遗忘复习会话，会话ID: ${antiForgetSessionId}，teacherId: ${sessionTeacherId}，单词集: ${currentWordSet}，单词数: ${sessionWords.length}`)
 
     // 为每个抗遗忘日期创建课程
-    antiForgetDays.forEach(dayOffset => {
+    for (const dayOffset of antiForgetDays) {
       const targetDate = new Date(today)
       targetDate.setDate(today.getDate() + dayOffset)
-      
+
       const dateStr = targetDate.toISOString().split('T')[0]
-      
-      // 创建符合Schedule接口的对象
+
+      // 创建符合后端API的对象（使用snake_case）
       const scheduleData = {
+        student_id: studentId,
         date: dateStr,
         time: time,
-        studentName: student.name,
-        studentId: studentId,
-        wordSet: currentWordSet,
-        type: 'review' as const, // 抗遗忘课程类型
+        word_set_name: currentWordSet,
+        course_type: 'review', // 抗遗忘课程类型
         duration: 30, // 抗遗忘课程默认30分钟
-        classType: 'small' as const, // 抗遗忘课程默认小课
-        completed: false
+        class_type: 'small' // 抗遗忘课程默认小课
       }
-      
-      scheduleStore.addSchedule(scheduleData)
-    })
+
+      await scheduleStore.addSchedule(scheduleData)
+    }
     
     console.log(`已成功创建 ${antiForgetDays.length} 个抗遗忘课程`)
 
@@ -711,15 +708,15 @@ const createAntiForgetSchedule = async (session: any, time: string) => {
 }
 
 // 同步复习记录到学生账号
-const syncReviewToStudent = (
+const syncReviewToStudent = async (
   studentId: number,
   wordSetName: string,
   learnDate: string,
   words: { id: number; english: string; chinese: string }[]
 ) => {
   try {
-    // 创建学生复习记录
-    const reviewId = studentReviewsStore.createReview(
+    // 创建学生复习记录（使用async/await）
+    const reviewId = await studentReviewsStore.createReview(
       studentId,
       wordSetName,
       learnDate,
@@ -863,12 +860,10 @@ const generateWordsReport = async (words: any[]) => {
       return
     }
 
-    // 获取学生信息
+    // 获取学生信息（后端API自动处理权限）
     const studentId = parseInt(route.params.studentId as string)
-    const teacherId = route.query.teacherId as string
-    const userIdForStudent = teacherId || currentUser.id
-    const userStudents = studentsStore.getStudentsByUserId(userIdForStudent)
-    const student = userStudents.find(s => s.id === studentId)
+    await studentsStore.fetchStudents()
+    const student = studentsStore.students.find(s => s.id === studentId)
     const studentName = student ? student.name : '未知学生'
 
     // 获取教师姓名（当前登录用户的用户名）
@@ -960,8 +955,8 @@ const generateWordsReport = async (words: any[]) => {
   }
 }
 
-// 初始化数据
-const initializeWords = () => {
+// 初始化数据（改为async）
+const initializeWords = async () => {
   // 从路由参数获取信息
   const wordSetName = route.query.wordSet as string || ''
   const totalWords = parseInt(route.query.totalWords as string) || 10
@@ -1003,12 +998,10 @@ const initializeWords = () => {
   // 如果sessionStorage没有数据，使用备用逻辑从单词库加载
   if (!loadedFromSession || sourceWords.length === 0) {
     console.warn('PostLearningTest - 使用备用逻辑从单词库加载')
-    if (teacherId && wordSetName) {
-      sourceWords = wordsStore.getWordsBySetForUser(teacherId, wordSetName)
-      console.log(`从教师 ${teacherId} 加载单词集 "${wordSetName}"，单词数: ${sourceWords.length}`)
-    } else if (wordSetName) {
-      sourceWords = wordsStore.getWordsBySet(wordSetName)
-      console.log(`从当前用户加载单词集 "${wordSetName}"，单词数: ${sourceWords.length}`)
+    if (wordSetName) {
+      // 使用异步方法获取单词（后端API自动处理权限）
+      sourceWords = await wordsStore.getWordsBySet(wordSetName)
+      console.log(`加载单词集 "${wordSetName}"，单词数: ${sourceWords.length}`)
     } else {
       sourceWords = wordsStore.words
     }
@@ -1050,19 +1043,19 @@ const initializeWords = () => {
 }
 
 // 生命周期
-onMounted(() => {
+onMounted(async () => {
   // 确保处于课程模式（不重新设置计时）
   if (!uiStore.isInCourseMode) {
     uiStore.enterCourseMode('/study/' + route.params.studentId)
   }
 
-  // 获取学生信息
+  // 获取学生信息（后端API自动处理权限）
   const studentId = parseInt(route.params.studentId as string)
   if (studentId) {
     const currentUser = authStore.currentUser
     if (currentUser) {
-      const userStudents = studentsStore.getStudentsByUserId(currentUser.id)
-      const student = userStudents.find(s => s.id === studentId)
+      await studentsStore.fetchStudents()
+      const student = studentsStore.students.find(s => s.id === studentId)
       if (student) {
         studentName.value = student.name
       }
@@ -1070,7 +1063,7 @@ onMounted(() => {
   }
 
   // 初始化单词数据
-  initializeWords()
+  await initializeWords()
 })
 </script>
 

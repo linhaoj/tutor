@@ -148,32 +148,31 @@ const shuffleArray = <T>(array: T[]): T[] => {
   return shuffled
 }
 
-// 获取可用的替换单词
-const getAvailableReplacementWords = (excludeWords: Word[]): Word[] => {
-  let allWords: Word[] = []
-  
-  if (teacherId.value) {
-    allWords = wordsStore.getWordsBySetForUser(teacherId.value, wordSetName.value)
-  } else {
-    allWords = wordsStore.getWordsBySet(wordSetName.value)
-  }
+// 获取可用的替换单词（改为async）
+const getAvailableReplacementWords = async (excludeWords: Word[]): Promise<Word[]> => {
+  // 使用store的异步方法获取单词（后端API自动处理权限）
+  const allWords = await wordsStore.getWordsBySet(wordSetName.value)
 
   // 排除已经在当前学习列表中的单词
   const excludeIds = new Set(excludeWords.map(w => w.id))
   const availableWords = allWords.filter(word => !excludeIds.has(word.id))
 
   // 过滤出真正需要学习的单词（格子0-6的单词）
-  return availableWords.filter((_, index) => {
-    const wordIndex = allWords.findIndex(w => w.id === _.id)
-    const wordProgress = progressStore.getWordProgressForUser(
-      teacherId.value,
+  // 需要异步检查每个单词的进度
+  const filteredWords: Word[] = []
+  for (const word of availableWords) {
+    const wordIndex = allWords.findIndex(w => w.id === word.id)
+    const wordProgress = await progressStore.getWordProgress(
       studentId.value,
       wordSetName.value,
       wordIndex
     )
     const stage = wordProgress ? wordProgress.currentStage : 0
-    return stage >= 0 && stage <= 6
-  })
+    if (stage >= 0 && stage <= 6) {
+      filteredWords.push(word)
+    }
+  }
+  return filteredWords
 }
 
 // 播放单词发音
@@ -222,14 +221,9 @@ const confirmSelection = async () => {
 
     // 将已认识的单词标记为已掌握（跳到最后一个格子）
     const knownWords = selectedKnownWords.value.map(index => currentWords.value[index])
-    
-    // 获取完整的单词库来找到单词的真实索引
-    let allWords: Word[] = []
-    if (teacherId.value) {
-      allWords = wordsStore.getWordsBySetForUser(teacherId.value, wordSetName.value)
-    } else {
-      allWords = wordsStore.getWordsBySet(wordSetName.value)
-    }
+
+    // 获取完整的单词库来找到单词的真实索引（使用异步方法）
+    const allWords = await wordsStore.getWordsBySet(wordSetName.value)
 
     // 标记已认识的单词为已掌握（阶段8）
     knownWords.forEach(word => {
@@ -245,8 +239,8 @@ const confirmSelection = async () => {
       }
     })
 
-    // 获取可用的替换单词
-    const availableReplacements = getAvailableReplacementWords(currentWords.value)
+    // 获取可用的替换单词（现在是异步调用）
+    const availableReplacements = await getAvailableReplacementWords(currentWords.value)
     
     if (availableReplacements.length < selectedKnownWords.value.length) {
       ElMessage.warning(`可替换的单词不足，只能替换 ${availableReplacements.length} 个单词`)
@@ -360,8 +354,8 @@ const skipFilterAndStartLearning = () => {
 }
 
 
-// 初始化单词列表
-const initializeWords = () => {
+// 初始化单词列表（改为async）
+const initializeWords = async () => {
   try {
     // 检查是否是继续练习（从训后检测返回）
     const continueSession = route.query.continueSession === 'true'
@@ -373,13 +367,8 @@ const initializeWords = () => {
       // 继续下面的正常初始化流程
     }
 
-    let allWords: Word[] = []
-
-    if (teacherId.value) {
-      allWords = wordsStore.getWordsBySetForUser(teacherId.value, wordSetName.value)
-    } else {
-      allWords = wordsStore.getWordsBySet(wordSetName.value)
-    }
+    // 使用异步方法获取单词（后端API自动处理权限）
+    const allWords = await wordsStore.getWordsBySet(wordSetName.value)
 
     if (!allWords || allWords.length === 0) {
       ElMessage.error('找不到单词集数据')
@@ -396,16 +385,19 @@ const initializeWords = () => {
     }
 
     // 过滤出需要学习的单词（格子0-6）
-    const wordsToLearn = allWords.filter((_, index) => {
-      const wordProgress = progressStore.getWordProgressForUser(
-        teacherId.value,
+    // 需要异步检查每个单词的进度
+    const wordsToLearn: Word[] = []
+    for (let index = 0; index < allWords.length; index++) {
+      const wordProgress = await progressStore.getWordProgress(
         studentId.value,
         wordSetName.value,
         index
       )
       const stage = wordProgress ? wordProgress.currentStage : 0
-      return stage >= 0 && stage <= 6
-    })
+      if (stage >= 0 && stage <= 6) {
+        wordsToLearn.push(allWords[index])
+      }
+    }
 
     if (wordsToLearn.length < wordsCount.value) {
       ElMessage.warning(`可学习单词不足，只有 ${wordsToLearn.length} 个单词可学习`)
@@ -440,21 +432,14 @@ onMounted(async () => {
   }
 
   try {
-    // 获取学生信息
-    if (teacherId.value) {
-      const teacherStudents = studentsStore.getStudentsByUserId(teacherId.value)
-      const student = teacherStudents.find(s => s.id === studentId.value)
-      if (student) {
-        studentName.value = student.name
-      }
-    } else {
-      const student = studentsStore.getStudent(studentId.value)
-      if (student) {
-        studentName.value = student.name
-      }
-    }
+    // 获取学生信息（后端API自动按当前用户过滤）
+    await studentsStore.fetchStudents()
+    const student = studentsStore.students.find(s => s.id === studentId.value)
 
-    if (!studentName.value) {
+    if (student) {
+      studentName.value = student.name
+    } else {
+      console.warn('找不到学生信息', { studentId: studentId.value, teacherId: teacherId.value })
       ElMessage.error('找不到学生信息')
       uiStore.exitCourseMode()
       router.push({
@@ -468,8 +453,8 @@ onMounted(async () => {
       return
     }
 
-    // 初始化单词列表
-    initializeWords()
+    // 初始化单词列表（现在是异步调用）
+    await initializeWords()
 
   } catch (error) {
     console.error('页面初始化失败:', error)

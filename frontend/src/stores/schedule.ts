@@ -153,16 +153,23 @@ export const useScheduleStore = defineStore('schedule', () => {
   }
 
   /**
-   * 获取按日期分组的课程
+   * 获取按日期分组的课程（只显示今天及未来的课程）
    */
   const getGroupedSchedules = computed((): DateGroup[] => {
     const groups: Record<string, Schedule[]> = {}
 
+    // 获取今天的日期（本地时区）
+    const today = new Date()
+    const todayStr = today.toISOString().split('T')[0]
+
+    // 只包含今天及未来的课程
     schedules.value.forEach(schedule => {
-      if (!groups[schedule.date]) {
-        groups[schedule.date] = []
+      if (schedule.date >= todayStr) {
+        if (!groups[schedule.date]) {
+          groups[schedule.date] = []
+        }
+        groups[schedule.date].push(schedule)
       }
-      groups[schedule.date].push(schedule)
     })
 
     return Object.keys(groups)

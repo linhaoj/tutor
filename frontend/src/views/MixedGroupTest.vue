@@ -371,12 +371,13 @@ const completeAllTests = () => {
   const totalWordsCount = totalLearningGroups.value * 5
 
   // 计算当前批次的起始组号和组数
-  // completedGroups 表示已经完成了多少组的检测
-  // 我们需要传递本次学习的组的范围
+  // currentBatchStartGroup 是本次学习开始的组号（由WordCheckTask传递）
+  // 例如：第一批学习组1，第二批学习组2
   const currentBatchStartGroup = route.query.currentBatchStartGroup
     ? parseInt(route.query.currentBatchStartGroup as string)
     : 1
-  const currentBatchGroupCount = totalGroups.value - (currentBatchStartGroup - 1)
+  // 当前批次只学习了1组（每次SimpleWordStudy只学5个单词=1组）
+  const currentBatchGroupCount = 1
 
   console.log('MixedGroupTest完成 - 跳转到训后检测', {
     currentBatchStartGroup,
@@ -441,8 +442,8 @@ const shuffleArray = <T>(array: T[]): T[] => {
   return shuffled
 }
 
-// 初始化数据
-const initializeWords = () => {
+// 初始化数据（改为async）
+const initializeWords = async () => {
   // 从路由参数获取信息
   const wordSetName = route.query.wordSet as string || ''
   const teacherId = route.query.teacherId as string || ''
@@ -474,10 +475,10 @@ const initializeWords = () => {
       originalGroupWords = JSON.parse(savedWords)
       console.log(`MixedGroupTest - 从sessionStorage加载第${groupNumber}组单词:`, originalGroupWords.map(w => w.english))
     } else {
-      // 备用逻辑：从单词库加载
+      // 备用逻辑：从单词库加载（使用异步方法，后端API自动处理权限）
       console.warn(`MixedGroupTest - 第${groupNumber}组未找到sessionStorage数据，使用备用逻辑`)
       const sourceWords = wordSetName
-        ? (teacherId ? wordsStore.getWordsBySetForUser(teacherId, wordSetName) : wordsStore.getWordsBySet(wordSetName))
+        ? await wordsStore.getWordsBySet(wordSetName)
         : wordsStore.words
 
       const groupStartIndex = i * 5
@@ -509,7 +510,7 @@ const initializeWords = () => {
 }
 
 // 生命周期
-onMounted(() => {
+onMounted(async () => {
   // 确保处于课程模式（不重新设置计时）
   if (!uiStore.isInCourseMode) {
     uiStore.enterCourseMode('/study/' + route.params.studentId)
@@ -525,7 +526,7 @@ onMounted(() => {
   }
 
   // 初始化单词数据
-  initializeWords()
+  await initializeWords()
 })
 </script>
 

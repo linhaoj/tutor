@@ -68,7 +68,7 @@
           <!-- 单词卡片 -->
           <div
             class="word-card"
-            :class="{ 'starred': word.isStarred }"
+            :class="{ 'starred': word.is_starred }"
             @click="toggleWordDisplay(index)"
           >
             <div class="word-content">
@@ -88,7 +88,7 @@
               size="large"
             />
             <el-button
-              :class="['star-button', { 'starred': word.isStarred }]"
+              :class="['star-button', { 'starred': word.is_starred }]"
               @click="toggleWordStar(word.id)"
               :icon="Star"
               circle
@@ -216,19 +216,19 @@ const toggleWordDisplay = (index: number) => {
   }
 }
 
-const toggleWordStar = (wordId: number) => {
-  const newStarState = antiForgetStore.toggleWordStar(sessionId.value, wordId)
-  
+const toggleWordStar = async (wordId: number) => {
+  const newStarState = await antiForgetStore.toggleWordStar(sessionId.value, wordId)
+
   // 更新本地显示状态
   const wordIndex = shuffledWords.value.findIndex(w => w.id === wordId)
   if (wordIndex !== -1) {
-    shuffledWords.value[wordIndex].isStarred = newStarState
+    shuffledWords.value[wordIndex].is_starred = newStarState
     hasAnyChanges.value = true
   }
-  
+
   // 更新统计数据
   updateStats()
-  
+
   const word = shuffledWords.value[wordIndex]
   if (word) {
     ElMessage.success(`"${word.english}" ${newStarState ? '已标记' : '取消标记'}`)
@@ -236,7 +236,7 @@ const toggleWordStar = (wordId: number) => {
 }
 
 const updateStats = () => {
-  starredWordsCount.value = shuffledWords.value.filter(w => w.isStarred).length
+  starredWordsCount.value = shuffledWords.value.filter(w => w.is_starred).length
 }
 
 const completeCurrentReview = async () => {
@@ -257,10 +257,10 @@ const completeCurrentReview = async () => {
       
       if (result.isCompleted) {
         ElMessage.success('恭喜！所有抗遗忘复习已完成！')
-        
+
         // 标记当前课程为已完成
-        markAntiForgetCourseAsCompleted()
-        
+        await markAntiForgetCourseAsCompleted()
+
         setTimeout(() => {
           // 完全结束课程并跳转到日程管理
           uiStore.endCourse()
@@ -278,30 +278,31 @@ const completeCurrentReview = async () => {
   }
 }
 
-const markAntiForgetCourseAsCompleted = () => {
+const markAntiForgetCourseAsCompleted = async () => {
   try {
     const scheduleIdStr = sessionStorage.getItem('currentScheduleId')
-    
+
     if (scheduleIdStr && teacherId.value && studentId.value) {
       const scheduleId = parseInt(scheduleIdStr)
-      
-      // 获取课程信息来确定扣减时长
-      const schedule = scheduleStore.getSchedulesByUserId(teacherId.value).find(s => s.id === scheduleId)
+
+      // 获取课程信息来确定扣减时长（后端API自动过滤）
+      await scheduleStore.fetchSchedules()
+      const schedule = scheduleStore.schedules.find(s => s.id === scheduleId)
       if (schedule) {
         // 根据课程类型扣减时长：大课(60分钟) = 1.0h，小课(30分钟) = 0.5h
-        const hoursToDeduct = schedule.classType === 'big' ? 1.0 : 0.5
-        
+        const hoursToDeduct = schedule.class_type === 'big' ? 1.0 : 0.5
+
         // 扣减学生课程时长
-        const success = studentsStore.deductStudentHours(studentId.value, hoursToDeduct, teacherId.value)
+        const success = await studentsStore.deductStudentHours(studentId.value, hoursToDeduct)
         if (success) {
-          console.log(`学生课程时长已扣减: ${hoursToDeduct}h (${schedule.classType === 'big' ? '大课' : '小课'})`)
+          console.log(`学生课程时长已扣减: ${hoursToDeduct}h (${schedule.class_type === 'big' ? '大课' : '小课'})`)
         } else {
           console.warn('扣减学生课程时长失败')
         }
       }
-      
-      // 使用跨用户方法标记课程为已完成
-      scheduleStore.completeScheduleForUser(teacherId.value, scheduleId)
+
+      // 标记课程为已完成
+      await scheduleStore.completeSchedule(scheduleId)
       console.log('抗遗忘课程已标记为完成:', scheduleId)
     } else {
       console.warn('缺少课程完成所需信息', { scheduleIdStr, teacherId: teacherId.value, studentId: studentId.value })
@@ -312,8 +313,8 @@ const markAntiForgetCourseAsCompleted = () => {
 }
 
 
-// 加载复习数据
-const loadReviewData = () => {
+// 加载复习数据（改为async）
+const loadReviewData = async () => {
   console.log('AntiForgetReview - 加载复习数据:', {
     studentId: studentId.value,
     sessionId: sessionId.value
@@ -324,18 +325,10 @@ const loadReviewData = () => {
   teacherId.value = route.query.teacherId as string || ''
   sessionId.value = route.query.sessionId as string || ''
 
-  // 获取学生信息（支持跨用户访问）
-  let student = null
-  if (teacherId.value) {
-    // 从教师的学生列表中查找
-    const teacherStudents = studentsStore.getStudentsByUserId(teacherId.value)
-    student = teacherStudents.find(s => s.id === studentId.value)
-    console.log(`从教师 ${teacherId.value} 的学生列表中查找学生 ${studentId.value}:`, student ? '找到' : '未找到')
-  } else {
-    // 从当前用户的学生列表中查找
-    student = studentsStore.students.find(s => s.id === studentId.value)
-    console.log(`从当前用户的学生列表中查找学生 ${studentId.value}:`, student ? '找到' : '未找到')
-  }
+  // 获取学生信息（后端API自动处理权限）
+  await studentsStore.fetchStudents()
+  const student = studentsStore.students.find(s => s.id === studentId.value)
+  console.log(`查找学生 ${studentId.value}:`, student ? '找到' : '未找到')
 
   if (student) {
     studentName.value = student.name
@@ -344,8 +337,8 @@ const loadReviewData = () => {
     studentName.value = '学生'
   }
   
-  // 获取会话数据
-  const session = antiForgetStore.getSession(sessionId.value)
+  // 从服务器获取最新的会话数据（包含星星状态）
+  const session = await antiForgetStore.fetchSession(sessionId.value)
   if (!session) {
     ElMessage.error('找不到复习会话数据')
     uiStore.endCourse() // 错误时也结束课程
@@ -356,8 +349,8 @@ const loadReviewData = () => {
   console.log('AntiForgetReview - 找到会话数据:', session)
   
   // 更新复习统计
-  currentReview.value = session.reviewCount
-  totalReviews.value = session.totalReviews
+  currentReview.value = session.review_count
+  totalReviews.value = session.total_reviews
   totalWordsCount.value = session.words.length
   
   // 打乱单词顺序并设置显示状态
@@ -385,13 +378,13 @@ watch(() => route.query.refresh, (newRefresh) => {
 })
 
 // 生命周期
-onMounted(() => {
+onMounted(async () => {
   // 确保处于课程模式（不重新设置计时）
   if (!uiStore.isInCourseMode) {
     uiStore.enterCourseMode('/')
   }
 
-  loadReviewData()
+  await loadReviewData()
 })
 </script>
 

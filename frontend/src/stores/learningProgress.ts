@@ -103,17 +103,165 @@ export const useLearningProgressStore = defineStore('learningProgress', () => {
     }>
   ): Promise<{ success: boolean, message: string }> => {
     try {
-      const results = await Promise.all(progressList.map(p => saveProgress(p)))
-      const allSuccess = results.every(r => r.success)
+      // 使用后端的批量更新API
+      const response = await api.post('/api/progress/batch-update', {
+        updates: progressList
+      })
 
-      if (allSuccess) {
-        return { success: true, message: '所有进度保存成功' }
-      } else {
-        return { success: false, message: '部分进度保存失败' }
+      // 更新本地缓存
+      if (response.data.success) {
+        // 重新获取进度以同步最新数据
+        if (progressList.length > 0) {
+          await fetchStudentProgress(
+            progressList[0].student_id,
+            progressList[0].word_set_name
+          )
+        }
       }
+
+      return { success: true, message: '所有进度保存成功' }
     } catch (error) {
       return { success: false, message: '批量保存失败' }
     }
+  }
+
+  /**
+   * 获取单个单词的学习进度
+   * 这是被7个页面频繁调用的核心方法
+   */
+  const getWordProgress = async (
+    studentId: number,
+    wordSetName: string,
+    wordIndex: number
+  ): Promise<{
+    currentStage: number
+    totalGroups: number
+    tasksCompleted: Record<string, any>
+  } | null> => {
+    try {
+      const response = await api.get(
+        `/api/progress/student/${studentId}/word/${wordSetName}/${wordIndex}`
+      )
+      return {
+        currentStage: response.data.current_stage,
+        totalGroups: response.data.total_groups,
+        tasksCompleted: response.data.tasks_completed || {}
+      }
+    } catch (error) {
+      console.error('Get word progress error:', error)
+      // 返回默认值（未学习状态）
+      return {
+        currentStage: 0,
+        totalGroups: 0,
+        tasksCompleted: {}
+      }
+    }
+  }
+
+  /**
+   * 获取九宫格统计数据（StudyHome专用）
+   */
+  const getGridStats = async (
+    studentId: number,
+    wordSetName: string
+  ): Promise<Record<string, number>> => {
+    try {
+      const response = await api.get(
+        `/api/progress/student/${studentId}/word-set/${wordSetName}/grid-stats`
+      )
+      return response.data
+    } catch (error) {
+      console.error('Get grid stats error:', error)
+      // 返回空统计
+      return {
+        grid_0: 0,
+        grid_1: 0,
+        grid_2: 0,
+        grid_3: 0,
+        grid_4: 0,
+        grid_5: 0,
+        grid_6: 0,
+        grid_7: 0,
+        grid_8: 0
+      }
+    }
+  }
+
+  /**
+   * 更新单词学习进度（训后检测核心功能）
+   */
+  const updateWordProgress = async (
+    studentId: number,
+    wordSetName: string,
+    wordIndex: number,
+    newStage: number,
+    totalGroups: number = 0,
+    tasksCompleted: Record<string, any> = {}
+  ): Promise<boolean> => {
+    try {
+      await saveProgress({
+        student_id: studentId,
+        word_set_name: wordSetName,
+        word_index: wordIndex,
+        current_stage: newStage,
+        total_groups: totalGroups,
+        tasks_completed: tasksCompleted
+      })
+      return true
+    } catch (error) {
+      console.error('Update word progress error:', error)
+      return false
+    }
+  }
+
+  /**
+   * 批量更新单词进度（PostLearningTest使用）
+   */
+  const updateWordProgressForUser = async (
+    userId: string,
+    studentId: number,
+    wordSetName: string,
+    wordIndex: number,
+    newStage: number
+  ): Promise<void> => {
+    // userId参数是为了兼容旧代码，实际不需要（后端通过JWT自动识别）
+    await updateWordProgress(studentId, wordSetName, wordIndex, newStage)
+  }
+
+  /**
+   * 标记任务完成（阶段切换）
+   */
+  const completeTask = async (
+    studentId: number,
+    wordSetName: string,
+    groupNumber: number,
+    taskNumber: number
+  ): Promise<boolean> => {
+    try {
+      await api.post('/api/progress/complete-task', {
+        student_id: studentId,
+        word_set_name: wordSetName,
+        group_number: groupNumber,
+        task_number: taskNumber
+      })
+      return true
+    } catch (error) {
+      console.error('Complete task error:', error)
+      return false
+    }
+  }
+
+  /**
+   * 初始化学习进度（SimpleWordStudy使用）
+   */
+  const startLearningProgress = async (
+    studentId: number,
+    wordSetName: string,
+    totalGroups: number
+  ): Promise<void> => {
+    // 如果需要初始化特定逻辑，可以在这里实现
+    // 目前在首次保存进度时自动创建记录
+    console.log('Start learning progress:', { studentId, wordSetName, totalGroups })
   }
 
   return {
@@ -122,6 +270,12 @@ export const useLearningProgressStore = defineStore('learningProgress', () => {
     fetchStudentProgress,
     saveProgress,
     getProgress,
-    batchSaveProgress
+    batchSaveProgress,
+    getWordProgress,
+    getGridStats,
+    updateWordProgress,
+    updateWordProgressForUser,
+    completeTask,
+    startLearningProgress
   }
 })

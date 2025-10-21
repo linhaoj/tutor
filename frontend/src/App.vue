@@ -19,7 +19,7 @@
           返回
         </el-button>
       </div>
-      <router-view />
+      <router-view :key="$route.fullPath" />
     </div>
 
     <!-- 学生端布局（无侧边栏） -->
@@ -50,7 +50,7 @@
       </el-header>
 
       <el-main class="main-content">
-        <router-view />
+        <router-view :key="$route.fullPath" />
       </el-main>
     </el-container>
 
@@ -75,7 +75,7 @@
               <el-icon><User /></el-icon>
               <span>教师工作台</span>
             </el-menu-item>
-            
+
             <el-menu-item index="/">
               <el-icon><Calendar /></el-icon>
               <span>日程管理</span>
@@ -144,7 +144,7 @@
         </el-header>
         
         <el-main class="main-content">
-          <router-view />
+          <router-view :key="$route.fullPath" />
         </el-main>
       </el-container>
     </el-container>
@@ -251,10 +251,19 @@ watch(() => route.path, (newPath) => {
 onMounted(() => {
   // 初始化认证状态
   authStore.initializeAuth()
-  
+
   // TODO: 获取今日复习数量
   todayReviewCount.value = 5
+
+  // 添加调试信息
+  console.log('App mounted - 当前路由:', route.path)
+  console.log('App mounted - 当前用户:', authStore.currentUser)
 })
+
+// 监听路由变化进行调试
+watch(() => route.path, (newPath, oldPath) => {
+  console.log('路由变化:', { from: oldPath, to: newPath })
+}, { immediate: false })
 </script>
 
 <style scoped>

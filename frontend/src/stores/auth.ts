@@ -103,14 +103,14 @@ export const useAuthStore = defineStore('auth', () => {
     role: 'admin' | 'teacher' | 'student'
     email?: string
     student_id?: number
-  }): Promise<{ success: boolean, message: string }> => {
+  }): Promise<{ success: boolean, message: string, data?: any }> => {
     if (!isAdmin.value) {
       return { success: false, message: '权限不足' }
     }
 
     try {
-      await api.post('/api/auth/register', userData)
-      return { success: true, message: '用户创建成功' }
+      const response = await api.post('/api/auth/register', userData)
+      return { success: true, message: '用户创建成功', data: response.data }
     } catch (error: any) {
       console.error('Register user error:', error)
       return {

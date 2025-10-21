@@ -328,16 +328,8 @@ const goToNextTask = () => {
   // 获取总学习单词数（从localStorage或其他方式）
   const totalWordsCount = parseInt(route.query.totalWords as string) || groupNumber * 5
 
-  // 计算当前批次的起始组号
-  // 通过检查sessionStorage来确定本次学习开始的组号
-  let currentBatchStartGroup = 1
-  for (let i = 1; i <= 100; i++) {
-    const key = `simpleStudyGroup_${i}`
-    if (sessionStorage.getItem(key)) {
-      currentBatchStartGroup = i
-      break
-    }
-  }
+  // 当前批次就是当前这个组
+  const currentBatchStartGroup = groupNumber
 
   console.log('WordCheckTask完成 - 跳转到MixedGroupTest', {
     groupNumber,
@@ -355,7 +347,7 @@ const goToNextTask = () => {
       totalWords: totalWordsCount, // 传递总学习单词数
       startIndex: route.query.startIndex, // 传递起始位置信息
       teacherId: route.query.teacherId, // 传递教师ID
-      currentBatchStartGroup: currentBatchStartGroup // 传递当前批次起始组号
+      currentBatchStartGroup: currentBatchStartGroup // 传递当前批次起始组号（就是当前组）
     }
   })
 
@@ -374,7 +366,7 @@ const shuffleArray = <T>(array: T[]): T[] => {
 }
 
 // 初始化数据
-const initializeWords = () => {
+const initializeWords = async () => {
   const groupNumber = parseInt(route.query.groupNumber as string) || 1
 
   // 尝试从sessionStorage获取当前组的学习单词
@@ -396,7 +388,7 @@ const initializeWords = () => {
     const teacherId = route.query.teacherId as string || ''
 
     let allWordsInSet = wordSetName
-      ? (teacherId ? wordsStore.getWordsBySetForUser(teacherId, wordSetName) : wordsStore.getWordsBySet(wordSetName))
+      ? await wordsStore.getWordsBySet(wordSetName)
       : wordsStore.words
 
     sourceWords = allWordsInSet.slice(startIndex, startIndex + wordsCount)
@@ -423,7 +415,7 @@ const initializeWords = () => {
 }
 
 // 生命周期
-onMounted(() => {
+onMounted(async () => {
   // 确保处于课程模式（不重新设置计时）
   if (!uiStore.isInCourseMode) {
     uiStore.enterCourseMode('/study/' + route.params.studentId)
@@ -439,7 +431,7 @@ onMounted(() => {
   }
   
   // 初始化单词数据
-  initializeWords()
+  await initializeWords()
 })
 </script>
 

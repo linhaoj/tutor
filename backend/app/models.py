@@ -7,7 +7,7 @@ import bcrypt
 Base = declarative_base()
 
 class User(Base):
-    """用户表 - 管理员和教师"""
+    """用户表 - 所有登录用户（管理员、教师、学生）"""
     __tablename__ = "users"
 
     id = Column(String(50), primary_key=True)  # 例如: admin-001, user-1234567890
@@ -16,15 +16,14 @@ class User(Base):
     role = Column(String(20), nullable=False)  # 'admin', 'teacher', 'student'
     display_name = Column(String(100), nullable=False)
     email = Column(String(255), unique=True, index=True)
-    student_id = Column(Integer, ForeignKey("students.id"), nullable=True)  # 如果是学生角色，关联学生ID
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login_at = Column(DateTime)
 
     # 关系
-    students = relationship("Student", back_populates="teacher", foreign_keys="Student.teacher_id")
+    managed_students = relationship("Student", back_populates="teacher", foreign_keys="Student.teacher_id")
+    student_profile = relationship("Student", back_populates="user", foreign_keys="Student.user_id", uselist=False)
     word_sets = relationship("WordSet", back_populates="owner")
     schedules = relationship("Schedule", back_populates="teacher")
-    linked_student = relationship("Student", foreign_keys=[student_id], back_populates="user_account")
 
     def set_password(self, password: str):
         """设置密码（自动哈希）"""
@@ -36,10 +35,11 @@ class User(Base):
 
 
 class Student(Base):
-    """学生表"""
+    """学生表 - 学生的教学数据"""
     __tablename__ = "students"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(50), ForeignKey("users.id"), nullable=False, unique=True)  # 关联的用户账号
     teacher_id = Column(String(50), ForeignKey("users.id"), nullable=False)  # 所属教师
     name = Column(String(100), nullable=False)
     email = Column(String(255), unique=True, index=True)
@@ -48,14 +48,14 @@ class Student(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # 关系
-    teacher = relationship("User", back_populates="students", foreign_keys=[teacher_id])
-    user_account = relationship("User", back_populates="linked_student", foreign_keys="User.student_id")
-    student_words = relationship("StudentWord", back_populates="student")
-    learning_sessions = relationship("LearningSession", back_populates="student")
-    schedules = relationship("Schedule", back_populates="student")
-    learning_progress = relationship("LearningProgress", back_populates="student")
-    anti_forget_sessions = relationship("AntiForgetSession", back_populates="student")
-    student_reviews = relationship("StudentReview", back_populates="student")
+    user = relationship("User", back_populates="student_profile", foreign_keys=[user_id])
+    teacher = relationship("User", back_populates="managed_students", foreign_keys=[teacher_id])
+    student_words = relationship("StudentWord", back_populates="student", cascade="all, delete-orphan")
+    learning_sessions = relationship("LearningSession", back_populates="student", cascade="all, delete-orphan")
+    schedules = relationship("Schedule", back_populates="student", cascade="all, delete-orphan")
+    learning_progress = relationship("LearningProgress", back_populates="student", cascade="all, delete-orphan")
+    anti_forget_sessions = relationship("AntiForgetSession", back_populates="student", cascade="all, delete-orphan")
+    student_reviews = relationship("StudentReview", back_populates="student", cascade="all, delete-orphan")
 
 
 class WordSet(Base):

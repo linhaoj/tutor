@@ -39,9 +39,9 @@ class UserResponse(BaseModel):
     role: str
     display_name: str
     email: Optional[str] = None
-    student_id: Optional[int] = None
     created_at: str
     last_login_at: Optional[str] = None
+    student_id: Optional[int] = None  # 学生角色的student_id
 
     class Config:
         from_attributes = True
@@ -51,9 +51,8 @@ class UserCreate(BaseModel):
     username: str
     password: str
     display_name: str
-    role: str = "teacher"
+    role: str = "teacher"  # 'admin', 'teacher', 或 'student'
     email: Optional[str] = None
-    student_id: Optional[int] = None
 
 
 class UserUpdate(BaseModel):
@@ -139,17 +138,26 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user_info(current_user: User = Depends(get_current_user)):
+async def get_current_user_info(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """获取当前用户信息"""
+    from app.models import Student
+
+    # 如果是学生角色，查找对应的student_id
+    student_id = None
+    if current_user.role == 'student':
+        student = db.query(Student).filter(Student.user_id == current_user.id).first()
+        if student:
+            student_id = student.id
+
     return UserResponse(
         id=current_user.id,
         username=current_user.username,
         role=current_user.role,
         display_name=current_user.display_name,
         email=current_user.email,
-        student_id=current_user.student_id,
         created_at=current_user.created_at.isoformat(),
-        last_login_at=current_user.last_login_at.isoformat() if current_user.last_login_at else None
+        last_login_at=current_user.last_login_at.isoformat() if current_user.last_login_at else None,
+        student_id=student_id
     )
 
 
@@ -162,6 +170,11 @@ async def register_user(
 ):
     """注册新用户（仅管理员）"""
     logger.info(f"管理员 {current_user.username} 尝试创建新用户: {user_data.username}")
+
+    # 验证角色
+    if user_data.role not in ['admin', 'teacher', 'student']:
+        logger.warning(f"创建用户失败: 角色无效 - {user_data.role}")
+        raise HTTPException(status_code=400, detail="角色必须是 admin、teacher 或 student")
 
     # 检查用户名是否已存在
     existing_user = db.query(User).filter(User.username == user_data.username).first()
@@ -182,8 +195,7 @@ async def register_user(
         username=user_data.username,
         role=user_data.role,
         display_name=user_data.display_name,
-        email=user_data.email,
-        student_id=user_data.student_id
+        email=user_data.email
     )
     new_user.set_password(user_data.password)
 
@@ -199,7 +211,6 @@ async def register_user(
         role=new_user.role,
         display_name=new_user.display_name,
         email=new_user.email,
-        student_id=new_user.student_id,
         created_at=new_user.created_at.isoformat(),
         last_login_at=None
     )
@@ -210,8 +221,9 @@ async def get_all_users(
     current_user: User = Depends(get_current_active_admin),
     db: Session = Depends(get_db)
 ):
-    """获取所有用户列表（仅管理员）"""
-    users = db.query(User).all()
+    """获取所有用户列表（仅管理员）- 只返回管理员和教师，不包括学生"""
+    # 只查询管理员和教师账号，学生账号在学生管理里维护
+    users = db.query(User).filter(User.role.in_(['admin', 'teacher'])).all()
     return [
         UserResponse(
             id=user.id,
@@ -219,7 +231,6 @@ async def get_all_users(
             role=user.role,
             display_name=user.display_name,
             email=user.email,
-            student_id=user.student_id,
             created_at=user.created_at.isoformat(),
             last_login_at=user.last_login_at.isoformat() if user.last_login_at else None
         )
@@ -234,6 +245,8 @@ async def delete_user(
     db: Session = Depends(get_db)
 ):
     """删除用户（仅管理员）"""
+    from app.models import Student, WordSet, Schedule, AntiForgetSession
+
     if user_id == current_user.id:
         logger.warning(f"用户 {current_user.username} 尝试删除自己的账号")
         raise HTTPException(status_code=400, detail="不能删除自己的账号")
@@ -244,6 +257,33 @@ async def delete_user(
         raise HTTPException(status_code=404, detail="用户不存在")
 
     deleted_username = user.username
+
+    # 如果是教师角色，检查并删除关联数据
+    if user.role == "teacher":
+        # 1. 删除该教师的所有学生及其关联数据
+        students = db.query(Student).filter(Student.teacher_id == user_id).all()
+        for student in students:
+            # 删除学生的所有关联数据会通过Student的级联删除自动处理
+            db.delete(student)
+
+        # 2. 删除该教师创建的单词集（会级联删除单词）
+        word_sets = db.query(WordSet).filter(WordSet.owner_id == user_id).all()
+        for word_set in word_sets:
+            db.delete(word_set)
+
+        # 3. 删除该教师的课程安排
+        schedules = db.query(Schedule).filter(Schedule.teacher_id == user_id).all()
+        for schedule in schedules:
+            db.delete(schedule)
+
+        # 4. 删除抗遗忘会话
+        sessions = db.query(AntiForgetSession).filter(AntiForgetSession.teacher_id == user_id).all()
+        for session in sessions:
+            db.delete(session)
+
+        logger.info(f"删除教师关联数据: 学生={len(students)}个, 单词集={len(word_sets)}个, 课程={len(schedules)}个, 抗遗忘会话={len(sessions)}个")
+
+    # 删除用户
     db.delete(user)
     db.commit()
 
@@ -289,7 +329,6 @@ async def update_user(
         role=user.role,
         display_name=user.display_name,
         email=user.email,
-        student_id=user.student_id,
         created_at=user.created_at.isoformat(),
         last_login_at=user.last_login_at.isoformat() if user.last_login_at else None
     )

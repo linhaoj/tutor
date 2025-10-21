@@ -1,218 +1,272 @@
+/**
+ * 抗遗忘会话Store - 连接后端API
+ */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import api from '@/api/config'
 
 export interface AntiForgetSession {
   id: string
-  studentId: number
-  wordSetName: string
-  teacherId: string
+  student_id: number
+  word_set_name: string
+  teacher_id: string
   words: AntiForgetWord[]
-  createdAt: string
-  reviewCount: number // 已复习次数
-  totalReviews: number // 计划总复习次数（通常是10次）
+  review_count: number
+  total_reviews: number
+  created_at: string
 }
 
 export interface AntiForgetWord {
   id: number
   english: string
   chinese: string
-  isStarred: boolean // 五角星标记状态
-  lastStarredAt?: string // 最后一次标记的时间
-}
-
-export interface AntiForgetReviewRecord {
-  sessionId: string
-  studentId: number
-  reviewDate: string
-  starredWords: number[] // 该次复习中被标记的单词ID列表
+  is_starred: boolean
 }
 
 export const useAntiForgetStore = defineStore('antiForget', () => {
-  // 从localStorage加载抗遗忘会话数据
-  const loadSessionsFromStorage = () => {
-    try {
-      const saved = localStorage.getItem('antiForgetSessions')
-      return saved ? JSON.parse(saved) : []
-    } catch {
-      return []
-    }
-  }
+  const sessions = ref<AntiForgetSession[]>([])
+  const loading = ref(false)
 
-  // 从localStorage加载复习记录
-  const loadReviewRecordsFromStorage = () => {
-    try {
-      const saved = localStorage.getItem('antiForgetReviews')
-      return saved ? JSON.parse(saved) : []
-    } catch {
-      return []
-    }
-  }
-
-  const sessions = ref<AntiForgetSession[]>(loadSessionsFromStorage())
-  const reviewRecords = ref<AntiForgetReviewRecord[]>(loadReviewRecordsFromStorage())
-
-  // 保存到localStorage
-  const saveSessionsToStorage = () => {
-    localStorage.setItem('antiForgetSessions', JSON.stringify(sessions.value))
-  }
-
-  const saveReviewRecordsToStorage = () => {
-    localStorage.setItem('antiForgetReviews', JSON.stringify(reviewRecords.value))
-  }
-
-  // 创建新的抗遗忘会话
-  const createAntiForgetSession = (
-    studentId: number, 
-    wordSetName: string, 
-    teacherId: string, 
+  /**
+   * 创建新的抗遗忘会话
+   */
+  const createAntiForgetSession = async (
+    studentId: number,
+    wordSetName: string,
+    teacherId: string,
     words: { id: number; english: string; chinese: string }[]
-  ) => {
-    const sessionId = `af_${studentId}_${wordSetName}_${Date.now()}`
-    
-    const antiForgetWords: AntiForgetWord[] = words.map(word => ({
-      id: word.id,
-      english: word.english,
-      chinese: word.chinese,
-      isStarred: false
-    }))
+  ): Promise<string> => {
+    try {
+      const response = await api.post('/api/anti-forget/sessions', {
+        student_id: studentId,
+        word_set_name: wordSetName,
+        teacher_id: teacherId,
+        words: words.map(w => ({
+          id: w.id,
+          english: w.english,
+          chinese: w.chinese,
+          is_starred: false
+        }))
+      })
 
-    const session: AntiForgetSession = {
-      id: sessionId,
-      studentId,
-      wordSetName,
-      teacherId,
-      words: antiForgetWords,
-      createdAt: new Date().toISOString(),
-      reviewCount: 0,
-      totalReviews: 10 // 默认10次复习
+      // 更新本地缓存
+      sessions.value.push(response.data)
+
+      console.log('创建抗遗忘会话成功:', response.data.id)
+      return response.data.id
+    } catch (error: any) {
+      console.error('创建抗遗忘会话失败:', error)
+      throw new Error(error.response?.data?.detail || '创建抗遗忘会话失败')
     }
-
-    sessions.value.push(session)
-    saveSessionsToStorage()
-    
-    console.log('创建抗遗忘会话:', session)
-    return sessionId
   }
 
-  // 获取学生的抗遗忘会话
-  const getStudentAntiForgetSessions = (studentId: number) => {
-    return sessions.value.filter(session => session.studentId === studentId)
+  /**
+   * 获取学生的所有抗遗忘会话
+   */
+  const fetchStudentSessions = async (studentId: number): Promise<void> => {
+    loading.value = true
+    try {
+      const response = await api.get(`/api/anti-forget/sessions/student/${studentId}`)
+      sessions.value = response.data
+      console.log(`获取学生${studentId}的抗遗忘会话:`, response.data.length, '个')
+    } catch (error) {
+      console.error('获取抗遗忘会话失败:', error)
+      sessions.value = []
+    } finally {
+      loading.value = false
+    }
   }
 
-  // 获取特定会话
-  const getSession = (sessionId: string) => {
-    return sessions.value.find(session => session.id === sessionId)
+  /**
+   * 获取特定会话（从服务器）
+   */
+  const fetchSession = async (sessionId: string): Promise<AntiForgetSession | null> => {
+    try {
+      const response = await api.get(`/api/anti-forget/sessions/${sessionId}`)
+
+      // 更新本地缓存
+      const index = sessions.value.findIndex(s => s.id === sessionId)
+      if (index !== -1) {
+        sessions.value[index] = response.data
+      } else {
+        sessions.value.push(response.data)
+      }
+
+      return response.data
+    } catch (error) {
+      console.error('获取会话失败:', error)
+      return null
+    }
   }
 
-  // 获取学生特定单词集的活跃会话（未完成的）
-  const getActiveSession = (studentId: number, wordSetName: string, teacherId: string) => {
-    return sessions.value.find(session => 
-      session.studentId === studentId && 
-      session.wordSetName === wordSetName &&
-      session.teacherId === teacherId &&
-      session.reviewCount < session.totalReviews
+  /**
+   * 获取特定会话（从本地缓存）
+   */
+  const getSession = (sessionId: string): AntiForgetSession | undefined => {
+    return sessions.value.find(s => s.id === sessionId)
+  }
+
+  /**
+   * 获取学生的抗遗忘会话（从本地缓存）
+   */
+  const getStudentAntiForgetSessions = (studentId: number): AntiForgetSession[] => {
+    return sessions.value.filter(s => s.student_id === studentId)
+  }
+
+  /**
+   * 获取学生特定单词集的活跃会话（未完成的）
+   */
+  const getActiveSession = (
+    studentId: number,
+    wordSetName: string,
+    teacherId: string
+  ): AntiForgetSession | undefined => {
+    return sessions.value.find(
+      s =>
+        s.student_id === studentId &&
+        s.word_set_name === wordSetName &&
+        s.teacher_id === teacherId &&
+        s.review_count < s.total_reviews
     )
   }
 
-  // 切换单词的五角星状态
-  const toggleWordStar = (sessionId: string, wordId: number) => {
-    const session = getSession(sessionId)
-    if (session) {
-      const word = session.words.find(w => w.id === wordId)
-      if (word) {
-        word.isStarred = !word.isStarred
-        word.lastStarredAt = word.isStarred ? new Date().toISOString() : undefined
-        saveSessionsToStorage()
-        
-        console.log(`单词 ${word.english} 五角星状态切换为:`, word.isStarred)
-        return word.isStarred
+  /**
+   * 切换单词的五角星状态
+   */
+  const toggleWordStar = async (sessionId: string, wordId: number): Promise<boolean> => {
+    try {
+      const response = await api.post(
+        `/api/anti-forget/sessions/${sessionId}/toggle-star/${wordId}`
+      )
+
+      // 更新本地缓存
+      const session = sessions.value.find(s => s.id === sessionId)
+      if (session) {
+        const word = session.words.find(w => w.id === wordId)
+        if (word) {
+          word.is_starred = response.data.is_starred
+          console.log(`单词 ${word.english} 五角星状态切换为:`, word.is_starred)
+        }
       }
+
+      return response.data.is_starred
+    } catch (error) {
+      console.error('切换五角星失败:', error)
+      return false
     }
-    return false
   }
 
-  // 记录一次复习完成
-  const completeReview = (sessionId: string) => {
-    const session = getSession(sessionId)
-    if (session) {
-      session.reviewCount++
-      
-      // 记录这次复习的标记单词
-      const starredWordIds = session.words
-        .filter(word => word.isStarred)
-        .map(word => word.id)
-      
-      const reviewRecord: AntiForgetReviewRecord = {
-        sessionId,
-        studentId: session.studentId,
-        reviewDate: new Date().toISOString(),
-        starredWords: starredWordIds
+  /**
+   * 完成一次复习
+   */
+  const completeReview = async (
+    sessionId: string
+  ): Promise<{ currentCount: number; totalCount: number; isCompleted: boolean } | null> => {
+    try {
+      const response = await api.post(
+        `/api/anti-forget/sessions/${sessionId}/complete-review`
+      )
+
+      // 更新本地缓存
+      const session = sessions.value.find(s => s.id === sessionId)
+      if (session) {
+        session.review_count = response.data.current_count
       }
-      
-      reviewRecords.value.push(reviewRecord)
-      saveSessionsToStorage()
-      saveReviewRecordsToStorage()
-      
-      console.log(`完成第${session.reviewCount}次复习，剩余${session.totalReviews - session.reviewCount}次`)
+
+      console.log(
+        `完成第${response.data.current_count}次复习，剩余${response.data.total_count - response.data.current_count}次`
+      )
+
       return {
-        currentCount: session.reviewCount,
-        totalCount: session.totalReviews,
-        isCompleted: session.reviewCount >= session.totalReviews
+        currentCount: response.data.current_count,
+        totalCount: response.data.total_count,
+        isCompleted: response.data.is_completed
       }
+    } catch (error) {
+      console.error('完成复习失败:', error)
+      return null
     }
-    return null
   }
 
-  // 获取复习统计
-  const getReviewStats = (sessionId: string) => {
-    const session = getSession(sessionId)
-    if (session) {
-      const starredCount = session.words.filter(word => word.isStarred).length
-      const totalWords = session.words.length
-      
+  /**
+   * 获取复习统计
+   */
+  const getReviewStats = async (sessionId: string): Promise<{
+    sessionId: string
+    currentReview: number
+    totalReviews: number
+    remainingReviews: number
+    starredWords: number
+    totalWords: number
+    progress: number
+  } | null> => {
+    try {
+      const response = await api.get(`/api/anti-forget/sessions/${sessionId}/stats`)
+
       return {
         sessionId,
-        currentReview: session.reviewCount,
-        totalReviews: session.totalReviews,
-        remainingReviews: session.totalReviews - session.reviewCount,
-        starredWords: starredCount,
-        totalWords: totalWords,
-        progress: Math.round((session.reviewCount / session.totalReviews) * 100)
+        currentReview: response.data.current_review,
+        totalReviews: response.data.total_reviews,
+        remainingReviews: response.data.total_reviews - response.data.current_review,
+        starredWords: response.data.starred_words,
+        totalWords: response.data.total_words,
+        progress: response.data.progress
       }
+    } catch (error) {
+      console.error('获取统计失败:', error)
+      return null
     }
-    return null
   }
 
-  // 清理已完成的会话（可选）
-  const cleanupCompletedSessions = (olderThanDays: number = 30) => {
-    const cutoffDate = new Date()
-    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays)
-    
-    const initialCount = sessions.value.length
-    sessions.value = sessions.value.filter(session => {
-      if (session.reviewCount >= session.totalReviews) {
-        const createdDate = new Date(session.createdAt)
-        return createdDate > cutoffDate
+  /**
+   * 删除会话（完成所有复习后）
+   */
+  const deleteSession = async (sessionId: string): Promise<boolean> => {
+    try {
+      await api.delete(`/api/anti-forget/sessions/${sessionId}`)
+
+      // 从本地缓存中移除
+      const index = sessions.value.findIndex(s => s.id === sessionId)
+      if (index !== -1) {
+        sessions.value.splice(index, 1)
       }
+
+      console.log('删除会话成功:', sessionId)
       return true
-    })
-    
-    if (sessions.value.length < initialCount) {
-      saveSessionsToStorage()
-      console.log(`清理了 ${initialCount - sessions.value.length} 个已完成的会话`)
+    } catch (error) {
+      console.error('删除会话失败:', error)
+      return false
     }
+  }
+
+  /**
+   * 清理已完成的会话（可选）
+   */
+  const cleanupCompletedSessions = async (studentId: number): Promise<void> => {
+    const completedSessions = sessions.value.filter(
+      s => s.student_id === studentId && s.review_count >= s.total_reviews
+    )
+
+    for (const session of completedSessions) {
+      await deleteSession(session.id)
+    }
+
+    console.log(`清理了 ${completedSessions.length} 个已完成的会话`)
   }
 
   return {
     sessions,
-    reviewRecords,
+    loading,
     createAntiForgetSession,
-    getStudentAntiForgetSessions,
+    fetchStudentSessions,
+    fetchSession,
     getSession,
+    getStudentAntiForgetSessions,
     getActiveSession,
     toggleWordStar,
     completeReview,
     getReviewStats,
+    deleteSession,
     cleanupCompletedSessions
   }
 })

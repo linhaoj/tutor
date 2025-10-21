@@ -17,6 +17,7 @@ router = APIRouter(prefix="/api/students", tags=["学生管理"])
 
 
 class StudentCreate(BaseModel):
+    user_id: str  # 关联的学生登录账号ID
     name: str
     email: Optional[str] = None
     remaining_hours: float = 0
@@ -31,6 +32,7 @@ class StudentUpdate(BaseModel):
 
 class StudentResponse(BaseModel):
     id: int
+    user_id: str
     teacher_id: str
     name: str
     email: Optional[str]
@@ -74,6 +76,22 @@ async def create_student(
         teacher_id = current_user.id
         logger.info(f"教师 {current_user.username} 创建学生: {student_data.name}")
 
+    # 验证user_id对应的User存在且角色为student
+    user = db.query(User).filter(User.id == student_data.user_id).first()
+    if not user:
+        logger.warning(f"创建学生失败: 用户不存在 - user_id={student_data.user_id}")
+        raise HTTPException(status_code=400, detail="用户不存在")
+
+    if user.role != "student":
+        logger.warning(f"创建学生失败: 用户角色不是学生 - user_id={student_data.user_id}, role={user.role}")
+        raise HTTPException(status_code=400, detail="用户角色必须是student")
+
+    # 检查该user_id是否已经关联了学生记录
+    existing_student = db.query(Student).filter(Student.user_id == student_data.user_id).first()
+    if existing_student:
+        logger.warning(f"创建学生失败: 该用户账号已关联学生记录 - user_id={student_data.user_id}")
+        raise HTTPException(status_code=400, detail="该用户账号已关联学生记录")
+
     # 检查邮箱是否已存在
     if student_data.email:
         existing = db.query(Student).filter(Student.email == student_data.email).first()
@@ -88,6 +106,7 @@ async def create_student(
     )
 
     student = Student(
+        user_id=student_data.user_id,
         teacher_id=teacher_id,
         name=student_data.name,
         email=student_data.email,
@@ -98,10 +117,11 @@ async def create_student(
     db.commit()
     db.refresh(student)
 
-    logger.info(f"学生创建成功: 教师ID={teacher_id}, 学生={student.name}, ID={student.id}, 课时={student.remaining_hours}h")
+    logger.info(f"学生创建成功: 教师ID={teacher_id}, 学生={student.name}, ID={student.id}, 用户ID={student.user_id}, 课时={student.remaining_hours}h")
 
     return StudentResponse(
         id=student.id,
+        user_id=student.user_id,
         teacher_id=student.teacher_id,
         name=student.name,
         email=student.email,
@@ -137,6 +157,7 @@ async def get_students(
     return [
         StudentResponse(
             id=s.id,
+            user_id=s.user_id,
             teacher_id=s.teacher_id,
             name=s.name,
             email=s.email,
@@ -155,16 +176,21 @@ async def get_student(
     db: Session = Depends(get_db)
 ):
     """获取单个学生信息"""
-    student = db.query(Student).filter(
-        Student.id == student_id,
-        Student.teacher_id == current_user.id
-    ).first()
+    # 管理员可以查看所有学生，教师只能查看自己的学生
+    if current_user.role == "admin":
+        student = db.query(Student).filter(Student.id == student_id).first()
+    else:
+        student = db.query(Student).filter(
+            Student.id == student_id,
+            Student.teacher_id == current_user.id
+        ).first()
 
     if not student:
         raise HTTPException(status_code=404, detail="学生不存在")
 
     return StudentResponse(
         id=student.id,
+        user_id=student.user_id,
         teacher_id=student.teacher_id,
         name=student.name,
         email=student.email,
@@ -183,10 +209,14 @@ async def update_student(
     db: Session = Depends(get_db)
 ):
     """更新学生信息"""
-    student = db.query(Student).filter(
-        Student.id == student_id,
-        Student.teacher_id == current_user.id
-    ).first()
+    # 管理员可以更新所有学生，教师只能更新自己的学生
+    if current_user.role == "admin":
+        student = db.query(Student).filter(Student.id == student_id).first()
+    else:
+        student = db.query(Student).filter(
+            Student.id == student_id,
+            Student.teacher_id == current_user.id
+        ).first()
 
     if not student:
         raise HTTPException(status_code=404, detail="学生不存在")
@@ -218,6 +248,7 @@ async def update_student(
 
     return StudentResponse(
         id=student.id,
+        user_id=student.user_id,
         teacher_id=student.teacher_id,
         name=student.name,
         email=student.email,
@@ -228,21 +259,38 @@ async def update_student(
 
 
 @router.delete("/{student_id}")
+@safe_transaction("删除学生")
 async def delete_student(
     student_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """删除学生"""
-    student = db.query(Student).filter(
-        Student.id == student_id,
-        Student.teacher_id == current_user.id
-    ).first()
+    """删除学生及其关联的用户账号"""
+    # 管理员可以删除所有学生，教师只能删除自己的学生
+    if current_user.role == "admin":
+        student = db.query(Student).filter(Student.id == student_id).first()
+    else:
+        student = db.query(Student).filter(
+            Student.id == student_id,
+            Student.teacher_id == current_user.id
+        ).first()
 
     if not student:
         raise HTTPException(status_code=404, detail="学生不存在")
 
+    # 获取关联的用户账号
+    user = db.query(User).filter(User.id == student.user_id).first()
+
+    # 删除学生记录（会级联删除所有学习数据）
     db.delete(student)
+
+    # 删除关联的用户账号
+    if user:
+        logger.info(f"删除学生 {student.name} (ID={student.id}) 及其用户账号 {user.username} (ID={user.id})")
+        db.delete(user)
+    else:
+        logger.warning(f"删除学生 {student.name} (ID={student.id})，但未找到关联的用户账号 (user_id={student.user_id})")
+
     db.commit()
 
     return {"message": "学生删除成功"}
@@ -264,10 +312,14 @@ async def deduct_student_hours(
     2. 课时不会变成负数
     3. 并发操作安全
     """
-    student = db.query(Student).filter(
-        Student.id == student_id,
-        Student.teacher_id == current_user.id
-    ).first()
+    # 管理员可以扣减所有学生课时，教师只能扣减自己的学生
+    if current_user.role == "admin":
+        student = db.query(Student).filter(Student.id == student_id).first()
+    else:
+        student = db.query(Student).filter(
+            Student.id == student_id,
+            Student.teacher_id == current_user.id
+        ).first()
 
     if not student:
         logger.warning(f"扣减课时失败: 学生不存在 - ID={student_id}, 教师={current_user.username}")

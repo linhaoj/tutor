@@ -243,9 +243,8 @@ const wordsStore = useWordsStore()
 const authStore = useAuthStore()
 const words = computed(() => wordsStore.words)
 const wordSets = computed(() => {
-  // 使用按用户隔离的单词集数据
-  const currentUser = authStore.currentUser
-  return currentUser ? wordsStore.getWordSetsByUserId(currentUser.id) : []
+  // 直接使用store的reactive属性（后端API已经按用户过滤）
+  return wordsStore.wordSets || []
 })
 
 // 状态
@@ -488,8 +487,13 @@ const importWords = async () => {
   }
 }
 
-onMounted(() => {
-  // TODO: 加载数据
+onMounted(async () => {
+  // 加载单词集和单词数据
+  await wordsStore.fetchWordSets()
+  // 如果有选中的单词集，加载该单词集的单词
+  if (selectedWordSet.value) {
+    await wordsStore.fetchWords(selectedWordSet.value)
+  }
 })
 </script>
 

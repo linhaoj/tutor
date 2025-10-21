@@ -226,58 +226,21 @@ const loadRealGridStats = async () => {
     console.warn('缺少学生ID或单词集信息')
     return
   }
-  
+
   try {
-    // 获取当前单词集的所有单词（使用教师的用户ID）
-    console.log('StudyHome - 准备获取单词:', {
-      teacherId: teacherId.value,
-      currentWordSet: currentWordSet.value,
-      hasTeacherId: !!teacherId.value,
-      methodToUse: teacherId.value ? 'getWordsBySetForUser' : 'getWordsBySet'
+    console.log('StudyHome - 准备获取九宫格统计:', {
+      studentId: studentId.value,
+      currentWordSet: currentWordSet.value
     })
-    
-    let wordsInSet;
-    if (teacherId.value) {
-      console.log('StudyHome - 调用 getWordsBySetForUser, 方法存在:', typeof wordsStore.getWordsBySetForUser)
-      wordsInSet = wordsStore.getWordsBySetForUser(teacherId.value, currentWordSet.value)
-      console.log('StudyHome - getWordsBySetForUser 返回结果:', wordsInSet)
-    } else {
-      wordsInSet = wordsStore.getWordsBySet(currentWordSet.value)
-    }
-    
-    console.log('StudyHome - 加载单词数据:', {
-      teacherId: teacherId.value,
-      currentWordSet: currentWordSet.value,
-      wordsCount: wordsInSet.length
-    })
-    
-    if (!wordsInSet || wordsInSet.length === 0) {
-      console.warn('找不到单词集或单词集为空:', currentWordSet.value)
-      return
-    }
-    
-    // 初始化统计数据
-    const stats = {
-      grid_0: 0, grid_1: 0, grid_2: 0, grid_3: 0, grid_4: 0,
-      grid_5: 0, grid_6: 0, grid_7: 0, grid_8: 0
-    }
-    
-    // 遍历所有单词，统计每个阶段的单词数量
-    wordsInSet.forEach((_, index) => {
-      const wordProgress = progressStore.getWordProgress(studentId.value, currentWordSet.value, index)
-      const stage = wordProgress ? wordProgress.currentStage : 0
-      
-      // 阶段0-7对应grid_0到grid_7
-      if (stage >= 0 && stage <= 7) {
-        (stats as any)[`grid_${stage}`]++
-      }
-    })
-    
+
+    // 直接从后端API获取九宫格统计数据
+    const stats = await progressStore.getGridStats(studentId.value, currentWordSet.value)
+
     // 更新响应式数据
     gridStats.value = stats
-    
+
     console.log('九宫格统计数据已更新:', stats)
-    
+
   } catch (error) {
     console.error('加载九宫格统计数据失败:', error)
     ElMessage.error('加载学习进度数据失败')
@@ -306,16 +269,9 @@ onMounted(async () => {
     // 初始化课程模式
     initializeCourseMode()
 
-    // 获取学生信息
-    let student;
-    if (teacherId.value) {
-      // 如果有teacherId，从指定老师的学生列表中查找
-      const teacherStudents = studentsStore.getStudentsByUserId(teacherId.value)
-      student = teacherStudents.find(s => s.id === studentId.value)
-    } else {
-      // 否则从当前用户的学生列表中查找
-      student = studentsStore.students.find(s => s.id === studentId.value)
-    }
+    // 获取学生信息（后端API自动按当前用户过滤）
+    await studentsStore.fetchStudents()
+    const student = studentsStore.students.find(s => s.id === studentId.value)
 
     if (student) {
       studentName.value = student.name

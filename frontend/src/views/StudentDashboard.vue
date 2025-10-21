@@ -72,8 +72,8 @@ const router = useRouter()
 const authStore = useAuthStore()
 const reviewsStore = useStudentReviewsStore()
 
-const studentName = computed(() => authStore.currentUser?.displayName || '学生')
-const studentId = computed(() => authStore.currentUser?.studentId || 0)
+const studentName = computed(() => authStore.currentUser?.display_name || '学生')
+const studentId = computed(() => authStore.currentUser?.student_id || 0)
 
 // 获取学生的复习记录
 const reviews = computed(() => {
@@ -110,8 +110,11 @@ const startReview = (reviewId: string) => {
   router.push(`/student-review/${reviewId}`)
 }
 
-onMounted(() => {
-  // 初始化
+onMounted(async () => {
+  // 加载学生的复习记录
+  if (studentId.value > 0) {
+    await reviewsStore.fetchStudentReviews(studentId.value)
+  }
 })
 </script>
 

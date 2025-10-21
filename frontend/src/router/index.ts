@@ -174,7 +174,7 @@ router.beforeEach(async (to, _from, next) => {
   if (to.meta.requiresAdmin && !authStore.isAdmin) {
     // 需要管理员权限但不是管理员，跳转到对应首页
     if (authStore.currentUser?.role === 'teacher') {
-      next('/teacher')
+      next('/')  // 教师跳转到日程管理
     } else if (authStore.currentUser?.role === 'student') {
       next('/student')
     } else {
@@ -220,7 +220,8 @@ router.beforeEach(async (to, _from, next) => {
     } else if (authStore.isStudent) {
       next('/student')
     } else {
-      next('/teacher')
+      // 教师跳转到日程管理（Dashboard）而不是TeacherHome
+      next('/')
     }
     return
   }

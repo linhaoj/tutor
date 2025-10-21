@@ -351,7 +351,7 @@ const loadNextGroup = () => {
 
 
 // 初始化数据
-const initializeWords = () => {
+const initializeWords = async () => {
   // 从路由参数获取信息
   const wordSetName = route.query.wordSet as string || ''
   const wordsCount = parseInt(route.query.wordsCount as string) || 20
@@ -378,9 +378,9 @@ const initializeWords = () => {
   }
   
   if (!isFiltered) {
-    // 使用原有逻辑获取单词
-    sourceWords = wordSetName 
-      ? (teacherId ? wordsStore.getWordsBySetForUser(teacherId, wordSetName) : wordsStore.getWordsBySet(wordSetName))
+    // 使用原有逻辑获取单词（使用异步方法，后端API自动处理权限）
+    sourceWords = wordSetName
+      ? await wordsStore.getWordsBySet(wordSetName)
       : wordsStore.words
       
     console.log('SimpleWordStudy - 加载单词数据:', {
@@ -430,7 +430,7 @@ const initializeWords = () => {
 }
 
 // 生命周期
-onMounted(() => {
+onMounted(async () => {
   // 确保处于课程模式（不重新设置计时）
   if (!uiStore.isInCourseMode) {
     uiStore.enterCourseMode('/study/' + route.params.studentId)
@@ -455,7 +455,7 @@ onMounted(() => {
   }
   
   // 初始化单词数据
-  initializeWords()
+  await initializeWords()
 })
 </script>
 
