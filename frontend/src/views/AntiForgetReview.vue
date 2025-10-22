@@ -250,16 +250,16 @@ const completeCurrentReview = async () => {
         type: 'success',
       }
     )
-    
+
     const result = antiForgetStore.completeReview(sessionId.value)
     if (result) {
       ElMessage.success(`第${result.currentCount}次复习完成！还需复习${result.totalCount - result.currentCount}次`)
-      
+
+      // 每次复习完成后都标记当前课程为已完成
+      await markAntiForgetCourseAsCompleted()
+
       if (result.isCompleted) {
         ElMessage.success('恭喜！所有抗遗忘复习已完成！')
-
-        // 标记当前课程为已完成
-        await markAntiForgetCourseAsCompleted()
 
         setTimeout(() => {
           // 完全结束课程并跳转到日程管理
@@ -267,9 +267,10 @@ const completeCurrentReview = async () => {
           router.push('/')
         }, 2000)
       } else {
-        // 刷新页面数据，准备下一次复习
+        // 完成当前课程后跳转回日程管理
         setTimeout(() => {
-          loadReviewData()
+          uiStore.endCourse()
+          router.push('/')
         }, 1000)
       }
     }
@@ -285,25 +286,10 @@ const markAntiForgetCourseAsCompleted = async () => {
     if (scheduleIdStr && teacherId.value && studentId.value) {
       const scheduleId = parseInt(scheduleIdStr)
 
-      // 获取课程信息来确定扣减时长（后端API自动过滤）
-      await scheduleStore.fetchSchedules()
-      const schedule = scheduleStore.schedules.find(s => s.id === scheduleId)
-      if (schedule) {
-        // 根据课程类型扣减时长：大课(60分钟) = 1.0h，小课(30分钟) = 0.5h
-        const hoursToDeduct = schedule.class_type === 'big' ? 1.0 : 0.5
-
-        // 扣减学生课程时长
-        const success = await studentsStore.deductStudentHours(studentId.value, hoursToDeduct)
-        if (success) {
-          console.log(`学生课程时长已扣减: ${hoursToDeduct}h (${schedule.class_type === 'big' ? '大课' : '小课'})`)
-        } else {
-          console.warn('扣减学生课程时长失败')
-        }
-      }
-
-      // 标记课程为已完成
+      // 注意：抗遗忘复习不扣减课时，只有新单词学习才扣课时
+      // 直接标记课程为已完成即可
       await scheduleStore.completeSchedule(scheduleId)
-      console.log('抗遗忘课程已标记为完成:', scheduleId)
+      console.log('抗遗忘课程已标记为完成（不扣课时）:', scheduleId)
     } else {
       console.warn('缺少课程完成所需信息', { scheduleIdStr, teacherId: teacherId.value, studentId: studentId.value })
     }

@@ -35,14 +35,20 @@
         </div>
         
         <div v-show="dateGroup.expanded" class="schedule-list">
-          <!-- 今日课程：分为未完成和已完成两栏 -->
+          <!-- 今日课程：分为未完成和已完成两栏（垂直排列） -->
           <div v-if="isToday(dateGroup.date)" class="today-schedule-columns">
             <!-- 未完成课程栏 -->
             <div class="schedule-column incomplete-column">
-              <div class="column-header">
+              <div
+                class="column-header"
+                @click="todayIncompleteExpanded = !todayIncompleteExpanded"
+              >
+                <el-icon class="expand-icon" :class="{ expanded: todayIncompleteExpanded }">
+                  <ArrowRight />
+                </el-icon>
                 <h3>未完成 ({{ getTodayIncompleteSchedules(dateGroup.schedules).length }})</h3>
               </div>
-              <div class="column-content">
+              <div v-show="todayIncompleteExpanded" class="column-content">
                 <div 
                   v-for="schedule in getTodayIncompleteSchedules(dateGroup.schedules)" 
                   :key="schedule.id"
@@ -100,10 +106,16 @@
             
             <!-- 已完成课程栏 -->
             <div class="schedule-column completed-column">
-              <div class="column-header">
+              <div
+                class="column-header"
+                @click="todayCompletedExpanded = !todayCompletedExpanded"
+              >
+                <el-icon class="expand-icon" :class="{ expanded: todayCompletedExpanded }">
+                  <ArrowRight />
+                </el-icon>
                 <h3>已完成 ({{ getTodayCompletedSchedules(dateGroup.schedules).length }})</h3>
               </div>
-              <div class="column-content">
+              <div v-show="todayCompletedExpanded" class="column-content">
                 <div 
                   v-for="schedule in getTodayCompletedSchedules(dateGroup.schedules)" 
                   :key="schedule.id"
@@ -336,6 +348,10 @@ const isLoading = ref(true)
 const addDialogVisible = ref(false)
 const adding = ref(false)
 
+// 今日课程展开/收起状态
+const todayIncompleteExpanded = ref(true)  // 未完成默认展开
+const todayCompletedExpanded = ref(false)  // 已完成默认收起
+
 // 表单
 const courseForm = reactive({
   studentId: '',
@@ -368,15 +384,21 @@ const timeSlots = computed(() => {
 
 // 方法
 const formatDate = (dateStr: string) => {
-  const date = new Date(dateStr + 'T00:00:00+08:00') // 北京时间
+  // 获取今天的日期（本地时区）
   const today = new Date()
-  const beijingToday = new Date(today.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }))
-  const todayStr = beijingToday.toISOString().split('T')[0]
-  
-  const tomorrow = new Date(beijingToday)
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  const todayStr = `${year}-${month}-${day}`
+
+  // 获取明天的日期
+  const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
-  const tomorrowStr = tomorrow.toISOString().split('T')[0]
-  
+  const tomorrowYear = tomorrow.getFullYear()
+  const tomorrowMonth = String(tomorrow.getMonth() + 1).padStart(2, '0')
+  const tomorrowDay = String(tomorrow.getDate()).padStart(2, '0')
+  const tomorrowStr = `${tomorrowYear}-${tomorrowMonth}-${tomorrowDay}`
+
   if (dateStr === todayStr) {
     return `今天 (${dateStr})`
   } else if (dateStr === tomorrowStr) {
@@ -394,9 +416,15 @@ const toggleDateGroup = (date: string) => {
 
 // 判断是否是今天
 const isToday = (dateString: string) => {
+  // 获取今天的日期字符串（本地时区）
   const today = new Date()
-  const targetDate = new Date(dateString)
-  return today.toDateString() === targetDate.toDateString()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  const todayStr = `${year}-${month}-${day}`
+
+  // 直接比较日期字符串
+  return dateString === todayStr
 }
 
 // 获取今日未完成课程
@@ -515,11 +543,56 @@ const addCourse = async () => {
     ElMessage.error('请填写完整的课程信息')
     return
   }
-  
+
   adding.value = true
-  
+
   try {
-    const student = students.value.find(s => s.id === parseInt(courseForm.studentId))
+    const studentId = parseInt(courseForm.studentId)
+    const student = students.value.find(s => s.id === studentId)
+
+    console.log('添加课程 - 课时验证:', {
+      courseForm: courseForm,
+      studentId: studentId,
+      allStudents: students.value,
+      foundStudent: student
+    })
+
+    if (!student) {
+      ElMessage.error('找不到学生信息')
+      adding.value = false
+      return
+    }
+
+    // 检查学生课时是否足够
+    const requiredHours = courseForm.classType === 'big' ? 1.0 : 0.5
+    const remainingHours = student.remaining_hours || 0
+
+    console.log('课时检查:', {
+      studentName: student.name,
+      remainingHours: remainingHours,
+      requiredHours: requiredHours,
+      classType: courseForm.classType,
+      isInsufficient: remainingHours < requiredHours
+    })
+
+    if (remainingHours < requiredHours) {
+      // 课时不足，显示详细提示
+      await ElMessageBox.alert(
+        `学生 ${student.name} 的剩余课时不足！\n\n` +
+        `剩余课时: ${remainingHours}小时\n` +
+        `需要课时: ${requiredHours}小时 (${courseForm.classType === 'big' ? '大课' : '小课'})\n` +
+        `缺少课时: ${(requiredHours - remainingHours).toFixed(1)}小时\n\n` +
+        `请先为学生充值课时后再安排课程。`,
+        '课时不足',
+        {
+          confirmButtonText: '知道了',
+          type: 'warning'
+        }
+      )
+      adding.value = false
+      return
+    }
+
     // 使用本地时区格式化日期，避免时区转换问题
     const dateStr = courseForm.date instanceof Date
       ? courseForm.date.getFullYear() + '-' +
@@ -527,21 +600,21 @@ const addCourse = async () => {
         String(courseForm.date.getDate()).padStart(2, '0')
       : courseForm.date
     const timeStr = courseForm.time
-    
+
     const newSchedule = {
       time: timeStr,
       date: dateStr,
-      wordSet: courseForm.wordSet,
-      studentName: student?.name || '',
-      studentId: parseInt(courseForm.studentId),
-      type: courseForm.type as 'learning' | 'review',
+      word_set_name: courseForm.wordSet,
+      student_name: student?.name || '',
+      student_id: parseInt(courseForm.studentId),
+      course_type: courseForm.type as 'learning' | 'review',
       duration: courseForm.duration,
-      classType: courseForm.classType as 'big' | 'small'
+      class_type: courseForm.classType as 'big' | 'small'
     }
-    
-    scheduleStore.addSchedule(newSchedule)
-    
-    ElMessage.success('课程添加成功')
+
+    await scheduleStore.addSchedule(newSchedule)
+
+    ElMessage.success(`课程添加成功！学生剩余课时: ${(remainingHours - requiredHours).toFixed(1)}小时`)
     addDialogVisible.value = false
   } catch (error) {
     ElMessage.error('添加课程失败')
@@ -736,11 +809,11 @@ onMounted(async () => {
   gap: 10px;
 }
 
-/* 今日课程两栏布局 */
+/* 今日课程垂直布局 */
 .today-schedule-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
   margin-top: 10px;
 }
 
@@ -763,6 +836,14 @@ onMounted(async () => {
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   padding: 15px 20px;
   border-bottom: 1px solid #e4e7ed;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.column-header:hover {
+  opacity: 0.9;
 }
 
 .incomplete-column .column-header {
@@ -775,10 +856,16 @@ onMounted(async () => {
   color: white;
 }
 
+.column-header .expand-icon {
+  margin-right: 10px;
+  transition: transform 0.3s ease;
+}
+
 .column-header h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
+  flex: 1;
 }
 
 .column-content {

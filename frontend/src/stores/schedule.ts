@@ -160,7 +160,10 @@ export const useScheduleStore = defineStore('schedule', () => {
 
     // 获取今天的日期（本地时区）
     const today = new Date()
-    const todayStr = today.toISOString().split('T')[0]
+    const year = today.getFullYear()
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    const day = String(today.getDate()).padStart(2, '0')
+    const todayStr = `${year}-${month}-${day}`
 
     // 只包含今天及未来的课程
     schedules.value.forEach(schedule => {
@@ -185,9 +188,15 @@ export const useScheduleStore = defineStore('schedule', () => {
    * 获取今日需要复习的数量
    */
   const getTodayReviewCount = computed((): number => {
-    const today = new Date().toISOString().split('T')[0]
+    // 获取今天的日期（本地时区）
+    const today = new Date()
+    const year = today.getFullYear()
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    const day = String(today.getDate()).padStart(2, '0')
+    const todayStr = `${year}-${month}-${day}`
+
     return schedules.value.filter(s =>
-      s.date === today &&
+      s.date === todayStr &&
       s.course_type === 'review' &&
       !s.completed
     ).length

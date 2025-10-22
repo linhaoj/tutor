@@ -234,6 +234,42 @@ export const useWordsStore = defineStore('words', () => {
   }
 
   /**
+   * 重命名单词集
+   */
+  const renameWordSet = async (oldName: string, newName: string): Promise<{ success: boolean, message: string }> => {
+    try {
+      await api.put(`/api/words/sets/${encodeURIComponent(oldName)}/rename`, {
+        new_name: newName
+      })
+
+      // 更新本地列表中的单词集名称
+      const wordSet = wordSets.value.find(ws => ws.name === oldName)
+      if (wordSet) {
+        wordSet.name = newName
+      }
+
+      // 更新本地单词列表中的单词集名称
+      words.value.forEach(word => {
+        if (word.word_set_name === oldName) {
+          word.word_set_name = newName
+        }
+      })
+
+      // 如果重命名的是当前单词集，更新当前单词集名称
+      if (currentWordSetName.value === oldName) {
+        currentWordSetName.value = newName
+      }
+
+      return { success: true, message: '单词集重命名成功' }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '重命名单词集失败'
+      }
+    }
+  }
+
+  /**
    * 删除单词集
    */
   const deleteWordSet = async (wordSetName: string): Promise<{ success: boolean, message: string }> => {
@@ -275,6 +311,7 @@ export const useWordsStore = defineStore('words', () => {
     createWordSet,
     addWord,
     deleteWord,
+    renameWordSet,
     deleteWordSet,
     importWordsFromExcel,
     getWordsBySet,

@@ -298,23 +298,22 @@ const continuePractice = async () => {
   // 清理sessionStorage中的检测状态数据
   clearTestStatusStorage()
 
-  // 跳转到 WordFilter 页面，继续使用之前筛选的单词
+  // 跳转回 StudyHome 页面，开始新的一轮学习
   const studentId = route.params.studentId
   const wordSet = route.query.wordSet
   const teacherId = route.query.teacherId
-  const totalWords = route.query.totalWords
 
+  ElMessage.success('本轮学习已提交！通过的单词已记录到抗遗忘会话中')
+
+  // 跳转回学习准备页面
   router.push({
-    path: `/word-filter/${studentId}`,
+    path: `/study/${studentId}`,
     query: {
       wordSet,
       teacherId,
-      wordsCount: totalWords, // 保持原来的总单词数
-      continueSession: 'true' // 标记为继续练习
+      refresh: Date.now() // 添加时间戳强制刷新九宫格数据
     }
   })
-
-  ElMessage.success('训后检测完成！已更新学习进度，通过的单词已记录到抗遗忘会话中')
 }
 
 // 清理sessionStorage中的检测状态数据
@@ -359,6 +358,7 @@ const markCourseAsCompleted = async () => {
     if (scheduleIdStr && teacherId && studentId) {
       const scheduleId = parseInt(scheduleIdStr)
 
+      // 注意：只有单词学习课程才扣减课时，抗遗忘复习不扣课时
       // 获取课程信息来确定扣减时长（后端API自动过滤）
       await scheduleStore.fetchSchedules()
       const schedule = scheduleStore.schedules.find(s => s.id === scheduleId)
@@ -366,10 +366,10 @@ const markCourseAsCompleted = async () => {
         // 根据课程类型扣减时长：大课(60分钟) = 1.0h，小课(30分钟) = 0.5h
         const hoursToDeduct = schedule.class_type === 'big' ? 1.0 : 0.5
 
-        // 扣减学生课程时长
+        // 扣减学生课程时长（单词学习课程）
         const success = await studentsStore.deductStudentHours(studentId, hoursToDeduct)
         if (success) {
-          console.log(`学生课程时长已扣减: ${hoursToDeduct}h (${schedule.class_type === 'big' ? '大课' : '小课'})`)
+          console.log(`单词学习课程时长已扣减: ${hoursToDeduct}h (${schedule.class_type === 'big' ? '大课' : '小课'})`)
         } else {
           console.warn('扣减学生课程时长失败')
         }
@@ -377,7 +377,7 @@ const markCourseAsCompleted = async () => {
 
       // 标记课程为已完成（后端API通过JWT自动识别用户）
       await scheduleStore.completeSchedule(scheduleId)
-      console.log('课程已标记为完成:', scheduleId)
+      console.log('单词学习课程已标记为完成:', scheduleId)
     } else {
       console.warn('缺少课程完成所需信息', { scheduleIdStr, teacherId, studentId })
     }
@@ -447,7 +447,7 @@ const updateLearningProgress = async () => {
 const recordPassedWordsForAntiForget = () => {
   const studentId = parseInt(route.params.studentId as string)
   const wordSet = route.query.wordSet as string
-  
+
   console.log('调试信息:', {
     studentId,
     wordSet,
@@ -455,29 +455,29 @@ const recordPassedWordsForAntiForget = () => {
     passedWordsCount: passedWords.value.length,
     passedWords: passedWords.value
   })
-  
+
   if (!studentId || !wordSet) {
     console.error('缺少必要参数:', { studentId, wordSet })
     return
   }
-  
+
   if (passedWords.value.length === 0) {
     console.warn('没有通过的单词需要记录')
     return
   }
-  
+
   // 将通过的单词转换为抗遗忘会话格式
   const passedWordsData = passedWords.value.map(word => ({
     id: word.id,
     english: word.english,
     chinese: word.chinese
   }))
-  
+
   // 添加到抗遗忘会话
   antiForgetSessionStore.addPassedWordsToSession(studentId, wordSet, passedWordsData)
-  
+
   console.log(`已将 ${passedWords.value.length} 个通过的单词记录到抗遗忘会话中`)
-  
+
   // 验证是否成功添加
   const currentSession = antiForgetSessionStore.getCurrentSession(studentId)
   console.log('当前会话单词数:', currentSession?.words.length)

@@ -263,9 +263,48 @@ const initializeCourseMode = () => {
   }
 }
 
+// 清理上一轮学习的临时数据
+const clearTemporaryLearningData = () => {
+  const keysToRemove = [
+    'learning_session_id',
+    'current_learning_words',
+    'current_group_number',
+    'current_stage',
+    'stage1_results',
+    'stage2_results',
+    'stage3_results',
+    'total_learning_words',
+    'filtered_words'
+  ]
+
+  keysToRemove.forEach(key => {
+    sessionStorage.removeItem(key)
+  })
+
+  // 清理所有组的单词数据
+  for (let i = 1; i <= 10; i++) {
+    sessionStorage.removeItem(`learned_words_group_${i}`)
+    sessionStorage.removeItem(`simpleStudyGroup_${i}`)
+  }
+
+  // 清理所有训后检测状态（使用通配符模式清理）
+  const allKeys = Object.keys(sessionStorage)
+  allKeys.forEach(key => {
+    if (key.startsWith('postTestStatus_')) {
+      sessionStorage.removeItem(key)
+      console.log('清理训后检测状态:', key)
+    }
+  })
+
+  console.log('StudyHome - 已清理上一轮学习的临时数据')
+}
+
 // 生命周期
 onMounted(async () => {
   try {
+    // 清理上一轮学习的临时数据
+    clearTemporaryLearningData()
+
     // 初始化课程模式
     initializeCourseMode()
 

@@ -30,22 +30,22 @@
         >
           <template #header>
             <div class="card-header">
-              <span class="review-date">{{ formatDate(review.learnDate) }}</span>
+              <span class="review-date">{{ formatDate(review.learn_date) }}</span>
             </div>
           </template>
 
           <div class="review-info">
             <div class="info-item">
               <span class="info-label">单词库:</span>
-              <span class="info-value word-set-name">{{ review.wordSetName }}</span>
+              <span class="info-value word-set-name">{{ review.word_set_name }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">单词数:</span>
               <span class="info-value">{{ review.words.length }} 个</span>
             </div>
-            <div v-if="review.lastReviewedAt" class="info-item">
+            <div v-if="review.last_reviewed_at" class="info-item">
               <span class="info-label">最后复习:</span>
-              <span class="info-value">{{ formatDateTime(review.lastReviewedAt) }}</span>
+              <span class="info-value">{{ formatDateTime(review.last_reviewed_at) }}</span>
             </div>
           </div>
 

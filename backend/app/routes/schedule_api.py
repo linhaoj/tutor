@@ -1,9 +1,9 @@
-"""课程安排API - 简化版"""
+"""课程安排API - 简化版（支持时区）"""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
-from datetime import date
+from datetime import datetime, date
 
 from app.database import get_db
 from app.models import Schedule, Student, User
@@ -18,8 +18,11 @@ router = APIRouter(prefix="/api/schedules", tags=["课程安排"])
 
 class ScheduleCreate(BaseModel):
     student_id: int
-    date: str
-    time: str
+    # 新字段：ISO 8601格式的datetime字符串（前端会发送UTC时间）
+    scheduled_at: Optional[str] = None  # 例如："2025-10-21T15:00:00Z"
+    # 旧字段：向后兼容
+    date: Optional[str] = None
+    time: Optional[str] = None
     word_set_name: str
     course_type: str = "learning"
     duration: int = 60
@@ -31,6 +34,9 @@ class ScheduleResponse(BaseModel):
     id: int
     student_id: int
     student_name: str
+    # 新字段：ISO 8601格式的datetime字符串（返回UTC时间）
+    scheduled_at: str  # 例如："2025-10-21T15:00:00Z"
+    # 旧字段：向后兼容（前端暂时还需要）
     date: str
     time: str
     word_set_name: str
@@ -80,12 +86,31 @@ async def create_schedule(
         logger.warning(f"创建课程失败: 学生不存在或不属于该教师 - ID={schedule_data.student_id}, 教师ID={teacher_id}")
         raise HTTPException(status_code=404, detail="学生不存在或不属于该教师")
 
+    # 解析时间：优先使用新的 scheduled_at 字段
+    if schedule_data.scheduled_at:
+        # 前端发送UTC时间的ISO 8601字符串
+        scheduled_at = datetime.fromisoformat(schedule_data.scheduled_at.replace('Z', '+00:00'))
+        # 同时填充旧字段以保持向后兼容
+        schedule_date = scheduled_at.date()
+        schedule_time = scheduled_at.strftime('%H:%M')
+    elif schedule_data.date and schedule_data.time:
+        # 向后兼容：使用旧字段
+        schedule_date = date.fromisoformat(schedule_data.date)
+        schedule_time = schedule_data.time
+        # 组合为datetime（假设是北京时间，转为UTC）
+        from datetime import timedelta
+        local_dt = datetime.combine(schedule_date, datetime.strptime(schedule_time, '%H:%M').time())
+        scheduled_at = local_dt - timedelta(hours=8)  # 北京时间转UTC
+    else:
+        raise HTTPException(status_code=400, detail="必须提供scheduled_at或date+time")
+
     schedule = Schedule(
         teacher_id=teacher_id,
         student_id=schedule_data.student_id,
         student_name=student.name,
-        date=date.fromisoformat(schedule_data.date),
-        time=schedule_data.time,
+        scheduled_at=scheduled_at,  # 新字段：UTC时间
+        date=schedule_date,  # 旧字段：向后兼容
+        time=schedule_time,  # 旧字段：向后兼容
         word_set_name=schedule_data.word_set_name,
         course_type=schedule_data.course_type,
         duration=schedule_data.duration,
@@ -96,14 +121,15 @@ async def create_schedule(
     db.commit()
     db.refresh(schedule)
 
-    logger.info(f"课程创建成功: 教师ID={teacher_id}, 学生={student.name}, 日期={schedule_data.date}, 时间={schedule_data.time}, 类型={schedule_data.course_type}, 时长={schedule_data.duration}分钟")
+    logger.info(f"课程创建成功: 教师ID={teacher_id}, 学生={student.name}, 时间={scheduled_at.isoformat()}Z (UTC), 类型={schedule_data.course_type}, 时长={schedule_data.duration}分钟")
 
     return ScheduleResponse(
         id=schedule.id,
         student_id=schedule.student_id,
         student_name=schedule.student_name,
-        date=schedule.date.isoformat(),
-        time=schedule.time,
+        scheduled_at=schedule.scheduled_at.isoformat() + 'Z',  # 新字段：返回UTC时间
+        date=schedule.date.isoformat(),  # 旧字段：向后兼容
+        time=schedule.time,  # 旧字段：向后兼容
         word_set_name=schedule.word_set_name,
         course_type=schedule.course_type,
         duration=schedule.duration,
@@ -139,8 +165,9 @@ async def get_schedules(
             id=s.id,
             student_id=s.student_id,
             student_name=s.student_name,
-            date=s.date.isoformat(),
-            time=s.time,
+            scheduled_at=s.scheduled_at.isoformat() + 'Z',  # UTC时间
+            date=s.date.isoformat() if s.date else '',  # 向后兼容
+            time=s.time if s.time else '',  # 向后兼容
             word_set_name=s.word_set_name,
             course_type=s.course_type,
             duration=s.duration,
@@ -157,19 +184,28 @@ async def complete_schedule(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """标记课程为已完成"""
-    schedule = db.query(Schedule).filter(
-        Schedule.id == schedule_id,
-        Schedule.teacher_id == current_user.id
-    ).first()
+    """标记课程为已完成
+
+    - 教师：可以标记自己创建的课程
+    - 管理员：可以标记任意课程
+    """
+    # 管理员可以完成任意课程，教师只能完成自己创建的课程
+    if current_user.role == "admin":
+        schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+    else:
+        schedule = db.query(Schedule).filter(
+            Schedule.id == schedule_id,
+            Schedule.teacher_id == current_user.id
+        ).first()
+
     if not schedule:
-        logger.warning(f"完成课程失败: 课程不存在 - ID={schedule_id}, 教师={current_user.username}")
-        raise HTTPException(status_code=404, detail="课程不存在")
+        logger.warning(f"完成课程失败: 课程不存在或无权限 - ID={schedule_id}, 用户={current_user.username}")
+        raise HTTPException(status_code=404, detail="课程不存在或无权限")
 
     schedule.completed = True
     db.commit()
 
-    logger.info(f"课程标记完成: 学生={schedule.student_name}, 日期={schedule.date}, 类型={schedule.course_type}")
+    logger.info(f"课程标记完成: 学生={schedule.student_name}, 日期={schedule.date}, 类型={schedule.course_type}, 操作人={current_user.username}")
     return {"message": "课程已标记为完成"}
 
 

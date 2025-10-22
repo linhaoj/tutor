@@ -1,0 +1,5 @@
+备份时间: 2025-10-22 12:05:56
+源数据库: ./english_tutor.db
+备份文件: ./backups/database/test_backup.db
+文件大小: 628K
+备份说明: 测试备份功能

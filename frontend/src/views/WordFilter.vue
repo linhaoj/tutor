@@ -157,17 +157,17 @@ const getAvailableReplacementWords = async (excludeWords: Word[]): Promise<Word[
   const excludeIds = new Set(excludeWords.map(w => w.id))
   const availableWords = allWords.filter(word => !excludeIds.has(word.id))
 
+  // 批量获取所有单词的进度，避免多次API调用
+  const allProgress = await progressStore.getAllWordProgress(
+    studentId.value,
+    wordSetName.value
+  )
+
   // 过滤出真正需要学习的单词（格子0-6的单词）
-  // 需要异步检查每个单词的进度
   const filteredWords: Word[] = []
   for (const word of availableWords) {
     const wordIndex = allWords.findIndex(w => w.id === word.id)
-    const wordProgress = await progressStore.getWordProgress(
-      studentId.value,
-      wordSetName.value,
-      wordIndex
-    )
-    const stage = wordProgress ? wordProgress.currentStage : 0
+    const stage = allProgress[wordIndex] || 0
     if (stage >= 0 && stage <= 6) {
       filteredWords.push(word)
     }
@@ -385,29 +385,86 @@ const initializeWords = async () => {
     }
 
     // 过滤出需要学习的单词（格子0-6）
-    // 需要异步检查每个单词的进度
-    const wordsToLearn: Word[] = []
+    // 批量获取所有单词的进度，避免多次API调用
+    const allProgress = await progressStore.getAllWordProgress(
+      studentId.value,
+      wordSetName.value
+    )
+
+    // 按格子分组单词
+    const wordsByStage: { [key: number]: Word[] } = {
+      0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []
+    }
+
     for (let index = 0; index < allWords.length; index++) {
-      const wordProgress = await progressStore.getWordProgress(
-        studentId.value,
-        wordSetName.value,
-        index
-      )
-      const stage = wordProgress ? wordProgress.currentStage : 0
+      const stage = allProgress[index] || 0
       if (stage >= 0 && stage <= 6) {
-        wordsToLearn.push(allWords[index])
+        wordsByStage[stage].push(allWords[index])
       }
     }
 
-    if (wordsToLearn.length < wordsCount.value) {
-      ElMessage.warning(`可学习单词不足，只有 ${wordsToLearn.length} 个单词可学习`)
+    // 获取最近学过的单词ID列表（避免短时间内重复）
+    const recentlyLearnedKey = `recentlyLearned_${studentId.value}_${wordSetName.value}`
+    let recentlyLearned: number[] = []
+    try {
+      const saved = localStorage.getItem(recentlyLearnedKey)
+      if (saved) {
+        recentlyLearned = JSON.parse(saved)
+      }
+    } catch (error) {
+      console.warn('无法加载最近学习记录:', error)
     }
 
-    // 随机选择要学习的单词
-    const shuffledWords = shuffleArray(wordsToLearn)
-    currentWords.value = shuffledWords.slice(0, wordsCount.value)
+    // 智能选择单词：优先格子0，排除最近学过的
+    const selectedWords: Word[] = []
+    let remainingCount = wordsCount.value
 
-    console.log(`初始化完成，准备学习 ${currentWords.value.length} 个单词`)
+    // 按优先级顺序：格子0 > 格子1 > ... > 格子6
+    for (let stage = 0; stage <= 6 && selectedWords.length < wordsCount.value; stage++) {
+      const stageWords = wordsByStage[stage]
+
+      // 过滤掉最近学过的单词
+      const availableWords = stageWords.filter(word =>
+        !recentlyLearned.includes(word.id)
+      )
+
+      // 如果过滤后不够，使用全部单词（避免无法选择）
+      const wordsToSelect = availableWords.length > 0 ? availableWords : stageWords
+
+      // 随机打乱当前格子的单词
+      const shuffled = shuffleArray([...wordsToSelect])
+
+      // 取需要的数量
+      const count = Math.min(remainingCount, shuffled.length)
+      selectedWords.push(...shuffled.slice(0, count))
+      remainingCount -= count
+
+      console.log(`从格子${stage}选择了${count}个单词 (可用:${wordsToSelect.length}, 最近学过排除:${stageWords.length - availableWords.length})`)
+    }
+
+    if (selectedWords.length < wordsCount.value) {
+      ElMessage.warning(`可学习单词不足，只有 ${selectedWords.length} 个单词可学习`)
+    }
+
+    currentWords.value = selectedWords
+
+    // 记录本次选择的单词ID到"最近学习"列表
+    const newRecentlyLearned = selectedWords.map(w => w.id)
+    // 合并旧记录，保留最近200个（避免列表过长）
+    const updatedRecentlyLearned = [...newRecentlyLearned, ...recentlyLearned].slice(0, 200)
+    try {
+      localStorage.setItem(recentlyLearnedKey, JSON.stringify(updatedRecentlyLearned))
+    } catch (error) {
+      console.warn('无法保存最近学习记录:', error)
+    }
+
+    console.log(`初始化完成，准备学习 ${currentWords.value.length} 个单词，格子分布:`, {
+      grid0: selectedWords.filter((_, i) => {
+        const originalIndex = allWords.findIndex(w => w.id === selectedWords[i].id)
+        return (allProgress[originalIndex] || 0) === 0
+      }).length,
+      total: selectedWords.length
+    })
 
   } catch (error) {
     console.error('初始化单词失败:', error)

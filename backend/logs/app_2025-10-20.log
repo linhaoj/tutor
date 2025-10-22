@@ -39,3 +39,9 @@
 2025-10-21 00:00:02 | INFO     | schedule:172 | 课程标记完成: 学生=Linhao, 日期=2025-10-21, 类型=learning
 2025-10-21 00:00:16 | INFO     | auth:114 | 用户尝试登录: jlhstu
 2025-10-21 00:00:16 | INFO     | auth:136 | 登录成功: 用户=jlhstu, 角色=student, ID=user-1760933270076
+2025-10-21 00:13:00 | INFO     | progress:218 | 九宫格统计: 学生=Linhao, 单词集=Sheet1, 总单词数=2504, 已学=5, 统计={'grid_0': 2499, 'grid_1': 5, 'grid_2': 0, 'grid_3': 0, 'grid_4': 0, 'grid_5': 0, 'grid_6': 0, 'grid_7': 0, 'grid_8': 0}
+2025-10-21 00:13:00 | INFO     | progress:218 | 九宫格统计: 学生=Linhao, 单词集=Sheet1, 总单词数=2504, 已学=5, 统计={'grid_0': 2499, 'grid_1': 5, 'grid_2': 0, 'grid_3': 0, 'grid_4': 0, 'grid_5': 0, 'grid_6': 0, 'grid_7': 0, 'grid_8': 0}
+2025-10-21 00:15:01 | INFO     | auth:114 | 用户尝试登录: admin
+2025-10-21 00:15:01 | INFO     | auth:136 | 登录成功: 用户=admin, 角色=admin, ID=admin-001
+2025-10-21 00:17:09 | INFO     | progress:218 | 九宫格统计: 学生=Linhao, 单词集=Sheet1, 总单词数=2504, 已学=5, 统计={'grid_0': 2499, 'grid_1': 5, 'grid_2': 0, 'grid_3': 0, 'grid_4': 0, 'grid_5': 0, 'grid_6': 0, 'grid_7': 0, 'grid_8': 0}
+2025-10-21 00:17:16 | INFO     | progress:218 | 九宫格统计: 学生=Linhao, 单词集=Sheet1, 总单词数=2504, 已学=5, 统计={'grid_0': 2499, 'grid_1': 5, 'grid_2': 0, 'grid_3': 0, 'grid_4': 0, 'grid_5': 0, 'grid_6': 0, 'grid_7': 0, 'grid_8': 0}

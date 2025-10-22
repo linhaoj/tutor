@@ -286,10 +286,8 @@ const goToNextTask = () => {
   sessionStorage.setItem(sessionKey, JSON.stringify(currentGroupWords))
   console.log(`SimpleWordStudy - 已保存第${groupNumber}组单词到sessionStorage:`, currentGroupWords.map(w => w.english))
 
-  // 标记第一个任务完成
-  const studentId = parseInt(route.params.studentId as string)
-  const wordSet = route.query.wordSet as string
-  progressStore.completeTask(studentId, wordSet, groupNumber, 1)
+  // 注意：不再立即更新后端进度，只在最终提交时更新
+  // 临时数据保存在sessionStorage中
 
   // 获取总学习单词数
   const totalWordsCount = parseInt(route.query.totalWords as string) || allWords.value.length

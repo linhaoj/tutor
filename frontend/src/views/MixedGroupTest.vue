@@ -370,19 +370,17 @@ const completeAllTests = () => {
   const wordSet = route.query.wordSet as string
   const totalWordsCount = totalLearningGroups.value * 5
 
-  // 计算当前批次的起始组号和组数
-  // currentBatchStartGroup 是本次学习开始的组号（由WordCheckTask传递）
-  // 例如：第一批学习组1，第二批学习组2
-  const currentBatchStartGroup = route.query.currentBatchStartGroup
-    ? parseInt(route.query.currentBatchStartGroup as string)
-    : 1
-  // 当前批次只学习了1组（每次SimpleWordStudy只学5个单词=1组）
-  const currentBatchGroupCount = 1
+  // 计算本轮学习的所有组数
+  // 本轮学习从第1组开始，到当前最后一组结束
+  const currentBatchStartGroup = 1  // 总是从第1组开始
+  // 本轮学习的组数 = totalLearningGroups（已完成的组数，包括当前组）
+  const currentBatchGroupCount = totalLearningGroups.value
 
   console.log('MixedGroupTest完成 - 跳转到训后检测', {
     currentBatchStartGroup,
     currentBatchGroupCount,
-    totalGroups: totalGroups.value
+    totalGroups: totalGroups.value,
+    totalLearningGroups: totalLearningGroups.value
   })
 
   ElMessage.success('混组检测全部完成！进入训后检测阶段')

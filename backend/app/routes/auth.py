@@ -262,9 +262,20 @@ async def delete_user(
     if user.role == "teacher":
         # 1. 删除该教师的所有学生及其关联数据
         students = db.query(Student).filter(Student.teacher_id == user_id).all()
+        student_user_ids = []  # 收集学生的user_id，稍后删除User账号
         for student in students:
+            # 保存学生的user_id
+            if student.user_id:
+                student_user_ids.append(student.user_id)
             # 删除学生的所有关联数据会通过Student的级联删除自动处理
             db.delete(student)
+
+        # 删除学生关联的User账号
+        for student_user_id in student_user_ids:
+            student_user = db.query(User).filter(User.id == student_user_id).first()
+            if student_user:
+                db.delete(student_user)
+                logger.info(f"删除学生User账号: {student_user.username}")
 
         # 2. 删除该教师创建的单词集（会级联删除单词）
         word_sets = db.query(WordSet).filter(WordSet.owner_id == user_id).all()
@@ -281,7 +292,7 @@ async def delete_user(
         for session in sessions:
             db.delete(session)
 
-        logger.info(f"删除教师关联数据: 学生={len(students)}个, 单词集={len(word_sets)}个, 课程={len(schedules)}个, 抗遗忘会话={len(sessions)}个")
+        logger.info(f"删除教师关联数据: 学生={len(students)}个(含User账号), 单词集={len(word_sets)}个, 课程={len(schedules)}个, 抗遗忘会话={len(sessions)}个")
 
     # 删除用户
     db.delete(user)

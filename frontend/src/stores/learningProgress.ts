@@ -264,6 +264,31 @@ export const useLearningProgressStore = defineStore('learningProgress', () => {
     console.log('Start learning progress:', { studentId, wordSetName, totalGroups })
   }
 
+  /**
+   * 批量获取所有单词的学习进度（WordFilter优化使用）
+   * 返回一个对象，key是单词索引，value是阶段号
+   */
+  const getAllWordProgress = async (
+    studentId: number,
+    wordSetName: string
+  ): Promise<Record<number, number>> => {
+    try {
+      // 使用现有的批量获取API
+      const progressList = await fetchStudentProgress(studentId, wordSetName)
+
+      // 转换为 { wordIndex: currentStage } 的格式
+      const progressMap: Record<number, number> = {}
+      progressList.forEach(p => {
+        progressMap[p.word_index] = p.current_stage
+      })
+
+      return progressMap
+    } catch (error) {
+      console.error('Get all word progress error:', error)
+      return {}
+    }
+  }
+
   return {
     progresses,
     loading,
@@ -276,6 +301,7 @@ export const useLearningProgressStore = defineStore('learningProgress', () => {
     updateWordProgress,
     updateWordProgressForUser,
     completeTask,
-    startLearningProgress
+    startLearningProgress,
+    getAllWordProgress
   }
 })

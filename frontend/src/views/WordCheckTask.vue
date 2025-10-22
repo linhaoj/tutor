@@ -318,12 +318,8 @@ const goToNextTask = () => {
     return
   }
 
-  // 标记第二个任务完成
-  const studentId = parseInt(route.params.studentId as string)
-  const wordSet = route.query.wordSet as string
+  // 注意：不再立即更新后端进度，只在最终提交时更新
   const groupNumber = parseInt(route.query.groupNumber as string) || 1
-
-  progressStore.completeTask(studentId, wordSet, groupNumber, 2)
 
   // 获取总学习单词数（从localStorage或其他方式）
   const totalWordsCount = parseInt(route.query.totalWords as string) || groupNumber * 5

@@ -33,10 +33,20 @@
       </el-select>
       <span class="word-count">共 {{ filteredWords.length }} 个单词</span>
       
-      <!-- 删除单词集按钮 -->
-      <el-button 
-        v-if="selectedWordSet && authStore.isAdmin" 
-        type="danger" 
+      <!-- 单词集操作按钮 -->
+      <el-button
+        v-if="selectedWordSet && authStore.isAdmin"
+        type="warning"
+        size="small"
+        @click="showRenameWordSetDialog"
+      >
+        <el-icon><Edit /></el-icon>
+        重命名单词集
+      </el-button>
+
+      <el-button
+        v-if="selectedWordSet && authStore.isAdmin"
+        type="danger"
         size="small"
         @click="deleteWordSet"
       >
@@ -123,9 +133,40 @@
       </template>
     </el-dialog>
 
+    <!-- 重命名单词集对话框 -->
+    <el-dialog
+      v-model="renameDialogVisible"
+      title="重命名单词集"
+      width="500px"
+    >
+      <el-form label-width="120px">
+        <el-form-item label="当前名称">
+          <el-input :value="selectedWordSet" disabled />
+        </el-form-item>
+        <el-form-item label="新名称" required>
+          <el-input
+            v-model="newWordSetName"
+            placeholder="请输入新的单词集名称"
+            @keyup.enter="renameWordSet"
+          />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="renameDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          @click="renameWordSet"
+          :loading="renaming"
+        >
+          确定重命名
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- Excel导入对话框 -->
-    <el-dialog 
-      v-model="importDialogVisible" 
+    <el-dialog
+      v-model="importDialogVisible"
       title="导入Excel单词"
       width="800px"
     >
@@ -223,7 +264,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Upload, Delete } from '@element-plus/icons-vue'
+import { Plus, Upload, Delete, Edit } from '@element-plus/icons-vue'
 import * as XLSX from 'xlsx'
 
 // 接口定义
@@ -253,9 +294,12 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const wordDialogVisible = ref(false)
 const importDialogVisible = ref(false)
+const renameDialogVisible = ref(false)
 const isEditingWord = ref(false)
 const savingWord = ref(false)
 const importing = ref(false)
+const renaming = ref(false)
+const newWordSetName = ref('')
 
 // Excel相关状态
 const excelSheets = ref<ExcelSheet[]>([])
@@ -349,27 +393,69 @@ const deleteWord = async (word: any) => {
   }
 }
 
+const showRenameWordSetDialog = () => {
+  if (!selectedWordSet.value) return
+  newWordSetName.value = selectedWordSet.value
+  renameDialogVisible.value = true
+}
+
+const renameWordSet = async () => {
+  if (!selectedWordSet.value || !newWordSetName.value) {
+    ElMessage.error('请输入新的单词集名称')
+    return
+  }
+
+  if (newWordSetName.value === selectedWordSet.value) {
+    ElMessage.warning('新名称与当前名称相同')
+    return
+  }
+
+  // 检查新名称是否已存在
+  const exists = wordSets.value.some(set => set.name === newWordSetName.value)
+  if (exists) {
+    ElMessage.error('该单词集名称已存在，请使用其他名称')
+    return
+  }
+
+  renaming.value = true
+
+  try {
+    await wordsStore.renameWordSet(selectedWordSet.value, newWordSetName.value)
+
+    // 更新当前选中的单词集
+    selectedWordSet.value = newWordSetName.value
+
+    ElMessage.success('单词集重命名成功')
+    renameDialogVisible.value = false
+  } catch (error) {
+    ElMessage.error('重命名失败')
+    console.error('重命名错误:', error)
+  } finally {
+    renaming.value = false
+  }
+}
+
 const deleteWordSet = async () => {
   if (!selectedWordSet.value) return
-  
+
   const wordsInSet = words.value.filter(w => w.word_set === selectedWordSet.value)
-  
+
   try {
     await ElMessageBox.confirm(
-      `确定要删除单词集 "${selectedWordSet.value}" 吗？这将删除该单词集下的所有 ${wordsInSet.length} 个单词。`, 
-      '确认删除单词集', 
+      `确定要删除单词集 "${selectedWordSet.value}" 吗？这将删除该单词集下的所有 ${wordsInSet.length} 个单词。`,
+      '确认删除单词集',
       {
         type: 'warning',
         confirmButtonText: '确认删除',
         cancelButtonText: '取消'
       }
     )
-    
+
     wordsStore.deleteWordSet(selectedWordSet.value)
-    
+
     // 重置筛选
     selectedWordSet.value = ''
-    
+
     ElMessage.success(`单词集已删除`)
   } catch {
     // 用户取消删除

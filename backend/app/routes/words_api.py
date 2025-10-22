@@ -202,6 +202,35 @@ async def delete_word(
     return {"message": "单词删除成功"}
 
 
+@router.put("/sets/{word_set_name}/rename")
+async def rename_word_set(
+    word_set_name: str,
+    rename_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """重命名单词集"""
+    word_set = db.query(WordSet).filter(WordSet.name == word_set_name).first()
+    if not word_set:
+        raise HTTPException(status_code=404, detail="单词集不存在")
+
+    new_name = rename_data.get('new_name')
+    if not new_name:
+        raise HTTPException(status_code=400, detail="新名称不能为空")
+
+    # 检查新名称是否已存在
+    existing = db.query(WordSet).filter(WordSet.name == new_name).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="单词集名称已存在")
+
+    old_name = word_set.name
+    word_set.name = new_name
+    db.commit()
+
+    logger.info(f"重命名单词集: {old_name} → {new_name}, 教师={current_user.username}")
+    return {"message": "单词集重命名成功", "old_name": old_name, "new_name": new_name}
+
+
 @router.delete("/sets/{word_set_name}")
 async def delete_word_set(
     word_set_name: str,

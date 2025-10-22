@@ -115,8 +115,14 @@ class Schedule(Base):
     teacher_id = Column(String(50), ForeignKey("users.id"), nullable=False)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
     student_name = Column(String(100), nullable=False)  # 冗余，便于查询
-    date = Column(Date, nullable=False, index=True)
-    time = Column(String(10), nullable=False)  # 例如: "14:00"
+
+    # 时区支持：存储UTC时间
+    scheduled_at = Column(DateTime, nullable=False, index=True)  # UTC时间
+
+    # 向后兼容字段（保留旧字段，但逐步迁移）
+    date = Column(Date, nullable=True, index=True)  # 旧字段：仅日期
+    time = Column(String(10), nullable=True)  # 旧字段：仅时间 "14:00"
+
     word_set_name = Column(String(100), nullable=False)
     course_type = Column(String(20), nullable=False)  # 'learning', 'review'
     duration = Column(Integer, default=60)  # 课程时长（分钟）

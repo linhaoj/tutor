@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>时区测试</title>
+</head>
+<body>
+  <h1>时区转换测试</h1>
+
+  <h2>测试场景：芝加哥管理员安排课程</h2>
+  <div id="test1"></div>
+
+  <h2>测试场景：北京老师查看课程</h2>
+  <div id="test2"></div>
+
+  <h2>测试场景：夏令时切换</h2>
+  <div id="test3"></div>
+
+  <script>
+    // 模拟 timezone.ts 中的函数
+    function localToUTC(localDateStr, localTimeStr) {
+      const dateTimeParts = `${localDateStr}T${localTimeStr}:00`
+      const localDate = new Date(dateTimeParts)
+      return localDate.toISOString()
+    }
+
+    function utcToLocalDateTime(utcDateTimeStr) {
+      const date = new Date(utcDateTimeStr)
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const hours = String(date.getHours()).padStart(2, '0')
+      const minutes = String(date.getMinutes()).padStart(2, '0')
+      return {
+        date: `${year}-${month}-${day}`,
+        time: `${hours}:${minutes}`
+      }
+    }
+
+    // 测试1：芝加哥管理员创建课程
+    console.log('=== 测试1：芝加哥时间 →  UTC ===')
+    // 注意：这个测试在你的浏览器时区运行，结果会根据你的时区显示
+    const chicagoInput = { date: '2025-10-21', time: '15:00' }
+    const utcTime = localToUTC(chicagoInput.date, chicagoInput.time)
+
+    document.getElementById('test1').innerHTML = `
+      <p><strong>芝加哥管理员输入：</strong>2025-10-21 15:00（星期二下午3点）</p>
+      <p><strong>存储的UTC时间：</strong>${utcTime}</p>
+      <p><em>（注意：此测试在你当前浏览器时区运行，所以UTC时间是基于你的时区计算的）</em></p>
+    `
+
+    // 测试2：北京老师查看
+    console.log('=== 测试2：UTC → 本地时间 ===')
+    // 假设UTC时间为芝加哥冬令时（UTC-6）下午3点
+    const utcTimeChicago = '2025-10-21T21:00:00Z'  // 芝加哥 15:00 = UTC 21:00
+    const beijingTime = utcToLocalDateTime(utcTimeChicago)
+
+    document.getElementById('test2').innerHTML = `
+      <p><strong>存储的UTC时间：</strong>2025-10-21T21:00:00Z</p>
+      <p><strong>你的本地时间：</strong>${beijingTime.date} ${beijingTime.time}</p>
+      <p><em>（如果你在北京，应该显示：2025-10-22 05:00，即星期三早上5点）</em></p>
+    `
+
+    // 测试3：夏令时对比
+    console.log('=== 测试3：夏令时 vs 冬令时 ===')
+    // 芝加哥夏令时（UTC-5）vs 冬令时（UTC-6）
+    const summerUTC = '2025-06-21T20:00:00Z'  // 夏令时：芝加哥 15:00 = UTC 20:00
+    const winterUTC = '2025-12-21T21:00:00Z'  // 冬令时：芝加哥 15:00 = UTC 21:00
+
+    const summerBeijing = utcToLocalDateTime(summerUTC)
+    const winterBeijing = utcToLocalDateTime(winterUTC)
+
+    document.getElementById('test3').innerHTML = `
+      <h3>夏令时（6月）：</h3>
+      <p><strong>芝加哥：</strong>2025-06-21 15:00 (UTC-5)</p>
+      <p><strong>UTC：</strong>2025-06-21T20:00:00Z</p>
+      <p><strong>你的本地时间：</strong>${summerBeijing.date} ${summerBeijing.time}</p>
+      <p><em>（北京应显示：2025-06-22 04:00）</em></p>
+
+      <h3>冬令时（12月）：</h3>
+      <p><strong>芝加哥：</strong>2025-12-21 15:00 (UTC-6)</p>
+      <p><strong>UTC：</strong>2025-12-21T21:00:00Z</p>
+      <p><strong>你的本地时间：</strong>${winterBeijing.date} ${winterBeijing.time}</p>
+      <p><em>（北京应显示：2025-12-22 05:00）</em></p>
+    `
+
+    // 额外：显示当前浏览器时区
+    const offset = -new Date().getTimezoneOffset() / 60
+    const sign = offset >= 0 ? '+' : ''
+    console.log(`你的浏览器时区：UTC${sign}${offset}`)
+  </script>
+</body>
+</html>
