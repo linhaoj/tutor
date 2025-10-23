@@ -40,9 +40,24 @@ def migrate_database():
             logger.info("✅ students.teacher_id 列添加成功")
             migration_count += 1
 
+        if not check_column_exists('students', 'remaining_hours'):
+            logger.info("🔧 迁移 #3: 给 students 表添加 remaining_hours 列")
+            db.execute(text("ALTER TABLE students ADD COLUMN remaining_hours REAL DEFAULT 0"))
+            db.commit()
+            logger.info("✅ students.remaining_hours 列添加成功")
+            migration_count += 1
+
+        # ========== 单词表迁移 ==========
+        if not check_column_exists('words', 'word_set_id'):
+            logger.info("🔧 迁移 #4: 给 words 表添加 word_set_id 列")
+            db.execute(text("ALTER TABLE words ADD COLUMN word_set_id INTEGER"))
+            db.commit()
+            logger.info("✅ words.word_set_id 列添加成功")
+            migration_count += 1
+
         # ========== 课程表迁移 ==========
         if not check_column_exists('schedules', 'scheduled_at'):
-            logger.info("🔧 迁移 #3: 给 schedules 表添加 scheduled_at 列")
+            logger.info("🔧 迁移 #5: 给 schedules 表添加 scheduled_at 列")
             db.execute(text("ALTER TABLE schedules ADD COLUMN scheduled_at TIMESTAMP"))
             db.commit()
             logger.info("✅ schedules.scheduled_at 列添加成功")
@@ -60,7 +75,7 @@ def migrate_database():
             logger.info(f"✅ 已迁移 {result.rowcount} 条课程记录")
 
         if not check_column_exists('schedules', 'teacher_id'):
-            logger.info("🔧 迁移 #4: 给 schedules 表添加 teacher_id 列")
+            logger.info("🔧 迁移 #6: 给 schedules 表添加 teacher_id 列")
             db.execute(text("ALTER TABLE schedules ADD COLUMN teacher_id TEXT"))
             db.commit()
             logger.info("✅ schedules.teacher_id 列添加成功")
@@ -68,14 +83,14 @@ def migrate_database():
 
         # ========== 单词集表迁移 ==========
         if not check_column_exists('word_sets', 'owner_id'):
-            logger.info("🔧 迁移 #5: 给 word_sets 表添加 owner_id 列")
+            logger.info("🔧 迁移 #7: 给 word_sets 表添加 owner_id 列")
             db.execute(text("ALTER TABLE word_sets ADD COLUMN owner_id TEXT"))
             db.commit()
             logger.info("✅ word_sets.owner_id 列添加成功")
             migration_count += 1
 
         if not check_column_exists('word_sets', 'is_global'):
-            logger.info("🔧 迁移 #6: 给 word_sets 表添加 is_global 列")
+            logger.info("🔧 迁移 #8: 给 word_sets 表添加 is_global 列")
             db.execute(text("ALTER TABLE word_sets ADD COLUMN is_global BOOLEAN DEFAULT 1"))
             db.commit()
             logger.info("✅ word_sets.is_global 列添加成功（默认全局共享）")
@@ -102,9 +117,10 @@ def migrate_database():
 def verify_migrations():
     """验证所有必需的列是否存在"""
     required_columns = {
-        'students': ['user_id', 'teacher_id'],
+        'students': ['user_id', 'teacher_id', 'remaining_hours'],
         'schedules': ['scheduled_at', 'teacher_id'],
-        'word_sets': ['owner_id', 'is_global']
+        'word_sets': ['owner_id', 'is_global'],
+        'words': ['word_set_id']
     }
 
     logger.info("🔍 验证数据库架构...")
