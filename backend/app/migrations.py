@@ -50,9 +50,10 @@ def migrate_database():
 
             # 数据迁移：将旧的 date + time 转换为 scheduled_at
             logger.info("🔄 迁移现有课程数据到新字段...")
+            # 使用 || 连接字符串，避免 :00 被误认为绑定参数
             result = db.execute(text("""
                 UPDATE schedules
-                SET scheduled_at = datetime(date || ' ' || time || ':00')
+                SET scheduled_at = datetime(date || ' ' || time || char(58) || '00')
                 WHERE date IS NOT NULL AND time IS NOT NULL
             """))
             db.commit()
