@@ -399,11 +399,17 @@ const updateLearningProgress = async () => {
   let unchangedCount = 0
   let uncheckedCount = 0
 
+  console.log('=== 开始更新学习进度 ===')
+  console.log('总单词数:', allWords.value.length)
+  console.log('单词列表:', allWords.value.map(w => `${w.english}(idx:${w.originalIndex}, status:${w.status})`))
+
   // 处理所有单词，不只是有明确状态的单词
   for (const word of allWords.value) {
     // 获取当前阶段（使用新的API方式，不需要teacherId）
     const currentProgress = await progressStore.getWordProgress(studentId, wordSet, word.originalIndex)
     const currentStage = currentProgress ? currentProgress.currentStage : 0
+
+    console.log(`处理单词 "${word.english}" - originalIndex: ${word.originalIndex}, 当前阶段: ${currentStage}, 状态: ${word.status}`)
 
     if (word.status === 'passed') {
       // 通过的单词 - 阶段+1
@@ -412,13 +418,13 @@ const updateLearningProgress = async () => {
 
       if (newStage > currentStage) {
         promotedCount++
-        console.log(`单词 "${word.english}" 从阶段${currentStage}进入阶段${newStage}`)
+        console.log(`✓ 单词 "${word.english}" (idx:${word.originalIndex}) 从阶段${currentStage}进入阶段${newStage}`)
       }
     } else if (word.status === 'failed') {
       // 未通过的单词 - 保持当前阶段不变
       await progressStore.updateWordProgress(studentId, wordSet, word.originalIndex, currentStage)
       unchangedCount++
-      console.log(`单词 "${word.english}" 保持在阶段${currentStage}（未通过）`)
+      console.log(`× 单词 "${word.english}" (idx:${word.originalIndex}) 保持在阶段${currentStage}（未通过）`)
     } else if (word.status === 'unchecked') {
       // 未检测的单词 - 如果当前阶段是0，提升到阶段1（认为已经学过）
       if (currentStage === 0) {
@@ -426,15 +432,18 @@ const updateLearningProgress = async () => {
         await progressStore.updateWordProgress(studentId, wordSet, word.originalIndex, newStage)
         promotedCount++
         uncheckedCount++
-        console.log(`单词 "${word.english}" 从阶段${currentStage}进入阶段${newStage}（未检测视为已学习）`)
+        console.log(`? 单词 "${word.english}" (idx:${word.originalIndex}) 从阶段${currentStage}进入阶段${newStage}（未检测视为已学习）`)
       } else {
         // 如果已经不在阶段0，保持当前阶段
         await progressStore.updateWordProgress(studentId, wordSet, word.originalIndex, currentStage)
         unchangedCount++
-        console.log(`单词 "${word.english}" 保持在阶段${currentStage}（未检测但已学过）`)
+        console.log(`? 单词 "${word.english}" (idx:${word.originalIndex}) 保持在阶段${currentStage}（未检测但已学过）`)
       }
     }
   }
+
+  console.log('=== 进度更新完成 ===')
+  console.log(`提升: ${promotedCount}, 不变: ${unchangedCount}, 未检测: ${uncheckedCount}`)
 
   let message = `学习进度已更新：${promotedCount}个单词进入下一阶段，${unchangedCount}个单词保持当前阶段`
   if (uncheckedCount > 0) {
@@ -1026,7 +1035,9 @@ const initializeWords = async () => {
 
   // 转换为训后检测用的单词格式
   allWords.value = sourceWords.map((word, index) => {
-    const originalIndex = startIndex + index
+    // 优先使用从sessionStorage传来的originalIndex
+    // 如果没有（旧数据或备用逻辑），则使用startIndex + index计算
+    const originalIndex = word.originalIndex !== undefined ? word.originalIndex : (startIndex + index)
     const savedWordStatus = savedStatus[originalIndex] || 'unchecked'
 
     return {

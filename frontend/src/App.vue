@@ -1,5 +1,8 @@
 <template>
   <div id="app">
+    <!-- 版本信息 -->
+    <VersionInfo />
+
     <!-- 登录页面时不显示侧边栏 -->
     <div v-if="isLoginPage" class="login-page">
       <router-view />
@@ -160,6 +163,7 @@ import { useStudentsStore } from '@/stores/students'
 import { useScheduleStore } from '@/stores/schedule'
 import { useLearningProgressStore } from '@/stores/learningProgress'
 import { useUIStore } from '@/stores/ui'
+import VersionInfo from '@/components/VersionInfo.vue'
 
 const route = useRoute()
 const router = useRouter()

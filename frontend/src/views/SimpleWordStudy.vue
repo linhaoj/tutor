@@ -121,6 +121,7 @@ interface StudyWord {
   chinese: string
   showChinese: boolean
   movedToBox: boolean
+  originalIndex?: number // 单词在完整单词库中的索引
 }
 
 // 响应式数据
@@ -281,7 +282,8 @@ const goToNextTask = () => {
   const currentGroupWords = displayWords.value.map(word => ({
     id: word.id,
     english: word.english,
-    chinese: word.chinese
+    chinese: word.chinese,
+    originalIndex: word.originalIndex // 保存原始索引
   }))
   sessionStorage.setItem(sessionKey, JSON.stringify(currentGroupWords))
   console.log(`SimpleWordStudy - 已保存第${groupNumber}组单词到sessionStorage:`, currentGroupWords.map(w => w.english))
@@ -302,7 +304,8 @@ const goToNextTask = () => {
       groupNumber,
       totalWords: totalWordsCount, // 传递总学习单词数
       startIndex: route.query.startIndex, // 传递起始位置
-      teacherId: route.query.teacherId // 传递教师ID
+      teacherId: route.query.teacherId, // 传递教师ID
+      learningMode: route.query.learningMode // 传递学习模式
     }
   })
 
@@ -335,12 +338,17 @@ const loadNextGroup = () => {
   console.log('remainingWords 数量:', remainingWords.value.length)
   console.log('remainingWords 内容:', remainingWords.value.map(w => w.english))
 
-  const wordsToLoad = remainingWords.value.slice(0, 5)
-  console.log('本组将加载的单词（加载前）:', wordsToLoad.map(w => w.english))
+  // 关键修复：先打乱剩余单词，再取前5个
+  // 这样每次加载新组时，都会从不同位置随机选择5个单词
+  const shuffledRemaining = shuffleArray([...remainingWords.value])
+  console.log('剩余单词（打乱后）:', shuffledRemaining.map(w => w.english))
 
-  // 打乱这组5个单词的顺序
+  const wordsToLoad = shuffledRemaining.slice(0, 5)
+  console.log('本组将加载的单词:', wordsToLoad.map(w => w.english))
+
+  // 再次打乱这组5个单词的显示顺序
   const shuffledWords = shuffleArray(wordsToLoad)
-  console.log('本组将加载的单词（打乱后）:', shuffledWords.map(w => w.english))
+  console.log('本组单词（最终显示顺序）:', shuffledWords.map(w => w.english))
 
   displayWords.value = shuffledWords.map(word => ({ ...word, showChinese: false }))
 
@@ -374,55 +382,45 @@ const initializeWords = async () => {
       console.error('获取筛选后的单词失败:', error)
     }
   }
-  
+
   if (!isFiltered) {
     // 使用原有逻辑获取单词（使用异步方法，后端API自动处理权限）
     sourceWords = wordSetName
       ? await wordsStore.getWordsBySet(wordSetName)
       : wordsStore.words
-      
+
     console.log('SimpleWordStudy - 加载单词数据:', {
       teacherId,
       wordSetName,
       wordsCount: sourceWords.length
     })
-    
+
     // 从指定位置开始，取指定数量的单词
     sourceWords = sourceWords.slice(startIndex, startIndex + wordsCount)
   }
-  
-  // 使用 Fisher-Yates 洗牌算法打乱单词顺序
-  const shuffleArray = <T>(array: T[]): T[] => {
-    const shuffled = [...array]
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
-      ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
-    }
-    return shuffled
-  }
-  
-  // 打乱单词顺序，确保每次学习顺序都不同
-  const shuffledWords = shuffleArray(sourceWords)
+
+  // 注意：不要在这里打乱全部单词顺序
+  // 因为我们要保证每组学习时都是随机的，而不是整体随机后再分组
 
   console.log('=== 初始化单词 ===')
-  console.log('源单词（打乱前）:', sourceWords.map((w: any) => w.english))
-  console.log('源单词（打乱后）:', shuffledWords.map((w: any) => w.english))
+  console.log('源单词（原始顺序）:', sourceWords.map((w: any) => w.english))
 
-  // 转换为学习用的单词格式
-  allWords.value = shuffledWords.map((word: any) => ({
+  // 转换为学习用的单词格式（保持原始顺序）
+  allWords.value = sourceWords.map((word: any) => ({
     id: word.id,
     english: word.english,
     chinese: word.chinese,
     showChinese: false,
-    movedToBox: false
+    movedToBox: false,
+    originalIndex: word.originalIndex // 保留原始索引（从filteredWords传递过来）
   }))
 
-  console.log('SimpleWordStudy - 单词已打乱顺序，准备学习:', allWords.value.length)
-  console.log('allWords 初始内容:', allWords.value.map(w => w.english))
-  
-  // 加载第一组的5个单词
+  console.log('SimpleWordStudy - 准备学习单词数量:', allWords.value.length)
+  console.log('allWords 初始内容（原始顺序）:', allWords.value.map(w => w.english))
+
+  // 加载第一组的5个单词（loadNextGroup会自动打乱）
   loadNextGroup()
-  
+
   const groupNumber = parseInt(route.query.groupNumber as string) || 1
   ElMessage.success(`开始第${groupNumber}组学习，共 ${allWords.value.length} 个单词`)
 }

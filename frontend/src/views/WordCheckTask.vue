@@ -343,7 +343,8 @@ const goToNextTask = () => {
       totalWords: totalWordsCount, // 传递总学习单词数
       startIndex: route.query.startIndex, // 传递起始位置信息
       teacherId: route.query.teacherId, // 传递教师ID
-      currentBatchStartGroup: currentBatchStartGroup // 传递当前批次起始组号（就是当前组）
+      currentBatchStartGroup: currentBatchStartGroup, // 传递当前批次起始组号（就是当前组）
+      learningMode: route.query.learningMode // 传递学习模式
     }
   })
 

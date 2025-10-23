@@ -61,10 +61,24 @@
       <el-card>
         <h3>开始学习</h3>
         <div class="learning-options">
+          <!-- 学习模式选择 -->
+          <div class="option-group">
+            <label>学习模式：</label>
+            <el-select
+              v-model="learningMode"
+              placeholder="请选择"
+              style="width: 200px"
+              @change="onLearningModeChange"
+            >
+              <el-option label="学习新词" value="new" />
+              <el-option label="复习旧词" value="review" />
+            </el-select>
+          </div>
+
           <div class="option-group">
             <label>选择学习单词数量：</label>
-            <el-select 
-              v-model="selectedWordsCount" 
+            <el-select
+              v-model="selectedWordsCount"
               placeholder="请选择"
               style="width: 200px"
             >
@@ -90,8 +104,8 @@
 
           <div class="available-info">
             <el-alert
-              :title="`可学习单词: ${availableWords} 个`"
-              type="info"
+              :title="`${learningMode === 'new' ? '可学习新词' : '可复习单词'}: ${availableWords} 个`"
+              :type="learningMode === 'new' ? 'info' : 'success'"
               :closable="false"
             />
           </div>
@@ -114,7 +128,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteUpdate } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useStudentsStore } from '@/stores/students'
 import { useWordsStore } from '@/stores/words'
@@ -138,6 +152,7 @@ const studentName = ref<string>('')
 const currentWordSet = ref<string>('')
 const selectedWordsCount = ref(10)
 const customWordsCount = ref(10)
+const learningMode = ref<'new' | 'review'>('new') // 学习模式：new=学习新词，review=复习旧词
 
 // 真实的九宫格数据（基于学习进度）
 const gridStats = ref({
@@ -164,12 +179,17 @@ const learnedWords = computed(() => {
 })
 
 const availableWords = computed(() => {
-  // 格子0-7的单词都可以学习
-  let count = 0
-  for (let i = 0; i <= 7; i++) {
-    count += (gridStats.value as any)[`grid_${i}`] || 0
+  if (learningMode.value === 'new') {
+    // 学习新词：只有格子0的单词可用
+    return gridStats.value.grid_0
+  } else {
+    // 复习旧词：格子1-7的单词可用
+    let count = 0
+    for (let i = 1; i <= 7; i++) {
+      count += (gridStats.value as any)[`grid_${i}`] || 0
+    }
+    return count
   }
-  return count
 })
 
 const progressPercentage = computed(() => {
@@ -206,17 +226,32 @@ const startLearning = () => {
     ElMessage.error(`可学习单词不足，最多只能选择${availableWords.value}个单词`)
     return
   }
-  
+
   // 跳转到单词筛选页面
   router.push({
     name: 'WordFilter',
     params: { studentId: studentId.value },
-    query: { 
+    query: {
       wordSet: route.query.wordSet || '',
       wordsCount: finalWordsCount.value,
-      teacherId: teacherId.value
+      teacherId: teacherId.value,
+      learningMode: learningMode.value // 传递学习模式
     }
   })
+}
+
+// 学习模式切换处理
+const onLearningModeChange = () => {
+  // 切换模式时，重置自定义数量
+  if (selectedWordsCount.value === 0) {
+    customWordsCount.value = Math.min(10, availableWords.value)
+  }
+
+  // 如果当前选择的数量超过可用单词数，自动调整
+  if (finalWordsCount.value > availableWords.value) {
+    selectedWordsCount.value = Math.min(10, availableWords.value)
+    ElMessage.warning(`已切换为${learningMode.value === 'new' ? '学习新词' : '复习旧词'}模式，可用单词数为${availableWords.value}`)
+  }
 }
 
 
@@ -329,6 +364,22 @@ onMounted(async () => {
   } catch (error) {
     ElMessage.error('加载学习数据失败')
     console.error(error)
+  }
+})
+
+// 在路由更新时刷新数据（处理同一路由但参数变化的情况）
+onBeforeRouteUpdate(async (to, from) => {
+  console.log('StudyHome 路由更新，刷新九宫格数据')
+  if (to.path === from.path) {
+    await loadRealGridStats()
+  }
+})
+
+// 监听路由变化，每次进入页面都刷新数据
+watch(() => route.fullPath, async () => {
+  if (route.name === 'StudyHome') {
+    console.log('StudyHome 页面路由变化，刷新九宫格数据')
+    await loadRealGridStats()
   }
 })
 

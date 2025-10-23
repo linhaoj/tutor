@@ -394,7 +394,8 @@ const completeAllTests = () => {
       startIndex: 0,
       teacherId: route.query.teacherId || '',
       currentBatchStartGroup: currentBatchStartGroup, // 当前批次起始组号
-      currentBatchGroupCount: currentBatchGroupCount // 当前批次组数
+      currentBatchGroupCount: currentBatchGroupCount, // 当前批次组数
+      learningMode: route.query.learningMode // 传递学习模式
     }
   })
 }
@@ -418,13 +419,14 @@ const startNextGroupLearning = (skipMode = false) => {
   router.push({
     name: 'SimpleWordStudy',
     params: { studentId },
-    query: { 
+    query: {
       wordSet,
       wordsCount: 5,
       groupNumber: nextGroupNumber,
       totalWords: totalWordsCount, // 传递总学习单词数
       startIndex: totalGroups.value * 5, // 从当前组数*5的位置开始
-      teacherId: route.query.teacherId || '' // 传递teacherId
+      teacherId: route.query.teacherId || '', // 传递teacherId
+      learningMode: route.query.learningMode // 传递学习模式
     }
   })
 }

@@ -38,29 +38,38 @@
         </template>
 
         <div class="words-grid">
-          <div 
-            v-for="(word, index) in currentWords" 
+          <div
+            v-for="(word, index) in currentWords"
             :key="`${word.id}-${index}`"
             class="word-item"
-            :class="{ 'selected': selectedKnownWords.includes(index) }"
-            @click="toggleWordSelection(index)"
+            :class="{ 'known': selectedKnownWords.includes(index) }"
           >
-            <div class="word-content">
-              <div class="english">{{ word.english }}</div>
+            <div class="word-card" @click="toggleWordDisplay(index)">
+              <div class="word-text">
+                {{ word.showChinese ? word.chinese : word.english }}
+              </div>
             </div>
+
             <div class="word-actions">
               <el-button
                 type="primary"
                 :icon="VideoPlay"
-                size="small"
                 circle
+                size="large"
                 @click.stop="playPronunciation(word.english)"
                 class="pronunciation-btn"
                 title="播放发音"
               />
-            </div>
-            <div class="selection-indicator" v-if="selectedKnownWords.includes(index)">
-              <el-icon class="check-icon"><Check /></el-icon>
+
+              <el-button
+                :type="selectedKnownWords.includes(index) ? 'success' : 'info'"
+                :icon="Check"
+                circle
+                size="large"
+                @click.stop="toggleWordSelection(index)"
+                class="known-btn"
+                :title="selectedKnownWords.includes(index) ? '已认识' : '标记为认识'"
+              />
             </div>
           </div>
         </div>
@@ -106,6 +115,8 @@ interface Word {
   id: number
   english: string
   chinese: string
+  originalIndex?: number // 单词在完整单词库中的索引
+  showChinese?: boolean // 是否显示中文
 }
 
 const route = useRoute()
@@ -120,6 +131,7 @@ const studentId = ref<number>(parseInt(route.params.studentId as string))
 const teacherId = ref<string>(route.query.teacherId as string || '')
 const wordSetName = ref<string>(route.query.wordSet as string || '')
 const wordsCount = ref<number>(parseInt(route.query.wordsCount as string) || 10)
+const learningMode = ref<'new' | 'review'>(route.query.learningMode as 'new' | 'review' || 'new')
 
 // 状态数据
 const studentName = ref<string>('')
@@ -163,13 +175,29 @@ const getAvailableReplacementWords = async (excludeWords: Word[]): Promise<Word[
     wordSetName.value
   )
 
-  // 过滤出真正需要学习的单词（格子0-6的单词）
+  // 根据学习模式过滤单词
   const filteredWords: Word[] = []
   for (const word of availableWords) {
     const wordIndex = allWords.findIndex(w => w.id === word.id)
     const stage = allProgress[wordIndex] || 0
-    if (stage >= 0 && stage <= 6) {
-      filteredWords.push(word)
+
+    // 根据学习模式过滤
+    if (learningMode.value === 'new') {
+      // 新词模式：只选择格子0的单词
+      if (stage === 0) {
+        filteredWords.push({
+          ...word,
+          originalIndex: wordIndex
+        })
+      }
+    } else {
+      // 复习模式：选择格子1-7的单词
+      if (stage >= 1 && stage <= 7) {
+        filteredWords.push({
+          ...word,
+          originalIndex: wordIndex
+        })
+      }
     }
   }
   return filteredWords
@@ -195,6 +223,13 @@ const playPronunciation = (word: string) => {
   } catch (error) {
     console.error('播放发音失败:', error)
     ElMessage.error('播放发音失败')
+  }
+}
+
+// 切换单词显示（中英文）
+const toggleWordDisplay = (index: number) => {
+  if (currentWords.value[index]) {
+    currentWords.value[index].showChinese = !currentWords.value[index].showChinese
   }
 }
 
@@ -318,7 +353,8 @@ const startLearning = () => {
       wordsCount: wordsCount.value,
       teacherId: teacherId.value,
       filtered: 'true', // 标记这些单词已经过筛选
-      groupNumber: nextGroupNumber.toString()
+      groupNumber: nextGroupNumber.toString(),
+      learningMode: learningMode.value // 传递学习模式
     }
   })
 }
@@ -348,7 +384,8 @@ const skipFilterAndStartLearning = () => {
       wordsCount: currentWords.value.length,
       teacherId: teacherId.value,
       filtered: 'true',
-      groupNumber: nextGroupNumber // 传递正确的 groupNumber
+      groupNumber: nextGroupNumber, // 传递正确的 groupNumber
+      learningMode: learningMode.value // 传递学习模式
     }
   })
 }
@@ -391,15 +428,30 @@ const initializeWords = async () => {
       wordSetName.value
     )
 
-    // 按格子分组单词
-    const wordsByStage: { [key: number]: Word[] } = {
-      0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []
+    // 按格子分组单词（根据学习模式选择范围）
+    let stageRange: number[] = []
+    if (learningMode.value === 'new') {
+      // 新词模式：只选择格子0
+      stageRange = [0]
+    } else {
+      // 复习模式：选择格子1-7
+      stageRange = [1, 2, 3, 4, 5, 6, 7]
     }
+
+    const wordsByStage: { [key: number]: Word[] } = {}
+    stageRange.forEach(stage => {
+      wordsByStage[stage] = []
+    })
 
     for (let index = 0; index < allWords.length; index++) {
       const stage = allProgress[index] || 0
-      if (stage >= 0 && stage <= 6) {
-        wordsByStage[stage].push(allWords[index])
+      if (stageRange.includes(stage)) {
+        // 为单词添加originalIndex字段
+        const wordWithIndex = {
+          ...allWords[index],
+          originalIndex: index
+        }
+        wordsByStage[stage].push(wordWithIndex)
       }
     }
 
@@ -415,13 +467,15 @@ const initializeWords = async () => {
       console.warn('无法加载最近学习记录:', error)
     }
 
-    // 智能选择单词：优先格子0，排除最近学过的
+    // 智能选择单词：根据学习模式选择，排除最近学过的
     const selectedWords: Word[] = []
     let remainingCount = wordsCount.value
 
-    // 按优先级顺序：格子0 > 格子1 > ... > 格子6
-    for (let stage = 0; stage <= 6 && selectedWords.length < wordsCount.value; stage++) {
-      const stageWords = wordsByStage[stage]
+    // 按优先级顺序遍历格子
+    for (const stage of stageRange) {
+      if (selectedWords.length >= wordsCount.value) break
+
+      const stageWords = wordsByStage[stage] || []
 
       // 过滤掉最近学过的单词
       const availableWords = stageWords.filter(word =>
@@ -439,14 +493,18 @@ const initializeWords = async () => {
       selectedWords.push(...shuffled.slice(0, count))
       remainingCount -= count
 
-      console.log(`从格子${stage}选择了${count}个单词 (可用:${wordsToSelect.length}, 最近学过排除:${stageWords.length - availableWords.length})`)
+      console.log(`[${learningMode.value}模式] 从格子${stage}选择了${count}个单词 (可用:${wordsToSelect.length}, 最近学过排除:${stageWords.length - availableWords.length})`)
     }
 
     if (selectedWords.length < wordsCount.value) {
       ElMessage.warning(`可学习单词不足，只有 ${selectedWords.length} 个单词可学习`)
     }
 
-    currentWords.value = selectedWords
+    // 初始化单词显示状态
+    currentWords.value = selectedWords.map(word => ({
+      ...word,
+      showChinese: false // 默认显示英文
+    }))
 
     // 记录本次选择的单词ID到"最近学习"列表
     const newRecentlyLearned = selectedWords.map(w => w.id)
@@ -577,8 +635,8 @@ onMounted(async () => {
 
 .words-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 15px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
   margin: 20px 0;
 }
 
@@ -586,13 +644,13 @@ onMounted(async () => {
   position: relative;
   border: 2px solid #e4e7ed;
   border-radius: 12px;
-  padding: 20px;
-  cursor: pointer;
+  padding: 15px;
   transition: all 0.3s ease;
   background: white;
   display: flex;
+  flex-direction: row;
   align-items: center;
-  justify-content: space-between;
+  gap: 15px;
 }
 
 .word-item:hover {
@@ -601,54 +659,52 @@ onMounted(async () => {
   box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
 }
 
-.word-item.selected {
+.word-item.known {
   border-color: #67c23a;
   background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(103, 194, 58, 0.15);
 }
 
-.word-content {
+.word-card {
   flex: 1;
-  text-align: left;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: 2px solid #e4e7ed;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
 }
 
-.english {
+.word-card:hover {
+  background: #f5f7fa;
+  border-color: #409eff;
+}
+
+.word-text {
   font-size: 28px;
   font-weight: 600;
   color: #303133;
-  margin: 0;
+  text-align: center;
+  padding: 15px;
+  user-select: none;
 }
 
 .word-actions {
-  margin-left: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .pronunciation-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 50px;
+  height: 50px;
 }
 
-.selection-indicator {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 24px;
-  height: 24px;
-  background: #67c23a;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.check-icon {
-  color: white;
-  font-size: 14px;
+.known-btn {
+  width: 50px;
+  height: 50px;
 }
 
 .filter-actions {
@@ -698,17 +754,23 @@ onMounted(async () => {
     flex-direction: column;
   }
 
-  .english {
-    font-size: 22px;
-  }
-
   .word-item {
-    padding: 15px;
+    padding: 12px;
   }
 
-  .pronunciation-btn {
-    width: 36px;
-    height: 36px;
+  .word-card {
+    min-height: 70px;
+  }
+
+  .word-text {
+    font-size: 22px;
+    padding: 10px;
+  }
+
+  .pronunciation-btn,
+  .known-btn {
+    width: 45px;
+    height: 45px;
   }
 }
 </style>
