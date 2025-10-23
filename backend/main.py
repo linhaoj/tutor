@@ -33,9 +33,16 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    """应用启动时创建数据库表"""
+    """应用启动时创建数据库表并执行迁移"""
+    # 1. 创建基础表结构
     create_tables()
-    # 初始化默认管理员
+
+    # 2. 执行数据库迁移（自动添加缺失的列）
+    from app.migrations import migrate_database, verify_migrations
+    migrate_database()
+    verify_migrations()
+
+    # 3. 初始化默认管理员
     from app.init_db import create_default_admin
     create_default_admin()
 
