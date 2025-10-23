@@ -101,14 +101,14 @@
                   >
                     <div class="schedule-time">{{ schedule.time }}</div>
                     <div class="schedule-content">
-                      <div class="schedule-title">{{ schedule.wordSet }}</div>
-                      <div class="schedule-student">{{ schedule.studentName }}</div>
+                      <div class="schedule-title">{{ schedule.word_set_name }}</div>
+                      <div class="schedule-student">{{ schedule.student_name }}</div>
                       <div class="schedule-type">
-                        <el-tag 
-                          :type="schedule.type === 'review' ? 'warning' : 'success'" 
+                        <el-tag
+                          :type="schedule.course_type === 'review' ? 'warning' : 'success'"
                           size="small"
                         >
-                          {{ schedule.type === 'review' ? '抗遗忘' : '单词学习' }}
+                          {{ schedule.course_type === 'review' ? '抗遗忘' : '单词学习' }}
                         </el-tag>
                       </div>
                     </div>
@@ -277,9 +277,9 @@ const handleCommand = (command: string) => {
 const startLearning = (schedule: Schedule) => {
   router.push({
     name: 'StudyHome',
-    params: { studentId: schedule.studentId },
-    query: { 
-      wordSet: schedule.wordSet,
+    params: { studentId: schedule.student_id.toString() },
+    query: {
+      wordSet: schedule.word_set_name,
       teacherId: authStore.currentUser?.id || ''
     }
   })
