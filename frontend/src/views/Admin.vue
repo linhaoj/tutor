@@ -1774,7 +1774,18 @@ const submitAddSchedule = async () => {
   }
 
   try {
-    const dateStr = new Date(scheduleForm.date).toISOString().split('T')[0]
+// 修复时区问题：确保使用本地日期
+      let dateStr
+      if (scheduleForm.date instanceof Date) {
+        // Date对象：格式化为YYYY-MM-DD（本地时间）
+        const year = scheduleForm.date.getFullYear()
+        const month = String(scheduleForm.date.getMonth() + 1).padStart(2, '0')
+        const day = String(scheduleForm.date.getDate()).padStart(2, '0')
+        dateStr = `${year}-${month}-${day}`
+      } else {
+        // 字符串：直接使用
+        dateStr = scheduleForm.date
+      }
 
     const result = await scheduleStore.addSchedule({
       student_id: parseInt(scheduleForm.studentId),
