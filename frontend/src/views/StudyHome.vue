@@ -94,10 +94,11 @@
 
           <div v-if="selectedWordsCount === 0" class="option-group">
             <label>自定义数量：</label>
-            <el-input-number 
-              v-model="customWordsCount" 
-              :min="1" 
-              :max="availableWords"
+            <el-input-number
+              v-model="customWordsCount"
+              :min="Math.min(1, availableWords)"
+              :max="Math.max(1, availableWords)"
+              :disabled="availableWords === 0"
               style="width: 200px"
             />
           </div>
@@ -253,6 +254,22 @@ const onLearningModeChange = () => {
     ElMessage.warning(`已切换为${learningMode.value === 'new' ? '学习新词' : '复习旧词'}模式，可用单词数为${availableWords.value}`)
   }
 }
+
+// 监听可用单词数变化，自动调整选择
+watch(availableWords, (newAvailable) => {
+  if (selectedWordsCount.value === 0) {
+    // 自定义模式：确保不超过可用数量
+    if (customWordsCount.value > newAvailable) {
+      customWordsCount.value = Math.max(1, newAvailable)
+    }
+  } else {
+    // 预设模式：如果超过可用数量，自动切换到自定义
+    if (selectedWordsCount.value > newAvailable) {
+      selectedWordsCount.value = 0
+      customWordsCount.value = Math.max(1, newAvailable)
+    }
+  }
+})
 
 
 // 加载真实的九宫格统计数据
