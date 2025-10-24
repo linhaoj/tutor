@@ -97,7 +97,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, Box, VideoPlay } from '@element-plus/icons-vue'
@@ -331,7 +331,7 @@ const shuffleArray = <T>(array: T[]): T[] => {
   return shuffled
 }
 
-const loadNextGroup = () => {
+const loadNextGroup = async () => {
   console.log('=== 加载新组单词 ===')
   console.log('allWords 总数:', allWords.value.length)
   console.log('allWords 内容:', allWords.value.map(w => `${w.english}(moved:${w.movedToBox})`))
@@ -353,6 +353,10 @@ const loadNextGroup = () => {
   displayWords.value = shuffledWords.map(word => ({ ...word, showChinese: false }))
 
   console.log('displayWords 已更新:', displayWords.value.map(w => w.english))
+
+  // 等待DOM更新完成
+  await nextTick()
+  console.log('DOM已更新完成')
 }
 
 
@@ -419,7 +423,7 @@ const initializeWords = async () => {
   console.log('allWords 初始内容（原始顺序）:', allWords.value.map(w => w.english))
 
   // 加载第一组的5个单词（loadNextGroup会自动打乱）
-  loadNextGroup()
+  await loadNextGroup()
 
   const groupNumber = parseInt(route.query.groupNumber as string) || 1
   ElMessage.success(`开始第${groupNumber}组学习，共 ${allWords.value.length} 个单词`)
