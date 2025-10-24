@@ -344,7 +344,8 @@ const confirmSelection = async () => {
           type: 'success'
         })
 
-        startLearning()
+        // 传递 true 参数，跳过保存单词（已在上面保存了unknownWords）
+        startLearning(true)
         return
       }
 
@@ -415,10 +416,13 @@ const confirmSelection = async () => {
 }
 
 // 开始学习
-const startLearning = () => {
+const startLearning = (skipSaveWords = false) => {
   // 将筛选后的单词存储到sessionStorage中，供学习页面使用
-  const wordsForLearning = currentWords.value.slice(0, wordsCount.value)
-  sessionStorage.setItem('filteredWords', JSON.stringify(wordsForLearning))
+  // 复习模式下，已经保存了不会的单词，跳过这一步
+  if (!skipSaveWords) {
+    const wordsForLearning = currentWords.value.slice(0, wordsCount.value)
+    sessionStorage.setItem('filteredWords', JSON.stringify(wordsForLearning))
+  }
 
   // 检查是否是继续练习（从训后检测返回）
   const continueSession = route.query.continueSession === 'true'
@@ -444,13 +448,17 @@ const startLearning = () => {
     nextGroupNumber = 1
   }
 
+  // 获取实际要学习的单词数量
+  const filteredWords = sessionStorage.getItem('filteredWords')
+  const actualWordsCount = filteredWords ? JSON.parse(filteredWords).length : wordsCount.value
+
   // 跳转到第一个学习任务
   router.push({
     name: 'SimpleWordStudy',
     params: { studentId: studentId.value },
     query: {
       wordSet: wordSetName.value,
-      wordsCount: wordsCount.value,
+      wordsCount: actualWordsCount, // 使用实际单词数量
       teacherId: teacherId.value,
       filtered: 'true', // 标记这些单词已经过筛选
       groupNumber: nextGroupNumber.toString(),
