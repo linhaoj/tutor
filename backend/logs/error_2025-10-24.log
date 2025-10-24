@@ -1,0 +1,15 @@
+2025-10-24 02:11:43 | ERROR    | db_safety:71 | 创建学生失败 [数据库错误]: (sqlite3.OperationalError) no such column: students.user_id
+[SQL: SELECT students.id AS students_id, students.user_id AS students_user_id, students.teacher_id AS students_teacher_id, students.name AS students_name, students.email AS students_email, students.remaining_hours AS students_remaining_hours, students.created_at AS students_created_at, students.updated_at AS students_updated_at 
+FROM students 
+WHERE students.user_id = ?
+ LIMIT ? OFFSET ?]
+[parameters: ('user-1761214302659', 1, 0)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+2025-10-24 04:44:22 | ERROR    | app.migrations:94 | ❌ 迁移过程中出现未知错误: (sqlalchemy.exc.InvalidRequestError) A value is required for bind parameter '00'
+[SQL: 
+                UPDATE schedules
+                SET scheduled_at = datetime(date || ' ' || time || '?')
+                WHERE date IS NOT NULL AND time IS NOT NULL
+            ]
+[parameters: [{}]]
+(Background on this error at: https://sqlalche.me/e/20/cd3x)

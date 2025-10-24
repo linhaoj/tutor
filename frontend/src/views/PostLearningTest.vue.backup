@@ -333,34 +333,21 @@ const clearTestStatusStorage = () => {
 }
 
 const endPracticeAndCreateAntiForget = async () => {
-    // 在路由跳转前，先保存当前路由参数（避免跳转后丢失）
-    const wordSetName = route.query.wordSet as string || ''
-    const totalWords = parseInt(route.query.totalWords as string) || 10
-    const startIndex = parseInt(route.query.startIndex as string) || 0
-    const studentId = parseInt(route.params.studentId as string)
+  // 更新学习进度
+  await updateLearningProgress()
 
-    // 更新学习进度
-    await updateLearningProgress()
+  // 创建抗遗忘任务（内部会自动记录通过的单词）
+  await createAntiForgetTasks()
 
-    // 创建抗遗忘任务（内部会自动记录通过的单词）
-    await createAntiForgetTasks()
+  // 标记当前课程为已完成
+  await markCourseAsCompleted()
 
-    // 标记当前课程为已完成
-    await markCourseAsCompleted()
+  // 清理sessionStorage中的检测状态数据
+  clearTestStatusStorage()
 
-    // 清理sessionStorage中的检测状态数据（使用保存的参数）
-    const storageKey =
-  `postTestStatus_${studentId}_${wordSetName}_${startIndex}_${totalWords}`
-    try {
-      sessionStorage.removeItem(storageKey)
-      console.log('已清理检测状态缓存:', storageKey)
-    } catch (error) {
-      console.warn('清理检测状态缓存失败:', error)
-    }
-
-    // 完全结束课程（清除计时）
-    uiStore.endCourse()
-  }
+  // 完全结束课程（清除计时）
+  uiStore.endCourse()
+}
 
 const markCourseAsCompleted = async () => {
   try {
