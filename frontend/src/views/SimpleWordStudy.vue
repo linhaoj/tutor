@@ -399,7 +399,8 @@ const goToNextTask = () => {
       totalWords: totalWordsCount, // 传递总学习单词数
       startIndex: route.query.startIndex, // 传递起始位置
       teacherId: route.query.teacherId, // 传递教师ID
-      learningMode: route.query.learningMode // 传递学习模式
+      learningMode: route.query.learningMode, // 传递学习模式
+      filtered: route.query.filtered // 传递筛选标记
     }
   })
 

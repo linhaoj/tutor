@@ -395,7 +395,8 @@ const completeAllTests = () => {
       teacherId: route.query.teacherId || '',
       currentBatchStartGroup: currentBatchStartGroup, // 当前批次起始组号
       currentBatchGroupCount: currentBatchGroupCount, // 当前批次组数
-      learningMode: route.query.learningMode // 传递学习模式
+      learningMode: route.query.learningMode, // 传递学习模式
+      filtered: route.query.filtered // 传递筛选标记
     }
   })
 }
@@ -426,7 +427,8 @@ const startNextGroupLearning = (skipMode = false) => {
       totalWords: totalWordsCount, // 传递总学习单词数
       startIndex: totalGroups.value * 5, // 从当前组数*5的位置开始
       teacherId: route.query.teacherId || '', // 传递teacherId
-      learningMode: route.query.learningMode // 传递学习模式
+      learningMode: route.query.learningMode, // 传递学习模式
+      filtered: route.query.filtered // 传递筛选标记
     }
   })
 }
