@@ -336,7 +336,14 @@ const confirmSelection = async () => {
         // 2. 不会的单词进入学习流程
         const unknownWords = selectedKnownWords.value.map(index => currentWords.value[index])
         sessionStorage.setItem('filteredWords', JSON.stringify(unknownWords))
-        ElMessage.success(`${knownWords.length}个会的单词已前进一格，开始学习${unknownWords.length}个不会的单词`)
+
+        const knownCount = knownWords.length
+        const unknownCount = unknownWords.length
+        ElMessage({
+          message: `${knownCount}个会的单词已前进一格，开始学习${unknownCount}个不会的单词`,
+          type: 'success'
+        })
+
         startLearning()
         return
       }
