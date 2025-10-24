@@ -30,7 +30,7 @@
       <el-card>
         <template #header>
           <div class="card-header">
-            <span>请选择你已经认识的单词</span>
+            <span>{{ learningMode === 'review' ? '请选择你【不会】的单词' : '请选择你已经认识的单词' }}</span>
             <div class="selection-info">
               已选择: {{ selectedKnownWords.length }} / {{ currentWords.length }}
             </div>
@@ -68,7 +68,9 @@
                 size="large"
                 @click.stop="toggleWordSelection(index)"
                 class="known-btn"
-                :title="selectedKnownWords.includes(index) ? '已认识' : '标记为认识'"
+                :title="learningMode === 'review'
+                  ? (selectedKnownWords.includes(index) ? '不会' : '标记为不会')
+                  : (selectedKnownWords.includes(index) ? '已认识' : '标记为认识')"
               />
             </div>
           </div>
@@ -76,14 +78,26 @@
 
         <div class="filter-actions">
           <div class="selection-summary">
-            <span v-if="selectedKnownWords.length === 0" class="no-selection">
-              没有选择任何单词，可以开始学习了
+            <span v-if="learningMode === 'review'">
+              <!-- 复习模式 -->
+              <span v-if="selectedKnownWords.length === 0" class="no-selection">
+                没有选择不会的单词，全部单词将前进一格
+              </span>
+              <span v-else class="has-selection">
+                选择了 {{ selectedKnownWords.length }} 个不会的单词，将进入学习流程
+              </span>
             </span>
-            <span v-else class="has-selection">
-              选择了 {{ selectedKnownWords.length }} 个认识的单词，将被替换为新单词
+            <span v-else>
+              <!-- 新词模式（原逻辑） -->
+              <span v-if="selectedKnownWords.length === 0" class="no-selection">
+                没有选择任何单词，可以开始学习了
+              </span>
+              <span v-else class="has-selection">
+                选择了 {{ selectedKnownWords.length }} 个认识的单词，将被替换为新单词
+              </span>
             </span>
           </div>
-          
+
           <div class="action-buttons">
             <el-button
               type="primary"
@@ -91,7 +105,9 @@
               @click="confirmSelection"
               :loading="processing"
             >
-              {{ selectedKnownWords.length === 0 ? '开始学习' : '替换并继续' }}
+              {{ learningMode === 'review'
+                ? (selectedKnownWords.length === 0 ? '全部会了' : '开始学习')
+                : (selectedKnownWords.length === 0 ? '开始学习' : '替换并继续') }}
             </el-button>
           </div>
         </div>
@@ -143,10 +159,16 @@ const maxRounds = 10
 
 // 计算属性
 const getInstructionText = () => {
-  if (currentRound.value === 1) {
-    return `这是第${currentRound.value}轮筛选。请选择你已经认识的单词，系统将自动替换为新的单词。已认识的单词会直接标记为"已掌握"，跳过后续学习阶段。`
+  if (learningMode.value === 'review') {
+    // 复习模式：选择不会的单词
+    return `请选择你【不会】的单词。不会的单词将进入学习流程，会的单词将直接前进一格。`
   } else {
-    return `这是第${currentRound.value}轮筛选。继续选择你认识的单词，确保最终学习的都是真正需要学的新单词。`
+    // 新词模式：选择会的单词（原逻辑）
+    if (currentRound.value === 1) {
+      return `这是第${currentRound.value}轮筛选。请选择你已经认识的单词，系统将自动替换为新的单词。已认识的单词会直接标记为"已掌握"，跳过后续学习阶段。`
+    } else {
+      return `这是第${currentRound.value}轮筛选。继续选择你认识的单词，确保最终学习的都是真正需要学的新单词。`
+    }
   }
 }
 
@@ -246,65 +268,136 @@ const toggleWordSelection = (index: number) => {
 // 确认选择
 const confirmSelection = async () => {
   processing.value = true
-  
+
   try {
-    if (selectedKnownWords.value.length === 0) {
-      // 没有选择任何单词，直接开始学习
-      startLearning()
-      return
-    }
-
-    // 将已认识的单词标记为已掌握（跳到最后一个格子）
-    const knownWords = selectedKnownWords.value.map(index => currentWords.value[index])
-
-    // 获取完整的单词库来找到单词的真实索引（使用异步方法）
+    // 获取完整的单词库来找到单词的真实索引
     const allWords = await wordsStore.getWordsBySet(wordSetName.value)
 
-    // 标记已认识的单词为已掌握（阶段8）
-    knownWords.forEach(word => {
-      const wordIndexInFullSet = allWords.findIndex(w => w.id === word.id)
-      if (wordIndexInFullSet !== -1) {
-        progressStore.updateWordProgress(
-          studentId.value,
-          wordSetName.value,
-          wordIndexInFullSet,
-          8 // 直接跳到最后一个格子（已掌握）
-        )
-        console.log(`单词 ${word.english} 标记为已掌握`)
+    if (learningMode.value === 'review') {
+      // ============ 复习模式新逻辑 ============
+      if (selectedKnownWords.value.length === 0) {
+        // 没有选择不会的单词 = 全部都会
+        // 所有单词直接 stage + 1
+        for (const word of currentWords.value) {
+          const wordIndexInFullSet = allWords.findIndex(w => w.id === word.id)
+          if (wordIndexInFullSet !== -1) {
+            const currentStage = await progressStore.getWordProgress(
+              studentId.value,
+              wordSetName.value,
+              wordIndexInFullSet
+            )
+            const newStage = Math.min(currentStage + 1, 8) // 最多到格子8
+            await progressStore.updateWordProgress(
+              studentId.value,
+              wordSetName.value,
+              wordIndexInFullSet,
+              newStage
+            )
+            console.log(`[复习模式] 单词 ${word.english} 从格子${currentStage}前进到格子${newStage}`)
+          }
+        }
+        ElMessage.success('太棒了！所有单词都会了，已全部前进一格！')
+        // 退出学习流程，返回准备界面
+        uiStore.exitCourseMode()
+        router.push({
+          name: 'StudyHome',
+          params: { studentId: studentId.value },
+          query: {
+            wordSet: wordSetName.value,
+            teacherId: teacherId.value
+          }
+        })
+        return
+      } else {
+        // 选择了不会的单词
+        // 1. 会的单词（未选择的）直接 stage + 1
+        const unknownWordIndices = new Set(selectedKnownWords.value)
+        const knownWords = currentWords.value.filter((_, index) => !unknownWordIndices.has(index))
+
+        for (const word of knownWords) {
+          const wordIndexInFullSet = allWords.findIndex(w => w.id === word.id)
+          if (wordIndexInFullSet !== -1) {
+            const currentStage = await progressStore.getWordProgress(
+              studentId.value,
+              wordSetName.value,
+              wordIndexInFullSet
+            )
+            const newStage = Math.min(currentStage + 1, 8)
+            await progressStore.updateWordProgress(
+              studentId.value,
+              wordSetName.value,
+              wordIndexInFullSet,
+              newStage
+            )
+            console.log(`[复习模式] 会的单词 ${word.english} 从格子${currentStage}前进到格子${newStage}`)
+          }
+        }
+
+        // 2. 不会的单词进入学习流程
+        const unknownWords = selectedKnownWords.value.map(index => currentWords.value[index])
+        sessionStorage.setItem('filteredWords', JSON.stringify(unknownWords))
+        ElMessage.success(`${knownWords.length}个会的单词已前进一格，开始学习${unknownWords.length}个不会的单词`)
+        startLearning()
+        return
       }
-    })
 
-    // 获取可用的替换单词（现在是异步调用）
-    const availableReplacements = await getAvailableReplacementWords(currentWords.value)
-    
-    if (availableReplacements.length < selectedKnownWords.value.length) {
-      ElMessage.warning(`可替换的单词不足，只能替换 ${availableReplacements.length} 个单词`)
-    }
-
-    // 替换已认识的单词
-    const replacementWords = shuffleArray(availableReplacements).slice(0, selectedKnownWords.value.length)
-    
-    // 创建新的单词列表
-    const newWords = [...currentWords.value]
-    selectedKnownWords.value.forEach((selectedIndex, i) => {
-      if (i < replacementWords.length) {
-        newWords[selectedIndex] = replacementWords[i]
+    } else {
+      // ============ 新词模式原逻辑 ============
+      if (selectedKnownWords.value.length === 0) {
+        // 没有选择任何单词，直接开始学习
+        startLearning()
+        return
       }
-    })
 
-    // 更新当前单词列表
-    currentWords.value = newWords
-    selectedKnownWords.value = []
-    currentRound.value++
+      // 将已认识的单词标记为已掌握（跳到最后一个格子）
+      const knownWords = selectedKnownWords.value.map(index => currentWords.value[index])
 
-    // 检查是否达到最大轮次
-    if (currentRound.value > maxRounds) {
-      ElMessage.success('筛选完成，开始学习！')
-      startLearning()
-      return
+      // 标记已认识的单词为已掌握（阶段8）
+      knownWords.forEach(word => {
+        const wordIndexInFullSet = allWords.findIndex(w => w.id === word.id)
+        if (wordIndexInFullSet !== -1) {
+          progressStore.updateWordProgress(
+            studentId.value,
+            wordSetName.value,
+            wordIndexInFullSet,
+            8 // 直接跳到最后一个格子（已掌握）
+          )
+          console.log(`单词 ${word.english} 标记为已掌握`)
+        }
+      })
+
+      // 获取可用的替换单词（现在是异步调用）
+      const availableReplacements = await getAvailableReplacementWords(currentWords.value)
+
+      if (availableReplacements.length < selectedKnownWords.value.length) {
+        ElMessage.warning(`可替换的单词不足，只能替换 ${availableReplacements.length} 个单词`)
+      }
+
+      // 替换已认识的单词
+      const replacementWords = shuffleArray(availableReplacements).slice(0, selectedKnownWords.value.length)
+
+      // 创建新的单词列表
+      const newWords = [...currentWords.value]
+      selectedKnownWords.value.forEach((selectedIndex, i) => {
+        if (i < replacementWords.length) {
+          newWords[selectedIndex] = replacementWords[i]
+        }
+      })
+
+      // 更新当前单词列表
+      currentWords.value = newWords
+      selectedKnownWords.value = []
+      currentRound.value++
+
+      // 检查是否达到最大轮次
+      if (currentRound.value > maxRounds) {
+        ElMessage.success('筛选完成，开始学习！')
+        startLearning()
+        return
+      }
+
+      ElMessage.success(`第${currentRound.value - 1}轮筛选完成，请继续选择认识的单词`)
     }
-
-    ElMessage.success(`第${currentRound.value - 1}轮筛选完成，请继续选择认识的单词`)
 
   } catch (error) {
     console.error('单词筛选失败:', error)
