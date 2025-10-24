@@ -479,6 +479,10 @@ const initializeWords = async () => {
       if (filteredWords) {
         sourceWords = JSON.parse(filteredWords)
         console.log('SimpleWordStudy - 使用筛选后的单词:', sourceWords.length)
+
+        // 关键修复：根据startIndex和wordsCount截取当前组的单词
+        sourceWords = sourceWords.slice(startIndex, startIndex + wordsCount)
+        console.log(`SimpleWordStudy - 当前组单词 (startIndex=${startIndex}, wordsCount=${wordsCount}):`, sourceWords.map((w: any) => w.english))
       } else {
         console.warn('未找到筛选后的单词，使用默认逻辑')
         isFiltered = false
