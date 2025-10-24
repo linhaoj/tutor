@@ -176,12 +176,18 @@ const moveToBox = (index: number) => {
     
     // 更新完成数量
     completedWords.value++
-    
-    ElMessage.success(`"${word.english}" 已学完`)
-    
+
+    ElMessage({
+      message: `"${word.english}" 已学完`,
+      type: 'success'
+    })
+
     // 检查当前组是否全部完成
     if (currentGroupCompleted.value) {
-      ElMessage.success('当前组的5个单词已全部学完！')
+      ElMessage({
+        message: '当前组的5个单词已全部学完！',
+        type: 'success'
+      })
     }
   }
 }
@@ -220,42 +226,124 @@ const moveBackToCard = (word: StudyWord) => {
   // 更新完成数量
   completedWords.value--
   
-  ElMessage.info(`"${word.english}" 已移回卡片区域`)
+  ElMessage({ message: `"${word.english}" 已移回卡片区域`, type: 'info' })
 }
 
 const speakWord = (text: string) => {
-  if ('speechSynthesis' in window) {
-    // 停止当前正在播放的语音
-    window.speechSynthesis.cancel()
-    
+  console.log('=== speakWord 被调用 ===', text)
+
+  if (!('speechSynthesis' in window)) {
+    console.log('speechSynthesis 不可用')
+    ElMessage({
+      message: '您的浏览器不支持语音功能',
+      type: 'warning'
+    })
+    return
+  }
+
+  console.log('speechSynthesis 可用')
+  console.log('paused:', window.speechSynthesis.paused)
+  console.log('speaking:', window.speechSynthesis.speaking)
+  console.log('pending:', window.speechSynthesis.pending)
+
+  // Chrome 需要先 resume 才能播放
+  if (window.speechSynthesis.paused) {
+    console.log('调用 resume()')
+    window.speechSynthesis.resume()
+  }
+
+  // 停止当前播放
+  console.log('调用 cancel()')
+  window.speechSynthesis.cancel()
+
+  const speak = () => {
+    console.log('>>> speak() 函数开始执行')
+
+    // 创建 utterance
     const utterance = new SpeechSynthesisUtterance(text)
-    utterance.lang = 'en-US' // 设置为英语
-    utterance.rate = 0.8 // 语速稍慢一些，便于学习
-    utterance.volume = 1 // 音量最大
-    
+    utterance.lang = 'en-US'
+    utterance.rate = 0.9
+    utterance.volume = 1
+    utterance.pitch = 1
+
+    console.log('utterance 已创建:', {
+      text: utterance.text,
+      lang: utterance.lang,
+      rate: utterance.rate,
+      volume: utterance.volume
+    })
+
+    // 获取语音列表并设置
+    const voices = window.speechSynthesis.getVoices()
+    console.log('可用语音数量:', voices.length)
+
+    const enVoices = voices.filter(v => v.lang.startsWith('en'))
+    console.log('英文语音数量:', enVoices.length)
+
+    if (enVoices.length > 0) {
+      const usVoice = enVoices.find(v => v.lang === 'en-US') || enVoices[0]
+      utterance.voice = usVoice
+      console.log('使用语音:', usVoice.name, usVoice.lang)
+    }
+
     utterance.onstart = () => {
-      ElMessage.info(`正在播放: ${text}`)
+      console.log('✅ 开始播放:', text)
     }
-    
+
+    utterance.onend = () => {
+      console.log('✅ 播放结束:', text)
+    }
+
     utterance.onerror = (event) => {
-      ElMessage.error('语音播放失败')
-      console.error('Speech synthesis error:', event)
+      console.error('❌ 播放错误:', event.error, event)
     }
-    
+
+    // Chrome 修复：在调用 speak 前先 resume
+    console.log('调用 resume() before speak')
+    window.speechSynthesis.resume()
+
+    console.log('调用 speak()')
     window.speechSynthesis.speak(utterance)
+
+    console.log('speak() 调用完成，检查状态:')
+    setTimeout(() => {
+      console.log('50ms 后状态 - speaking:', window.speechSynthesis.speaking, 'pending:', window.speechSynthesis.pending)
+    }, 50)
+  }
+
+  // 获取语音列表
+  console.log('获取语音列表...')
+  const voices = window.speechSynthesis.getVoices()
+  console.log('当前语音数量:', voices.length)
+
+  if (voices.length === 0) {
+    // 等待语音加载
+    console.log('语音未加载，等待 voiceschanged 事件')
+    window.speechSynthesis.addEventListener('voiceschanged', function handler() {
+      console.log('voiceschanged 事件触发')
+      window.speechSynthesis.removeEventListener('voiceschanged', handler)
+      speak()
+    }, { once: true })
   } else {
-    ElMessage.warning('您的浏览器不支持语音功能')
+    console.log('语音已加载，直接调用 speak()')
+    speak()
   }
 }
 
 const startNextGroup = () => {
   if (!currentGroupCompleted.value) {
-    ElMessage.warning('请先完成当前组的所有单词')
+    ElMessage({
+      message: '请先完成当前组的所有单词',
+      type: 'warning'
+    })
     return
   }
-  
+
   if (remainingWords.value.length === 0) {
-    ElMessage.success('恭喜！所有单词都已学完')
+    ElMessage({
+      message: '恭喜！所有单词都已学完',
+      type: 'success'
+    })
     return
   }
   
@@ -265,14 +353,20 @@ const startNextGroup = () => {
   
   // 加载下一组的5个单词
   loadNextGroup()
-  
+
   currentRound.value++
-  ElMessage.success(`开始第 ${currentRound.value} 组学习`)
+  ElMessage({
+    message: `开始第 ${currentRound.value} 组学习`,
+    type: 'success'
+  })
 }
 
 const goToNextTask = () => {
   if (!currentGroupCompleted.value) {
-    ElMessage.warning('请先完成当前组的所有单词')
+    ElMessage({
+      message: '请先完成当前组的所有单词',
+      type: 'warning'
+    })
     return
   }
 
@@ -309,11 +403,17 @@ const goToNextTask = () => {
     }
   })
 
-  ElMessage.success('第一个任务完成！进入第二个学习任务：检查阶段')
+  ElMessage({
+    message: '第一个任务完成！进入第二个学习任务：检查阶段',
+    type: 'success'
+  })
 }
 
 const completeAllLearning = () => {
-  ElMessage.success('恭喜！所有单词学习完成！')
+  ElMessage({
+    message: '恭喜！所有单词学习完成！',
+    type: 'success'
+  })
   setTimeout(() => {
     uiStore.exitCourseMode()
     const studentId = route.params.studentId
@@ -426,7 +526,10 @@ const initializeWords = async () => {
   await loadNextGroup()
 
   const groupNumber = parseInt(route.query.groupNumber as string) || 1
-  ElMessage.success(`开始第${groupNumber}组学习，共 ${allWords.value.length} 个单词`)
+  ElMessage({
+    message: `开始第${groupNumber}组学习，共 ${allWords.value.length} 个单词`,
+    type: 'success'
+  })
 }
 
 // 生命周期

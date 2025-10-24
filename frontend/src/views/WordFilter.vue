@@ -227,24 +227,63 @@ const getAvailableReplacementWords = async (excludeWords: Word[]): Promise<Word[
 
 // 播放单词发音
 const playPronunciation = (word: string) => {
-  try {
-    // 使用 Web Speech API 播放发音
-    if ('speechSynthesis' in window) {
-      // 停止当前播放
-      window.speechSynthesis.cancel()
+  if (!('speechSynthesis' in window)) {
+    ElMessage({
+      message: '您的浏览器不支持语音播放功能',
+      type: 'warning'
+    })
+    return
+  }
 
-      const utterance = new SpeechSynthesisUtterance(word)
-      utterance.lang = 'en-US' // 设置英语发音
-      utterance.rate = 0.8 // 稍慢的语速
-      utterance.volume = 1.0
+  // Chrome 需要先 resume 才能播放
+  if (window.speechSynthesis.paused) {
+    window.speechSynthesis.resume()
+  }
 
-      window.speechSynthesis.speak(utterance)
-    } else {
-      ElMessage.warning('您的浏览器不支持语音播放功能')
+  // 停止当前播放
+  window.speechSynthesis.cancel()
+
+  const speak = () => {
+    const utterance = new SpeechSynthesisUtterance(word)
+    utterance.lang = 'en-US'
+    utterance.rate = 0.9
+    utterance.volume = 1
+    utterance.pitch = 1
+
+    // 获取语音列表并设置
+    const voices = window.speechSynthesis.getVoices()
+    const enVoices = voices.filter(v => v.lang.startsWith('en'))
+    if (enVoices.length > 0) {
+      const usVoice = enVoices.find(v => v.lang === 'en-US') || enVoices[0]
+      utterance.voice = usVoice
     }
-  } catch (error) {
-    console.error('播放发音失败:', error)
-    ElMessage.error('播放发音失败')
+
+    utterance.onerror = (event) => {
+      if (event.error !== 'canceled') {
+        console.error('Speech error:', event.error)
+        ElMessage({
+          message: `播放发音失败: ${event.error}`,
+          type: 'error'
+        })
+      }
+    }
+
+    // Chrome 修复：在调用 speak 前先 resume
+    window.speechSynthesis.resume()
+    window.speechSynthesis.speak(utterance)
+  }
+
+  // 获取语音列表
+  const voices = window.speechSynthesis.getVoices()
+
+  if (voices.length === 0) {
+    // 等待语音加载
+    window.speechSynthesis.addEventListener('voiceschanged', function handler() {
+      window.speechSynthesis.removeEventListener('voiceschanged', handler)
+      speak()
+    }, { once: true })
+  } else {
+    speak()
   }
 }
 
@@ -281,11 +320,12 @@ const confirmSelection = async () => {
         for (const word of currentWords.value) {
           const wordIndexInFullSet = allWords.findIndex(w => w.id === word.id)
           if (wordIndexInFullSet !== -1) {
-            const currentStage = await progressStore.getWordProgress(
+            const progressData = await progressStore.getWordProgress(
               studentId.value,
               wordSetName.value,
               wordIndexInFullSet
             )
+            const currentStage = progressData?.currentStage || 0
             const newStage = Math.min(currentStage + 1, 8) // 最多到格子8
             await progressStore.updateWordProgress(
               studentId.value,
@@ -296,7 +336,10 @@ const confirmSelection = async () => {
             console.log(`[复习模式] 单词 ${word.english} 从格子${currentStage}前进到格子${newStage}`)
           }
         }
-        ElMessage.success('太棒了！所有单词都会了，已全部前进一格！')
+        ElMessage({
+          message: '太棒了！所有单词都会了，已全部前进一格！',
+          type: 'success'
+        })
         // 退出学习流程，返回准备界面
         uiStore.exitCourseMode()
         router.push({
@@ -317,11 +360,12 @@ const confirmSelection = async () => {
         for (const word of knownWords) {
           const wordIndexInFullSet = allWords.findIndex(w => w.id === word.id)
           if (wordIndexInFullSet !== -1) {
-            const currentStage = await progressStore.getWordProgress(
+            const progressData = await progressStore.getWordProgress(
               studentId.value,
               wordSetName.value,
               wordIndexInFullSet
             )
+            const currentStage = progressData?.currentStage || 0
             const newStage = Math.min(currentStage + 1, 8)
             await progressStore.updateWordProgress(
               studentId.value,
@@ -378,7 +422,10 @@ const confirmSelection = async () => {
       const availableReplacements = await getAvailableReplacementWords(currentWords.value)
 
       if (availableReplacements.length < selectedKnownWords.value.length) {
-        ElMessage.warning(`可替换的单词不足，只能替换 ${availableReplacements.length} 个单词`)
+        ElMessage({
+          message: `可替换的单词不足，只能替换 ${availableReplacements.length} 个单词`,
+          type: 'warning'
+        })
       }
 
       // 替换已认识的单词
@@ -399,17 +446,26 @@ const confirmSelection = async () => {
 
       // 检查是否达到最大轮次
       if (currentRound.value > maxRounds) {
-        ElMessage.success('筛选完成，开始学习！')
+        ElMessage({
+          message: '筛选完成，开始学习！',
+          type: 'success'
+        })
         startLearning()
         return
       }
 
-      ElMessage.success(`第${currentRound.value - 1}轮筛选完成，请继续选择认识的单词`)
+      ElMessage({
+        message: `第${currentRound.value - 1}轮筛选完成，请继续选择认识的单词`,
+        type: 'success'
+      })
     }
 
   } catch (error) {
     console.error('单词筛选失败:', error)
-    ElMessage.error('单词筛选失败，请重试')
+    ElMessage({
+      message: '单词筛选失败，请重试',
+      type: 'error'
+    })
   } finally {
     processing.value = false
   }
@@ -516,7 +572,10 @@ const initializeWords = async () => {
     const allWords = await wordsStore.getWordsBySet(wordSetName.value)
 
     if (!allWords || allWords.length === 0) {
-      ElMessage.error('找不到单词集数据')
+      ElMessage({
+        message: '找不到单词集数据',
+        type: 'error'
+      })
       uiStore.exitCourseMode()
       router.push({
         name: 'StudyHome',
@@ -605,7 +664,10 @@ const initializeWords = async () => {
     }
 
     if (selectedWords.length < wordsCount.value) {
-      ElMessage.warning(`可学习单词不足，只有 ${selectedWords.length} 个单词可学习`)
+      ElMessage({
+        message: `可学习单词不足，只有 ${selectedWords.length} 个单词可学习`,
+        type: 'warning'
+      })
     }
 
     // 初始化单词显示状态
@@ -634,7 +696,10 @@ const initializeWords = async () => {
 
   } catch (error) {
     console.error('初始化单词失败:', error)
-    ElMessage.error('加载单词数据失败')
+    ElMessage({
+      message: '加载单词数据失败',
+      type: 'error'
+    })
     uiStore.exitCourseMode()
     router.push({
       name: 'StudyHome',
@@ -663,7 +728,10 @@ onMounted(async () => {
       studentName.value = student.name
     } else {
       console.warn('找不到学生信息', { studentId: studentId.value, teacherId: teacherId.value })
-      ElMessage.error('找不到学生信息')
+      ElMessage({
+        message: '找不到学生信息',
+        type: 'error'
+      })
       uiStore.exitCourseMode()
       router.push({
         name: 'StudyHome',
@@ -681,7 +749,10 @@ onMounted(async () => {
 
   } catch (error) {
     console.error('页面初始化失败:', error)
-    ElMessage.error('页面加载失败')
+    ElMessage({
+      message: '页面加载失败',
+      type: 'error'
+    })
     uiStore.exitCourseMode()
     router.push({
       name: 'StudyHome',
