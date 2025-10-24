@@ -514,7 +514,9 @@ const startLearning = (skipSaveWords = false) => {
     params: { studentId: studentId.value },
     query: {
       wordSet: wordSetName.value,
-      wordsCount: actualWordsCount, // 使用实际单词数量
+      wordsCount: 5, // 每组固定5个单词
+      totalWords: actualWordsCount, // 传递总单词数用于进度显示
+      startIndex: (nextGroupNumber - 1) * 5, // 根据组号计算起始索引
       teacherId: teacherId.value,
       filtered: 'true', // 标记这些单词已经过筛选
       groupNumber: nextGroupNumber.toString(),
@@ -545,7 +547,9 @@ const skipFilterAndStartLearning = () => {
     params: { studentId: studentId.value },
     query: {
       wordSet: wordSetName.value,
-      wordsCount: currentWords.value.length,
+      wordsCount: 5, // 每组固定5个单词
+      totalWords: currentWords.value.length, // 传递总单词数用于进度显示
+      startIndex: (nextGroupNumber - 1) * 5, // 根据组号计算起始索引
       teacherId: teacherId.value,
       filtered: 'true',
       groupNumber: nextGroupNumber, // 传递正确的 groupNumber
