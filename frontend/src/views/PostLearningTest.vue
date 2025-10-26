@@ -711,7 +711,8 @@ const createAntiForgetSchedule = async (session: any, time: string) => {
         word_set_name: currentWordSet,
         course_type: 'review', // 抗遗忘课程类型
         duration: 30, // 抗遗忘课程默认30分钟
-        class_type: 'small' // 抗遗忘课程默认小课
+        class_type: 'small', // 抗遗忘课程默认小课
+        session_id: antiForgetSessionId // 关联抗遗忘会话ID
       }
 
       await scheduleStore.addSchedule(scheduleData)

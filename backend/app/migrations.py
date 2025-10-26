@@ -96,6 +96,14 @@ def migrate_database():
             logger.info("✅ word_sets.is_global 列添加成功（默认全局共享）")
             migration_count += 1
 
+        # ========== 课程表 session_id 迁移 ==========
+        if not check_column_exists('schedules', 'session_id'):
+            logger.info("🔧 迁移 #9: 给 schedules 表添加 session_id 列")
+            db.execute(text("ALTER TABLE schedules ADD COLUMN session_id TEXT"))
+            db.commit()
+            logger.info("✅ schedules.session_id 列添加成功（用于关联抗遗忘会话）")
+            migration_count += 1
+
         # ========== 完成迁移 ==========
         if migration_count > 0:
             logger.info(f"🎉 数据库迁移完成！共执行 {migration_count} 项迁移")
@@ -118,7 +126,7 @@ def verify_migrations():
     """验证所有必需的列是否存在"""
     required_columns = {
         'students': ['user_id', 'teacher_id', 'remaining_hours'],
-        'schedules': ['scheduled_at', 'teacher_id'],
+        'schedules': ['scheduled_at', 'teacher_id', 'session_id'],
         'word_sets': ['owner_id', 'is_global'],
         'words': ['word_set_id']
     }

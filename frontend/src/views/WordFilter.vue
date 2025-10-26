@@ -9,7 +9,7 @@
         <div class="header-content">
           <h2>{{ studentName }} - 单词筛选</h2>
           <div class="progress-info">
-            <span>本次学习: {{ wordsCount }}个单词 | 轮次: {{ currentRound }}/10</span>
+            <span>本次学习: {{ wordsCount }}个单词 | 轮次: {{ currentRound }}</span>
           </div>
         </div>
       </el-card>
@@ -155,7 +155,6 @@ const currentWords = ref<Word[]>([])
 const selectedKnownWords = ref<number[]>([])
 const processing = ref(false)
 const currentRound = ref(1)
-const maxRounds = 10
 
 // 计算属性
 const getInstructionText = () => {
@@ -443,16 +442,6 @@ const confirmSelection = async () => {
       currentWords.value = newWords
       selectedKnownWords.value = []
       currentRound.value++
-
-      // 检查是否达到最大轮次
-      if (currentRound.value > maxRounds) {
-        ElMessage({
-          message: '筛选完成，开始学习！',
-          type: 'success'
-        })
-        startLearning()
-        return
-      }
 
       ElMessage({
         message: `第${currentRound.value - 1}轮筛选完成，请继续选择认识的单词`,

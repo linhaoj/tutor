@@ -437,7 +437,7 @@ const getTodayCompletedSchedules = (schedules: any[]) => {
   return schedules.filter(schedule => schedule.completed)
 }
 
-const startStudy = (schedule: any) => {
+const startStudy = async (schedule: any) => {
   // 记录课程开始时间（只在首次设置）
   if (!sessionStorage.getItem('courseStartTime')) {
     const startTime = Date.now()
@@ -451,42 +451,57 @@ const startStudy = (schedule: any) => {
   if (schedule.course_type === 'review') {
     console.log('进入抗遗忘模式:', schedule)
 
-    // 查找现有的抗遗忘会话
     const currentUser = authStore.currentUser
     if (!currentUser) {
       ElMessage.error('用户未登录')
       return
     }
 
-    // 尝试查找抗遗忘会话
-    // 先用当前用户ID查找，如果找不到且当前用户不是管理员，则尝试用管理员ID查找
-    let existingSession = antiForgetStore.getActiveSession(
-      schedule.student_id,
-      schedule.word_set_name,
-      currentUser.id
-    )
-
+    let existingSession = null
     let sessionTeacherId = currentUser.id
 
-    // 如果当前用户是教师且没找到会话，尝试查找管理员创建的会话
-    if (!existingSession && !authStore.isAdmin) {
-      console.log('当前用户未找到会话，尝试查找管理员创建的会话...')
-      // 获取所有会话，查找匹配的
-      const allSessions = antiForgetStore.sessions
-      existingSession = allSessions.find(session =>
-        session.student_id === schedule.student_id &&
-        session.word_set_name === schedule.word_set_name &&
-        session.review_count < session.total_reviews
-      )
+    // 优先使用课程中保存的session_id（新逻辑）
+    if (schedule.session_id) {
+      console.log('使用课程关联的session_id:', schedule.session_id)
+      existingSession = antiForgetStore.getSession(schedule.session_id)
+
+      if (!existingSession) {
+        // 如果本地缓存没有，尝试从服务器获取
+        console.log('本地缓存未找到，从服务器获取会话...')
+        existingSession = await antiForgetStore.fetchSession(schedule.session_id)
+      }
 
       if (existingSession) {
         sessionTeacherId = existingSession.teacher_id
         console.log(`找到会话，teacherId: ${sessionTeacherId}`)
       }
+    } else {
+      // 兼容旧数据：没有session_id的课程，使用旧逻辑查找
+      console.log('旧版本课程，使用student_id + word_set_name查找会话')
+      existingSession = antiForgetStore.getActiveSession(
+        schedule.student_id,
+        schedule.word_set_name,
+        currentUser.id
+      )
+
+      // 如果当前用户是教师且没找到会话，尝试查找其他教师创建的会话
+      if (!existingSession && !authStore.isAdmin) {
+        console.log('当前用户未找到会话，尝试查找其他教师创建的会话...')
+        const allSessions = antiForgetStore.sessions
+        existingSession = allSessions.find(session =>
+          session.student_id === schedule.student_id &&
+          session.word_set_name === schedule.word_set_name &&
+          session.review_count < session.total_reviews
+        )
+
+        if (existingSession) {
+          sessionTeacherId = existingSession.teacher_id
+          console.log(`找到会话，teacherId: ${sessionTeacherId}`)
+        }
+      }
     }
 
-    // 如果没有现有会话，说明这是第一次抗遗忘复习
-    // 抗遗忘会话应该已经在学习完成时创建，这里只是获取
+    // 如果还是没找到会话
     if (!existingSession) {
       ElMessage.error('未找到抗遗忘复习数据，请确认已完成相关学习并创建了抗遗忘计划')
       return
