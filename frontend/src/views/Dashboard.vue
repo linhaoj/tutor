@@ -69,6 +69,14 @@
                         {{ schedule.course_type === 'review' ? '抗遗忘' : '单词学习' }}
                       </el-tag>
                       <el-tag
+                        v-if="schedule.course_type === 'review' && schedule.session_id"
+                        type="info"
+                        size="small"
+                        style="margin-left: 8px"
+                      >
+                        批次 #{{ schedule.session_id.slice(-6) }}
+                      </el-tag>
+                      <el-tag
                         :type="schedule.classType === 'big' ? 'primary' : 'info'"
                         size="small"
                         style="margin-left: 8px"
@@ -136,6 +144,14 @@
                         {{ schedule.course_type === 'review' ? '抗遗忘' : '单词学习' }}
                       </el-tag>
                       <el-tag
+                        v-if="schedule.course_type === 'review' && schedule.session_id"
+                        type="info"
+                        size="small"
+                        style="margin-left: 8px"
+                      >
+                        批次 #{{ schedule.session_id.slice(-6) }}
+                      </el-tag>
+                      <el-tag
                         :type="schedule.classType === 'big' ? 'primary' : 'info'"
                         size="small"
                         style="margin-left: 8px"
@@ -179,6 +195,14 @@
                     size="small"
                   >
                     {{ schedule.course_type === 'review' ? '抗遗忘' : '单词学习' }}
+                  </el-tag>
+                  <el-tag
+                    v-if="schedule.course_type === 'review' && schedule.session_id"
+                    type="info"
+                    size="small"
+                    style="margin-left: 8px"
+                  >
+                    批次 #{{ schedule.session_id.slice(-6) }}
                   </el-tag>
                   <el-tag
                     :type="schedule.classType === 'big' ? 'primary' : 'info'"
