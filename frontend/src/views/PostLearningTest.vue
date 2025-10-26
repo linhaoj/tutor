@@ -703,11 +703,56 @@ const createAntiForgetSchedule = async (session: any, time: string) => {
 
       const dateStr = targetDate.toISOString().split('T')[0]
 
+      // 检查时间冲突并自动调整
+      let adjustedTime = time
+      let timeConflict = true
+      let attempts = 0
+      const maxAttempts = 20 // 最多尝试20次（10小时）
+
+      while (timeConflict && attempts < maxAttempts) {
+        // 检查该学生在该日期该时间是否已有课程
+        const existingSchedules = scheduleStore.schedules.filter(
+          s => s.student_id === studentId &&
+               s.date === dateStr &&
+               s.time === adjustedTime
+        )
+
+        if (existingSchedules.length === 0) {
+          timeConflict = false
+        } else {
+          // 时间冲突，自动延后30分钟
+          const [hours, minutes] = adjustedTime.split(':').map(Number)
+          let newMinutes = minutes + 30
+          let newHours = hours
+
+          if (newMinutes >= 60) {
+            newMinutes -= 60
+            newHours += 1
+          }
+
+          // 如果超过22:00，回到第二天的8:00
+          if (newHours >= 22) {
+            newHours = 8
+            newMinutes = 0
+          }
+
+          adjustedTime = `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`
+          attempts++
+
+          console.log(`时间冲突，调整为: ${adjustedTime}`)
+        }
+      }
+
+      if (timeConflict) {
+        console.warn(`无法为日期 ${dateStr} 找到空闲时间，使用原时间: ${time}`)
+        adjustedTime = time
+      }
+
       // 创建符合后端API的对象（使用snake_case）
       const scheduleData = {
         student_id: studentId,
         date: dateStr,
-        time: time,
+        time: adjustedTime,
         word_set_name: currentWordSet,
         course_type: 'review', // 抗遗忘课程类型
         duration: 30, // 抗遗忘课程默认30分钟
