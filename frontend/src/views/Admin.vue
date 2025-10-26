@@ -815,14 +815,24 @@ const selectedSheetsCount = computed(() => {
 const groupedTeacherSchedules = computed(() => {
   const groups: { date: string, schedules: Schedule[] }[] = []
   const schedulesByDate: { [key: string]: Schedule[] } = {}
-  
+
+  // 获取今天的日期（本地时区）
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  const todayStr = `${year}-${month}-${day}`
+
+  // 只包含今天及未来的课程
   teacherSchedules.value.forEach(schedule => {
-    if (!schedulesByDate[schedule.date]) {
-      schedulesByDate[schedule.date] = []
+    if (schedule.date >= todayStr) {
+      if (!schedulesByDate[schedule.date]) {
+        schedulesByDate[schedule.date] = []
+      }
+      schedulesByDate[schedule.date].push(schedule)
     }
-    schedulesByDate[schedule.date].push(schedule)
   })
-  
+
   Object.keys(schedulesByDate)
     .sort()
     .forEach(date => {
@@ -831,7 +841,7 @@ const groupedTeacherSchedules = computed(() => {
         schedules: schedulesByDate[date].sort((a, b) => a.time.localeCompare(b.time))
       })
     })
-    
+
   return groups
 })
 
