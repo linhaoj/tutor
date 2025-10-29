@@ -90,16 +90,24 @@
                     </div>
                   </div>
                   <div class="schedule-actions">
-                    <el-button 
-                      type="success" 
-                      @click="startStudy(schedule)"
+                    <el-tooltip
+                      :content="isToday(schedule.date) ? (schedule.course_type === 'review' ? '开始复习' : '开始学习') : '只能学习今日课程'"
+                      placement="top"
                     >
-                      {{ schedule.course_type === 'review' ? '复习' : '学习' }}
-                    </el-button>
-                    <el-button 
+                      <span>
+                        <el-button
+                          type="success"
+                          @click="startStudy(schedule)"
+                          :disabled="!isToday(schedule.date)"
+                        >
+                          {{ schedule.course_type === 'review' ? '复习' : '学习' }}
+                        </el-button>
+                      </span>
+                    </el-tooltip>
+                    <el-button
                       v-if="authStore.isAdmin"
-                      size="small" 
-                      type="danger" 
+                      size="small"
+                      type="danger"
                       @click="deleteSchedule(schedule)"
                     >
                       删除
@@ -218,16 +226,24 @@
                 </div>
               </div>
               <div class="schedule-actions">
-                <el-button 
-                  type="success" 
-                  @click="startStudy(schedule)"
+                <el-tooltip
+                  :content="isToday(schedule.date) ? (schedule.course_type === 'review' ? '开始复习' : '开始学习') : '只能学习今日课程'"
+                  placement="top"
                 >
-                  {{ schedule.course_type === 'review' ? '复习' : '学习' }}
-                </el-button>
-                <el-button 
+                  <span>
+                    <el-button
+                      type="success"
+                      @click="startStudy(schedule)"
+                      :disabled="!isToday(schedule.date)"
+                    >
+                      {{ schedule.course_type === 'review' ? '复习' : '学习' }}
+                    </el-button>
+                  </span>
+                </el-tooltip>
+                <el-button
                   v-if="authStore.isAdmin"
-                  size="small" 
-                  type="danger" 
+                  size="small"
+                  type="danger"
                   @click="deleteSchedule(schedule)"
                 >
                   删除
@@ -982,6 +998,16 @@ onMounted(async () => {
 .schedule-actions {
   display: flex;
   gap: 10px;
+}
+
+/* 禁用的按钮样式优化 */
+.schedule-actions .el-button.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.schedule-actions .el-tooltip__trigger {
+  display: inline-block;
 }
 
 .empty-state {
