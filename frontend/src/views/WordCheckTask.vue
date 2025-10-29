@@ -1,8 +1,8 @@
 <template>
   <div class="word-check-task">
     <!-- 课程计时器 -->
-    <CourseTimer />
-    
+    <CourseTimer @time-expired="handleTimeExpired" />
+
     <!-- 学习进度头部 -->
     <div class="study-header">
       <el-card>
@@ -352,6 +352,36 @@ const goToNextTask = () => {
   ElMessage.success('第二个任务完成！进入第三个学习任务：混组检测')
 }
 
+/**
+ * 处理课程时间到达（60分钟自动结束）
+ * 直接跳转到训后检测，不再继续学习
+ */
+const handleTimeExpired = () => {
+  console.log('⏰ 课程时间已到，自动跳转到训后检测')
+
+  ElMessage({
+    message: '⏰ 课程时间已到，自动进入训后检测',
+    type: 'warning',
+    duration: 3000
+  })
+
+  // 延迟1秒后跳转，让用户看到提示
+  setTimeout(() => {
+    router.push({
+      name: 'PostLearningTest',
+      params: { studentId: route.params.studentId },
+      query: {
+        wordSet: route.query.wordSet,
+        totalWords: route.query.totalWords,
+        startIndex: route.query.startIndex,
+        teacherId: route.query.teacherId,
+        learningMode: route.query.learningMode,
+        filtered: route.query.filtered,
+        autoEnd: 'true'  // 标记为自动结束
+      }
+    })
+  }, 1000)
+}
 
 // Fisher-Yates 洗牌算法
 const shuffleArray = <T>(array: T[]): T[] => {
