@@ -235,12 +235,23 @@ async def update_student(
                 raise HTTPException(status_code=400, detail="邮箱已被使用")
         student.email = student_update.email
     if student_update.remaining_hours is not None:
+        # ⚠️ 权限检查：只有管理员可以修改课时
+        if current_user.role != "admin":
+            logger.warning(f"教师 {current_user.username} 尝试修改学生 {student.name} 的课时（被拒绝）")
+            raise HTTPException(
+                status_code=403,
+                detail="只有管理员可以修改学生课时，教师不能修改课时"
+            )
+
         # 验证课时数有效性
         validate_business_rule(
             student_update.remaining_hours >= 0,
             f"课时数不能为负数: {student_update.remaining_hours}"
         )
+
+        old_hours = student.remaining_hours
         student.remaining_hours = student_update.remaining_hours
+        logger.info(f"管理员 {current_user.username} 修改学生 {student.name} 课时: {old_hours}h → {student_update.remaining_hours}h")
 
     student.updated_at = datetime.utcnow()
     db.commit()

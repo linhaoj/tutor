@@ -60,11 +60,17 @@
             :step="0.5"
             :min="0"
             :max="1000"
+            :disabled="!authStore.isAdmin"
             placeholder="剩余课程时长（小时）"
             style="width: 100%"
           />
           <div style="font-size: 12px; color: #909399; margin-top: 5px;">
-            大课60分钟 = 1.0h，小课30分钟 = 0.5h
+            <template v-if="authStore.isAdmin">
+              大课60分钟 = 1.0h，小课30分钟 = 0.5h
+            </template>
+            <template v-else>
+              <span style="color: #f56c6c;">⚠️ 只有管理员可以修改课时</span>
+            </template>
           </div>
         </el-form-item>
 
