@@ -552,35 +552,35 @@ const createAntiForgetTasks = async () => {
   
   if (!studentId) {
     ElMessage.error('缺少学生信息')
-    return
+    throw new Error('缺少学生信息')
   }
-  
+
   // 先记录本次的通过单词到会话
   recordPassedWordsForAntiForget()
-  
+
   // 获取当前会话（不要立即完成，先让用户看到正确的单词数量）
   const currentSession = antiForgetSessionStore.getCurrentSession(studentId)
-  
+
   if (!currentSession || currentSession.words.length === 0) {
     ElMessage.warning('没有找到需要创建抗遗忘的单词')
-    return
+    throw new Error('没有找到需要创建抗遗忘的单词')
   }
-  
+
   try {
     // 让用户选择抗遗忘课程的时间（此时显示正确的单词数量）
     const selectedTime = await promptForAntiForgetTime()
-    
+
     if (!selectedTime) {
       ElMessage.info('已取消创建抗遗忘课程')
-      return
+      throw new Error('用户取消创建抗遗忘课程')
     }
-    
+
     // 现在完成会话并获取所有累积的单词
     const completedSession = antiForgetSessionStore.completeSession(studentId)
-    
+
     if (!completedSession) {
       ElMessage.error('完成会话时出现错误')
-      return
+      throw new Error('完成会话时出现错误')
     }
     
     // 创建抗遗忘日程
