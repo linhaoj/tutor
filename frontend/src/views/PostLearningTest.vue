@@ -372,13 +372,19 @@ const endPracticeAndCreateAntiForget = async () => {
 const markCourseAsCompleted = async () => {
   try {
     const scheduleIdStr = sessionStorage.getItem('currentScheduleId')
+    const courseStartTime = sessionStorage.getItem('courseStartTime')
     const teacherId = route.query.teacherId as string
     const studentId = parseInt(route.params.studentId as string)
 
     console.log('🔍 标记课程完成 - 调试信息:', {
       scheduleIdStr,
+      courseStartTime,
       teacherId,
       studentId,
+      '所有sessionStorage': Object.keys(sessionStorage).reduce((acc, key) => {
+        acc[key] = sessionStorage.getItem(key)
+        return acc
+      }, {}),
       '条件检查': {
         'scheduleIdStr存在': !!scheduleIdStr,
         'teacherId存在': !!teacherId,
