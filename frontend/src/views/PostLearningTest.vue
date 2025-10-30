@@ -512,23 +512,30 @@ const recordPassedWordsForAntiForget = () => {
   const studentId = parseInt(route.params.studentId as string)
   const wordSet = route.query.wordSet as string
 
-  console.log('调试信息:', {
+  console.log('🔍 recordPassedWordsForAntiForget - 调试信息:', {
     studentId,
     wordSet,
     allWordsCount: allWords.value.length,
     passedWordsCount: passedWords.value.length,
-    passedWords: passedWords.value
+    passedWords: passedWords.value.map(w => ({ id: w.id, english: w.english }))
   })
 
   if (!studentId || !wordSet) {
-    console.error('缺少必要参数:', { studentId, wordSet })
+    console.error('❌ 缺少必要参数:', { studentId, wordSet })
     return
   }
 
   if (passedWords.value.length === 0) {
-    console.warn('没有通过的单词需要记录')
+    console.warn('⚠️ 没有通过的单词需要记录')
     return
   }
+
+  // 记录添加前的会话状态
+  const sessionBefore = antiForgetSessionStore.getCurrentSession(studentId)
+  console.log('📊 添加前会话状态:', {
+    单词数: sessionBefore?.words.length || 0,
+    单词列表: sessionBefore?.words.map(w => ({ id: w.id, english: w.english })) || []
+  })
 
   // 将通过的单词转换为抗遗忘会话格式
   const passedWordsData = passedWords.value.map(word => ({
@@ -537,14 +544,19 @@ const recordPassedWordsForAntiForget = () => {
     chinese: word.chinese
   }))
 
+  console.log('➕ 准备添加的单词:', passedWordsData.map(w => ({ id: w.id, english: w.english })))
+
   // 添加到抗遗忘会话
   antiForgetSessionStore.addPassedWordsToSession(studentId, wordSet, passedWordsData)
 
-  console.log(`已将 ${passedWords.value.length} 个通过的单词记录到抗遗忘会话中`)
-
   // 验证是否成功添加
-  const currentSession = antiForgetSessionStore.getCurrentSession(studentId)
-  console.log('当前会话单词数:', currentSession?.words.length)
+  const sessionAfter = antiForgetSessionStore.getCurrentSession(studentId)
+  console.log('📊 添加后会话状态:', {
+    单词数: sessionAfter?.words.length || 0,
+    单词列表: sessionAfter?.words.map(w => ({ id: w.id, english: w.english })) || [],
+    新增数量: (sessionAfter?.words.length || 0) - (sessionBefore?.words.length || 0)
+  })
+  console.log(`✅ 已将 ${passedWords.value.length} 个通过的单词记录到抗遗忘会话中，实际新增 ${(sessionAfter?.words.length || 0) - (sessionBefore?.words.length || 0)} 个`)
 }
 
 const createAntiForgetTasks = async () => {

@@ -74,11 +74,22 @@ export const useAntiForgetSessionStore = defineStore('antiForgetSession', () => 
   // 添加通过的单词到当前会话
   const addPassedWordsToSession = (studentId: number, wordSetName: string, passedWords: { id: number, english: string, chinese: string }[]) => {
     const session = startOrGetSession(studentId)
-    
+
+    console.log('🔍 antiForgetSession.addPassedWordsToSession:', {
+      studentId,
+      wordSetName,
+      准备添加数量: passedWords.length,
+      准备添加单词: passedWords.map(w => ({ id: w.id, english: w.english })),
+      当前会话单词数: session.words.length
+    })
+
+    let addedCount = 0
+    let skippedCount = 0
+
     passedWords.forEach(word => {
       // 检查单词是否已存在（避免重复）
       const existingWord = session.words.find(w => w.id === word.id && w.wordSetName === wordSetName)
-      
+
       if (!existingWord) {
         const antiForgetWord: AntiForgetWord = {
           ...word,
@@ -86,13 +97,20 @@ export const useAntiForgetSessionStore = defineStore('antiForgetSession', () => 
           addedAt: new Date().toISOString()
         }
         session.words.push(antiForgetWord)
+        addedCount++
+        console.log(`  ✅ 添加新单词: ${word.english} (id: ${word.id})`)
+      } else {
+        skippedCount++
+        console.log(`  ⏭️  跳过重复单词: ${word.english} (id: ${word.id})`)
       }
     })
-    
+
+    console.log(`📊 添加完成: 新增${addedCount}个，跳过${skippedCount}个，总计${session.words.length}个`)
+
     // 更新会话时间
     session.createdAt = new Date().toISOString()
     saveSessionsToStorage()
-    
+
     return session
   }
 
