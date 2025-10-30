@@ -177,6 +177,7 @@ interface PostTestWord {
 // 响应式数据
 const studentName = ref('学生')
 const allWords = ref<PostTestWord[]>([])
+const progressUpdated = ref(false) // 防止重复更新进度
 
 // 计算属性
 const checkedCount = computed(() => {
@@ -333,6 +334,7 @@ const clearTestStatusStorage = () => {
 }
 
 const endPracticeAndCreateAntiForget = async () => {
+  try {
     // 在路由跳转前，先保存当前路由参数（避免跳转后丢失）
     const wordSetName = route.query.wordSet as string || ''
     const totalWords = parseInt(route.query.totalWords as string) || 10
@@ -345,7 +347,7 @@ const endPracticeAndCreateAntiForget = async () => {
     // 创建抗遗忘任务（内部会自动记录通过的单词）
     await createAntiForgetTasks()
 
-    // 标记当前课程为已完成
+    // 标记当前课程为已完成（只有创建抗遗忘成功后才执行）
     await markCourseAsCompleted()
 
     // 清理sessionStorage中的检测状态数据（使用保存的参数）
@@ -360,13 +362,29 @@ const endPracticeAndCreateAntiForget = async () => {
 
     // 完全结束课程（清除计时）
     uiStore.endCourse()
+  } catch (error) {
+    // 如果创建抗遗忘失败（用户取消等），不做任何操作
+    // 错误已经在 createAntiForgetTasks 中显示过了
+    console.log('📌 用户取消或操作失败，保持在当前页面')
   }
+}
 
 const markCourseAsCompleted = async () => {
   try {
     const scheduleIdStr = sessionStorage.getItem('currentScheduleId')
     const teacherId = route.query.teacherId as string
     const studentId = parseInt(route.params.studentId as string)
+
+    console.log('🔍 标记课程完成 - 调试信息:', {
+      scheduleIdStr,
+      teacherId,
+      studentId,
+      '条件检查': {
+        'scheduleIdStr存在': !!scheduleIdStr,
+        'teacherId存在': !!teacherId,
+        'studentId有效': !isNaN(studentId) && studentId > 0
+      }
+    })
 
     if (scheduleIdStr && teacherId && studentId) {
       const scheduleId = parseInt(scheduleIdStr)
@@ -375,31 +393,54 @@ const markCourseAsCompleted = async () => {
       // 获取课程信息来确定扣减时长（后端API自动过滤）
       await scheduleStore.fetchSchedules()
       const schedule = scheduleStore.schedules.find(s => s.id === scheduleId)
+
+      console.log('📅 找到的课程信息:', schedule)
+
       if (schedule) {
+        // 🚨 防止重复标记：如果课程已完成，跳过
+        if (schedule.completed) {
+          console.log('⚠️ 课程已完成，跳过重复标记和扣课时')
+          return
+        }
         // 根据课程类型扣减时长：大课(60分钟) = 1.0h，小课(30分钟) = 0.5h
         const hoursToDeduct = schedule.class_type === 'big' ? 1.0 : 0.5
+
+        console.log(`⏰ 准备扣减课时: ${hoursToDeduct}h (${schedule.class_type === 'big' ? '大课' : '小课'})`)
 
         // 扣减学生课程时长（单词学习课程）
         const success = await studentsStore.deductStudentHours(studentId, hoursToDeduct)
         if (success) {
-          console.log(`单词学习课程时长已扣减: ${hoursToDeduct}h (${schedule.class_type === 'big' ? '大课' : '小课'})`)
+          console.log(`✅ 单词学习课程时长已扣减: ${hoursToDeduct}h`)
+          ElMessage.success(`课时已扣减: ${hoursToDeduct}h`)
         } else {
-          console.warn('扣减学生课程时长失败')
+          console.warn('❌ 扣减学生课程时长失败')
+          ElMessage.warning('扣减课时失败')
         }
+      } else {
+        console.warn('⚠️ 未找到课程信息, scheduleId:', scheduleId)
       }
 
       // 标记课程为已完成（后端API通过JWT自动识别用户）
       await scheduleStore.completeSchedule(scheduleId)
-      console.log('单词学习课程已标记为完成:', scheduleId)
+      console.log('✅ 单词学习课程已标记为完成:', scheduleId)
+      ElMessage.success('课程已标记为完成')
     } else {
-      console.warn('缺少课程完成所需信息', { scheduleIdStr, teacherId, studentId })
+      console.warn('⚠️ 缺少课程完成所需信息', { scheduleIdStr, teacherId, studentId })
+      ElMessage.warning('无法标记课程完成：缺少必要信息（请查看控制台）')
     }
   } catch (error) {
-    console.error('标记课程完成失败:', error)
+    console.error('❌ 标记课程完成失败:', error)
+    ElMessage.error('标记课程完成失败')
   }
 }
 
 const updateLearningProgress = async () => {
+  // 🚨 防止重复更新进度
+  if (progressUpdated.value) {
+    console.log('⚠️ 进度已更新过，跳过重复更新')
+    return
+  }
+
   const studentId = parseInt(route.params.studentId as string)
   const wordSet = route.query.wordSet as string
 
@@ -439,19 +480,11 @@ const updateLearningProgress = async () => {
       unchangedCount++
       console.log(`× 单词 "${word.english}" (idx:${word.originalIndex}) 保持在阶段${currentStage}（未通过）`)
     } else if (word.status === 'unchecked') {
-      // 未检测的单词 - 如果当前阶段是0，提升到阶段1（认为已经学过）
-      if (currentStage === 0) {
-        const newStage = 1
-        await progressStore.updateWordProgress(studentId, wordSet, word.originalIndex, newStage)
-        promotedCount++
-        uncheckedCount++
-        console.log(`? 单词 "${word.english}" (idx:${word.originalIndex}) 从阶段${currentStage}进入阶段${newStage}（未检测视为已学习）`)
-      } else {
-        // 如果已经不在阶段0，保持当前阶段
-        await progressStore.updateWordProgress(studentId, wordSet, word.originalIndex, currentStage)
-        unchangedCount++
-        console.log(`? 单词 "${word.english}" (idx:${word.originalIndex}) 保持在阶段${currentStage}（未检测但已学过）`)
-      }
+      // 未检测的单词 - 保持当前阶段不变（不管在哪个格子）
+      await progressStore.updateWordProgress(studentId, wordSet, word.originalIndex, currentStage)
+      unchangedCount++
+      uncheckedCount++
+      console.log(`? 单词 "${word.english}" (idx:${word.originalIndex}) 保持在阶段${currentStage}（未检测）`)
     }
   }
 
@@ -464,6 +497,9 @@ const updateLearningProgress = async () => {
   }
 
   ElMessage.success(message)
+
+  // 🚨 标记进度已更新，防止重复更新
+  progressUpdated.value = true
 }
 
 const recordPassedWordsForAntiForget = () => {
@@ -556,6 +592,8 @@ const createAntiForgetTasks = async () => {
     console.error('创建抗遗忘任务失败:', error)
     console.error('错误详情:', error.message, error.stack)
     ElMessage.error(`创建抗遗忘任务失败: ${error.message || '未知错误'}`)
+    // 🚨 重新抛出错误，防止后续的 markCourseAsCompleted 被执行
+    throw error
   }
 }
 
@@ -696,63 +734,167 @@ const createAntiForgetSchedule = async (session: any, time: string) => {
 
     console.log(`已创建抗遗忘复习会话，会话ID: ${antiForgetSessionId}，teacherId: ${sessionTeacherId}，单词集: ${currentWordSet}，单词数: ${sessionWords.length}`)
 
-    // 为每个抗遗忘日期创建课程
+    // 第一步：检测所有时间冲突
+    const conflicts: Array<{ dayOffset: number, date: string, originalTime: string }> = []
+
     for (const dayOffset of antiForgetDays) {
       const targetDate = new Date(today)
       targetDate.setDate(today.getDate() + dayOffset)
-
       const dateStr = targetDate.toISOString().split('T')[0]
 
-      // 检查时间冲突并自动调整
-      let adjustedTime = time
-      let timeConflict = true
-      let attempts = 0
-      const maxAttempts = 20 // 最多尝试20次（10小时）
+      // 检查该学生在该日期该时间是否已有课程
+      const existingSchedules = scheduleStore.schedules.filter(
+        s => s.student_id === studentId &&
+             s.date === dateStr &&
+             s.time === time
+      )
 
-      while (timeConflict && attempts < maxAttempts) {
-        // 检查该学生在该日期该时间是否已有课程
-        const existingSchedules = scheduleStore.schedules.filter(
-          s => s.student_id === studentId &&
-               s.date === dateStr &&
-               s.time === adjustedTime
+      if (existingSchedules.length > 0) {
+        conflicts.push({ dayOffset, date: dateStr, originalTime: time })
+      }
+    }
+
+    // 第二步：如果有冲突，询问用户
+    let scheduleTimes: Record<number, string> = {} // 记录每个dayOffset对应的时间
+
+    if (conflicts.length > 0) {
+      // 格式化冲突列表（移到 try 外面，让 catch 块也能访问）
+      const conflictList = conflicts.map(c => {
+        const date = new Date(c.date)
+        return `${date.getMonth() + 1}月${date.getDate()}日 ${c.originalTime}`
+      }).join('、')
+
+      try {
+        await ElMessageBox.confirm(
+          `以下日期的 ${time} 时段已有课程安排：\n\n${conflictList}\n\n请选择处理方式：`,
+          '时间冲突提示',
+          {
+            confirmButtonText: '自动延后30分钟',
+            cancelButtonText: '重新选择时间',
+            type: 'warning',
+            distinguishCancelAndClose: true
+          }
         )
 
-        if (existingSchedules.length === 0) {
-          timeConflict = false
+        // 用户选择"自动延后30分钟"
+        console.log('用户选择：自动延后30分钟')
+
+        // 为冲突的日期自动延后
+        for (const conflict of conflicts) {
+          let adjustedTime = conflict.originalTime
+          let attempts = 0
+          const maxAttempts = 20
+
+          while (attempts < maxAttempts) {
+            // 延后30分钟
+            const [hours, minutes] = adjustedTime.split(':').map(Number)
+            let newMinutes = minutes + 30
+            let newHours = hours
+
+            if (newMinutes >= 60) {
+              newMinutes -= 60
+              newHours += 1
+            }
+
+            if (newHours >= 22) {
+              newHours = 8
+              newMinutes = 0
+            }
+
+            adjustedTime = `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`
+
+            // 检查新时间是否还有冲突
+            const stillConflict = scheduleStore.schedules.some(
+              s => s.student_id === studentId &&
+                   s.date === conflict.date &&
+                   s.time === adjustedTime
+            )
+
+            if (!stillConflict) break
+            attempts++
+          }
+
+          scheduleTimes[conflict.dayOffset] = adjustedTime
+          console.log(`${conflict.date} 时间调整为: ${adjustedTime}`)
+        }
+
+      } catch (action) {
+        if (action === 'cancel') {
+          // 用户选择"重新选择时间"
+          console.log('✅ 用户选择：重新选择时间')
+          console.log('📋 冲突列表:', conflictList)
+          console.log('🔔 即将弹出时间输入框...')
+
+          try {
+            // 显示时间选择对话框
+            console.log('🪟 正在调用 ElMessageBox.prompt...')
+            const { value: newTime } = await ElMessageBox.prompt(
+              `请为这 ${conflicts.length} 个冲突的日期选择新的上课时间：\n${conflictList}`,
+              '重新选择时间',
+              {
+                confirmButtonText: '确定',
+                cancelButtonText: '取消',
+                inputPlaceholder: '请输入时间，格式如 14:00',
+                inputPattern: /^([01]\d|2[0-3]):([0-5]\d)$/,
+                inputErrorMessage: '时间格式不正确，请输入如 14:00'
+              }
+            )
+
+            console.log('✅ 用户输入的新时间:', newTime)
+
+            // 验证新时间是否还有冲突
+            let hasConflictWithNewTime = false
+            for (const conflict of conflicts) {
+              const stillConflict = scheduleStore.schedules.some(
+                s => s.student_id === studentId &&
+                     s.date === conflict.date &&
+                     s.time === newTime
+              )
+              if (stillConflict) {
+                hasConflictWithNewTime = true
+                break
+              }
+            }
+
+            if (hasConflictWithNewTime) {
+              ElMessage.error('选择的时间仍有冲突，已取消创建抗遗忘课程')
+              throw new Error('时间仍有冲突')
+            }
+
+            // 为所有冲突日期使用新时间
+            for (const conflict of conflicts) {
+              scheduleTimes[conflict.dayOffset] = newTime
+            }
+
+            console.log(`✅ 所有冲突日期使用新时间: ${newTime}`)
+          } catch (promptAction) {
+            // 用户在时间输入框中点击了取消
+            console.log('❌ 用户取消了时间输入，promptAction:', promptAction)
+            ElMessage.info('已取消创建抗遗忘课程')
+            throw new Error('用户取消时间输入')
+          }
         } else {
-          // 时间冲突，自动延后30分钟
-          const [hours, minutes] = adjustedTime.split(':').map(Number)
-          let newMinutes = minutes + 30
-          let newHours = hours
-
-          if (newMinutes >= 60) {
-            newMinutes -= 60
-            newHours += 1
-          }
-
-          // 如果超过22:00，回到第二天的8:00
-          if (newHours >= 22) {
-            newHours = 8
-            newMinutes = 0
-          }
-
-          adjustedTime = `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`
-          attempts++
-
-          console.log(`时间冲突，调整为: ${adjustedTime}`)
+          // 用户点击了关闭按钮，取消操作
+          ElMessage.info('已取消创建抗遗忘课程')
+          throw new Error('用户取消操作')
         }
       }
+    }
 
-      if (timeConflict) {
-        console.warn(`无法为日期 ${dateStr} 找到空闲时间，使用原时间: ${time}`)
-        adjustedTime = time
-      }
+    // 第三步：创建所有课程
+    for (const dayOffset of antiForgetDays) {
+      const targetDate = new Date(today)
+      targetDate.setDate(today.getDate() + dayOffset)
+      const dateStr = targetDate.toISOString().split('T')[0]
+
+      // 使用调整后的时间（如果有冲突）或原时间
+      const finalTime = scheduleTimes[dayOffset] || time
 
       // 创建符合后端API的对象（使用snake_case）
       const scheduleData = {
         student_id: studentId,
         date: dateStr,
-        time: adjustedTime,
+        time: finalTime,
         word_set_name: currentWordSet,
         course_type: 'review', // 抗遗忘课程类型
         duration: 30, // 抗遗忘课程默认30分钟
@@ -1043,37 +1185,55 @@ const initializeWords = async () => {
     currentBatchGroupCount
   })
 
-  // 只加载当前批次的组
+  // 🚨 优先从 filteredWords 加载完整的学习单词列表（最可靠）
+  // 筛选阶段已经确定了要学习的所有单词，训后检测应该显示全部单词
   let sourceWords = []
-  let loadedFromSession = true
+  const filteredWordsStr = sessionStorage.getItem('filteredWords')
 
-  for (let i = 0; i < currentBatchGroupCount; i++) {
-    const groupNumber = currentBatchStartGroup + i
-    const sessionKey = `simpleStudyGroup_${groupNumber}`
-    const savedWords = sessionStorage.getItem(sessionKey)
-
-    if (savedWords) {
-      const groupWords = JSON.parse(savedWords)
-      sourceWords.push(...groupWords)
-      console.log(`PostLearningTest - 从sessionStorage加载第${groupNumber}组单词:`, groupWords.map((w: any) => w.english))
-    } else {
-      console.warn(`PostLearningTest - 第${groupNumber}组未找到sessionStorage数据`)
-      loadedFromSession = false
-      break
+  if (filteredWordsStr) {
+    try {
+      const filteredWords = JSON.parse(filteredWordsStr)
+      // 🚨 关键改动：加载全部筛选后的单词，而不是只加载已学习的组
+      sourceWords = filteredWords
+      console.log(`PostLearningTest - 从filteredWords加载全部单词 (${sourceWords.length}个):`, sourceWords.map((w: any) => w.english))
+    } catch (error) {
+      console.warn('解析 filteredWords 失败:', error)
     }
   }
 
-  // 如果sessionStorage没有数据，使用备用逻辑从单词库加载
-  if (!loadedFromSession || sourceWords.length === 0) {
-    console.warn('PostLearningTest - 使用备用逻辑从单词库加载')
-    if (wordSetName) {
-      // 使用异步方法获取单词（后端API自动处理权限）
-      sourceWords = await wordsStore.getWordsBySet(wordSetName)
-      console.log(`加载单词集 "${wordSetName}"，单词数: ${sourceWords.length}`)
-    } else {
-      sourceWords = wordsStore.words
+  // 如果 filteredWords 不存在或为空，fallback到分组加载
+  if (sourceWords.length === 0) {
+    console.warn('PostLearningTest - filteredWords不存在，尝试从分组加载')
+    let loadedFromSession = true
+
+    for (let i = 0; i < currentBatchGroupCount; i++) {
+      const groupNumber = currentBatchStartGroup + i
+      const sessionKey = `simpleStudyGroup_${groupNumber}`
+      const savedWords = sessionStorage.getItem(sessionKey)
+
+      if (savedWords) {
+        const groupWords = JSON.parse(savedWords)
+        sourceWords.push(...groupWords)
+        console.log(`PostLearningTest - 从sessionStorage加载第${groupNumber}组单词:`, groupWords.map((w: any) => w.english))
+      } else {
+        console.warn(`PostLearningTest - 第${groupNumber}组未找到sessionStorage数据`)
+        loadedFromSession = false
+        break
+      }
     }
-    sourceWords = sourceWords.slice(startIndex, startIndex + totalWords)
+
+    // 如果分组数据也没有，最后才从单词库加载
+    if (!loadedFromSession || sourceWords.length === 0) {
+      console.warn('PostLearningTest - 使用最后备用逻辑从单词库加载')
+      if (wordSetName) {
+        // 使用异步方法获取单词（后端API自动处理权限）
+        sourceWords = await wordsStore.getWordsBySet(wordSetName)
+        console.log(`加载单词集 "${wordSetName}"，单词数: ${sourceWords.length}`)
+      } else {
+        sourceWords = wordsStore.words
+      }
+      sourceWords = sourceWords.slice(startIndex, startIndex + totalWords)
+    }
   }
 
   console.log('PostLearningTest - 最终加载的单词:', sourceWords.map(w => w.english))

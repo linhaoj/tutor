@@ -417,6 +417,31 @@ const goToNextTask = () => {
 const handleTimeExpired = () => {
   console.log('⏰ 课程时间已到，自动跳转到训后检测')
 
+  // 获取当前组号
+  const groupNumber = parseInt(route.query.groupNumber as string) || 1
+
+  // 🚨 关键：保存当前组已学习的单词到sessionStorage（保存displayWords，即当前正在学习的5个单词）
+  const sessionKey = `simpleStudyGroup_${groupNumber}`
+  const learnedWords = displayWords.value.map(word => ({
+    id: word.id,
+    english: word.english,
+    chinese: word.chinese,
+    originalIndex: word.originalIndex
+  }))
+  sessionStorage.setItem(sessionKey, JSON.stringify(learnedWords))
+  console.log(`⏰ 自动结束 - 已保存第${groupNumber}组单词(${learnedWords.length}个):`, learnedWords.map(w => w.english))
+
+  const currentBatchStartGroup = 1  // 批次总是从第1组开始
+  const currentBatchGroupCount = groupNumber  // 已经学习到第几组
+  const totalWordsCount = groupNumber * 5  // 实际学习的单词数
+
+  console.log('⏰ SimpleWordStudy自动结束 - 训后检测参数:', {
+    groupNumber,
+    currentBatchStartGroup,
+    currentBatchGroupCount,
+    totalWordsCount
+  })
+
   ElMessage({
     message: '⏰ 课程时间已到，自动进入训后检测',
     type: 'warning',
@@ -430,11 +455,13 @@ const handleTimeExpired = () => {
       params: { studentId: route.params.studentId },
       query: {
         wordSet: route.query.wordSet,
-        totalWords: route.query.totalWords,
-        startIndex: route.query.startIndex,
+        totalWords: totalWordsCount,
+        startIndex: 0,
         teacherId: route.query.teacherId,
         learningMode: route.query.learningMode,
         filtered: route.query.filtered,
+        currentBatchStartGroup: currentBatchStartGroup,
+        currentBatchGroupCount: currentBatchGroupCount,
         autoEnd: 'true'  // 标记为自动结束
       }
     })

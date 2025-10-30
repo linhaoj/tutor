@@ -1,8 +1,8 @@
 <template>
   <div class="anti-forget-review">
-    <!-- 课程计时器 -->
-    <CourseTimer />
-    
+    <!-- 课程计时器（抗遗忘复习不限时） -->
+    <CourseTimer :enable-time-limit="false" :show-time-limit="false" />
+
     <!-- 页面头部 -->
     <div class="review-header">
       <el-card>
@@ -251,7 +251,7 @@ const completeCurrentReview = async () => {
       }
     )
 
-    const result = antiForgetStore.completeReview(sessionId.value)
+    const result = await antiForgetStore.completeReview(sessionId.value)
     if (result) {
       ElMessage.success(`第${result.currentCount}次复习完成！还需复习${result.totalCount - result.currentCount}次`)
 

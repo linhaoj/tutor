@@ -359,6 +359,17 @@ const goToNextTask = () => {
 const handleTimeExpired = () => {
   console.log('⏰ 课程时间已到，自动跳转到训后检测')
 
+  // 获取当前组号，表示已经学习到第几组
+  const groupNumber = parseInt(route.query.groupNumber as string) || 1
+  const currentBatchStartGroup = 1  // 批次总是从第1组开始
+  const currentBatchGroupCount = groupNumber  // 已经学习到第几组
+
+  console.log('⏰ WordCheckTask自动结束 - 训后检测参数:', {
+    groupNumber,
+    currentBatchStartGroup,
+    currentBatchGroupCount
+  })
+
   ElMessage({
     message: '⏰ 课程时间已到，自动进入训后检测',
     type: 'warning',
@@ -377,6 +388,8 @@ const handleTimeExpired = () => {
         teacherId: route.query.teacherId,
         learningMode: route.query.learningMode,
         filtered: route.query.filtered,
+        currentBatchStartGroup: currentBatchStartGroup,
+        currentBatchGroupCount: currentBatchGroupCount,
         autoEnd: 'true'  // 标记为自动结束
       }
     })

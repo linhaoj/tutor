@@ -451,14 +451,21 @@ const deleteWordSet = async () => {
       }
     )
 
-    wordsStore.deleteWordSet(selectedWordSet.value)
+    // ✅ 添加await并处理返回值
+    const result = await wordsStore.deleteWordSet(selectedWordSet.value)
 
-    // 重置筛选
-    selectedWordSet.value = ''
-
-    ElMessage.success(`单词集已删除`)
-  } catch {
-    // 用户取消删除
+    if (result.success) {
+      // 重置筛选
+      selectedWordSet.value = ''
+      ElMessage.success(result.message)
+    } else {
+      ElMessage.error(result.message)
+    }
+  } catch (error) {
+    // 用户取消删除或其他错误
+    if (error !== 'cancel') {
+      console.error('删除单词集错误:', error)
+    }
   }
 }
 

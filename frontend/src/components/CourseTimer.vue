@@ -79,7 +79,7 @@ const startTimer = () => {
   // 从sessionStorage获取开始时间
   const startTimeStr = sessionStorage.getItem('courseStartTime')
   if (!startTimeStr) {
-    console.warn('没有找到课程开始时间')
+    // 如果没有开始时间，说明课程已结束或未开始，不需要警告
     return
   }
 

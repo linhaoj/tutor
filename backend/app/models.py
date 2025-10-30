@@ -129,6 +129,7 @@ class Schedule(Base):
     class_type = Column(String(10), default='big')  # 'big' (60min), 'small' (30min)
     completed = Column(Boolean, default=False)
     session_id = Column(String(100), nullable=True)  # 关联的抗遗忘会话ID（仅review类型课程）
+    timer_version = Column(Integer, default=0)  # 计时器版本号，重置时递增
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # 关系

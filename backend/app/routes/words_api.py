@@ -237,15 +237,23 @@ async def delete_word_set(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """删除单词集"""
+    """删除单词集及其所有单词"""
     word_set = db.query(WordSet).filter(WordSet.name == word_set_name).first()
     if not word_set:
         raise HTTPException(status_code=404, detail="单词集不存在")
 
-    logger.info(f"删除单词集: 单词集={word_set_name}, 教师={current_user.username}")
+    # 先删除所有关联的单词（解决外键约束问题）
+    word_count = len(word_set.words)
+    for word in word_set.words:
+        db.delete(word)
+
+    logger.info(f"删除单词集: 单词集={word_set_name}, 单词数={word_count}, 教师={current_user.username}")
+
+    # 再删除单词集
     db.delete(word_set)
     db.commit()
-    return {"message": "单词集删除成功"}
+
+    return {"message": f"单词集删除成功（包含{word_count}个单词）"}
 
 
 @router.post("/sets/{word_set_name}/batch-add")

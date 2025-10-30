@@ -15,6 +15,8 @@ export interface Schedule {
   course_type: string
   duration: number
   class_type: string
+  session_id?: string  // 抗遗忘会话ID（可选）
+  timer_version: number  // 计时器版本号
   completed: boolean
 }
 
@@ -104,6 +106,32 @@ export const useScheduleStore = defineStore('schedule', () => {
       return {
         success: false,
         message: error.response?.data?.detail || '删除课程失败'
+      }
+    }
+  }
+
+  /**
+   * 重置课程计时器（仅管理员）
+   */
+  const resetTimer = async (id: number): Promise<{ success: boolean, message: string, timer_version?: number }> => {
+    try {
+      const response = await api.put(`/api/schedules/${id}/reset-timer`)
+
+      // 更新本地状态
+      const schedule = schedules.value.find(s => s.id === id)
+      if (schedule) {
+        schedule.timer_version = response.data.timer_version
+      }
+
+      return {
+        success: true,
+        message: response.data.message || '计时器已重置',
+        timer_version: response.data.timer_version
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '重置计时器失败'
       }
     }
   }
@@ -228,6 +256,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     updateSchedule,
     deleteSchedule,
     completeSchedule,
+    resetTimer,
     getSchedulesByDate,
     getSchedulesByStudent,
     toggleDateGroupExpanded,

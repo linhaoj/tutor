@@ -231,26 +231,40 @@
                           <span class="course-count">{{ dateGroup.schedules.length }} 门课程</span>
                         </div>
                         <div class="schedule-items">
-                          <div 
-                            v-for="schedule in dateGroup.schedules" 
+                          <div
+                            v-for="schedule in dateGroup.schedules"
                             :key="schedule.id"
                             class="schedule-item"
                           >
                             <div class="schedule-time">{{ schedule.time }}</div>
                             <div class="schedule-content">
-                              <div class="schedule-title">{{ schedule.wordSet }}</div>
-                              <div class="schedule-student">{{ schedule.studentName }}</div>
+                              <div class="schedule-info-row">
+                                <span class="info-label">学生:</span>
+                                <span class="info-value student">{{ schedule.student_name }}</span>
+                                <span class="info-separator">|</span>
+                                <span class="info-label">单词库:</span>
+                                <span class="info-value wordset">{{ schedule.word_set_name }}</span>
+                              </div>
                               <div class="schedule-type">
-                                <el-tag 
-                                  :type="schedule.type === 'review' ? 'warning' : 'success'" 
+                                <el-tag
+                                  :type="schedule.course_type === 'review' ? 'warning' : 'success'"
                                   size="small"
                                 >
-                                  {{ schedule.type === 'review' ? '抗遗忘' : '单词学习' }}
+                                  {{ schedule.course_type === 'review' ? '抗遗忘' : '单词学习' }}
                                 </el-tag>
+                                <el-tag
+                                  :type="schedule.class_type === 'big' ? 'primary' : 'info'"
+                                  size="small"
+                                  style="margin-left: 8px"
+                                >
+                                  {{ schedule.class_type === 'big' ? '大课' : '小课' }}
+                                </el-tag>
+                                <span class="duration-text">{{ schedule.duration || 60 }}分钟</span>
                               </div>
                             </div>
                             <div class="schedule-actions">
                               <el-button size="small" @click="editSchedule(schedule)">编辑</el-button>
+                              <el-button size="small" type="warning" @click="resetTimer(schedule)">重置计时</el-button>
                               <el-button size="small" type="danger" @click="deleteSchedule(schedule)">删除</el-button>
                             </div>
                           </div>
@@ -1846,6 +1860,27 @@ const deleteSchedule = async (schedule: Schedule) => {
   }
 }
 
+const resetTimer = async (schedule: Schedule) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要重置这个课程的计时器吗？\n重置后，教师下次点击学习/复习时会重新开始计时。`,
+      '确认重置',
+      { type: 'warning' }
+    )
+
+    const result = await scheduleStore.resetTimer(schedule.id)
+
+    if (result.success) {
+      ElMessage.success(result.message + ` (版本: ${result.timer_version})`)
+      await loadTeacherData()
+    } else {
+      ElMessage.error(result.message)
+    }
+  } catch {
+    // 用户取消
+  }
+}
+
 // 数据管理方法
 const goToDataManagement = () => {
   router.push('/data-management')
@@ -2188,10 +2223,46 @@ onMounted(() => {
   margin-bottom: 5px;
 }
 
-.schedule-student {
-  color: #606266;
-  font-size: 14px;
-  margin-bottom: 5px;
+.schedule-info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 15px;
+}
+
+.info-label {
+  color: #909399;
+  font-size: 13px;
+}
+
+.info-value {
+  font-weight: 600;
+}
+
+.info-value.student {
+  color: #409eff;
+}
+
+.info-value.wordset {
+  color: #67c23a;
+}
+
+.info-separator {
+  color: #dcdfe6;
+  margin: 0 4px;
+}
+
+.schedule-type {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.duration-text {
+  color: #909399;
+  font-size: 13px;
+  margin-left: 4px;
 }
 
 .schedule-actions {

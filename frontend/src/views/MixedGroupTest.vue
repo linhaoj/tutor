@@ -440,6 +440,19 @@ const startNextGroupLearning = (skipMode = false) => {
 const handleTimeExpired = () => {
   console.log('⏰ 课程时间已到，自动跳转到训后检测')
 
+  // 使用当前已学习的组数
+  const currentBatchStartGroup = 1  // 批次总是从第1组开始
+  const currentBatchGroupCount = totalGroups.value  // 当前已经学习到第几组
+  const totalWordsCount = currentBatchGroupCount * 5
+
+  console.log('⏰ MixedGroupTest自动结束 - 训后检测参数:', {
+    totalGroups: totalGroups.value,
+    totalLearningGroups: totalLearningGroups.value,
+    currentBatchStartGroup,
+    currentBatchGroupCount,
+    totalWordsCount
+  })
+
   ElMessage({
     message: '⏰ 课程时间已到，自动进入训后检测',
     type: 'warning',
@@ -453,11 +466,13 @@ const handleTimeExpired = () => {
       params: { studentId: route.params.studentId },
       query: {
         wordSet: route.query.wordSet,
-        totalWords: route.query.totalWords,
-        startIndex: route.query.startIndex,
+        totalWords: totalWordsCount,
+        startIndex: 0,
         teacherId: route.query.teacherId,
         learningMode: route.query.learningMode,
         filtered: route.query.filtered,
+        currentBatchStartGroup: currentBatchStartGroup,
+        currentBatchGroupCount: currentBatchGroupCount,
         autoEnd: 'true'  // 标记为自动结束
       }
     })

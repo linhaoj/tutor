@@ -24,8 +24,9 @@
           {{ formatDate(scope.row.created_at) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200">
+      <el-table-column label="操作" width="280">
         <template #default="scope">
+          <el-button size="small" @click="viewProgress(scope.row)">查看进度</el-button>
           <el-button size="small" @click="editStudent(scope.row)">编辑</el-button>
           <el-button
             size="small"
@@ -97,18 +98,91 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 查看学习进度对话框 -->
+    <el-dialog
+      v-model="progressDialogVisible"
+      :title="`${selectedStudent?.name} - 学习进度`"
+      width="900px"
+      @close="closeProgressDialog"
+    >
+      <div class="progress-dialog-content">
+        <!-- 词库选择器 -->
+        <div class="word-set-selector">
+          <el-form-item label="选择词库：" label-width="100px">
+            <el-select
+              v-model="selectedWordSet"
+              placeholder="请选择词库"
+              @change="loadGridStats"
+              style="width: 300px"
+            >
+              <el-option
+                v-for="wordSet in studentWordSets"
+                :key="wordSet"
+                :label="wordSet"
+                :value="wordSet"
+              />
+            </el-select>
+          </el-form-item>
+        </div>
+
+        <!-- 九宫格统计 -->
+        <div v-if="selectedWordSet" class="grid-stats">
+          <h3>{{ selectedWordSet }} - 学习进度统计</h3>
+          <div class="grid-container">
+            <div
+              v-for="i in 9"
+              :key="i"
+              class="grid-cell"
+              :class="`stage-${i-1}`"
+            >
+              <div class="grid-number">格子 {{ i-1 }}</div>
+              <div class="grid-count">{{ gridStats[`grid_${i-1}`] || 0 }}</div>
+              <div class="grid-label">{{ getGridLabel(i-1) }}</div>
+            </div>
+          </div>
+
+          <!-- 总计信息 -->
+          <div class="stats-summary">
+            <el-descriptions :column="3" border>
+              <el-descriptions-item label="总单词数">
+                {{ totalWords }}
+              </el-descriptions-item>
+              <el-descriptions-item label="未学习">
+                {{ gridStats.grid_0 || 0 }}
+              </el-descriptions-item>
+              <el-descriptions-item label="学习中">
+                {{ learningWords }}
+              </el-descriptions-item>
+              <el-descriptions-item label="已掌握" :span="3">
+                {{ masteredWords }} ({{ masteredPercentage }}%)
+              </el-descriptions-item>
+            </el-descriptions>
+          </div>
+        </div>
+
+        <!-- 未选择词库提示 -->
+        <div v-else class="empty-hint">
+          <el-empty description="请选择一个词库查看学习进度" />
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { useStudentsStore } from '../stores/students'
 import { useAuthStore } from '../stores/auth'
+import { useWordsStore } from '../stores/words'
+import { useLearningProgressStore } from '../stores/learningProgress'
 
 const studentsStore = useStudentsStore()
 const authStore = useAuthStore()
+const wordsStore = useWordsStore()
+const progressStore = useLearningProgressStore()
 
 const dialogVisible = ref(false)
 const saving = ref(false)
@@ -122,6 +196,61 @@ const studentForm = ref({
   remaining_hours: 0,
   teacher_id: ''
 })
+
+// 查看进度相关
+const progressDialogVisible = ref(false)
+const selectedStudent = ref<any>(null)
+const selectedWordSet = ref('')
+const studentWordSets = ref<string[]>([])
+const gridStats = ref<Record<string, number>>({
+  grid_0: 0,
+  grid_1: 0,
+  grid_2: 0,
+  grid_3: 0,
+  grid_4: 0,
+  grid_5: 0,
+  grid_6: 0,
+  grid_7: 0,
+  grid_8: 0
+})
+
+// 九宫格计算属性
+const totalWords = computed(() => {
+  return Object.values(gridStats.value).reduce((sum, count) => sum + count, 0)
+})
+
+const learningWords = computed(() => {
+  let count = 0
+  for (let i = 1; i <= 7; i++) {
+    count += gridStats.value[`grid_${i}`] || 0
+  }
+  return count
+})
+
+const masteredWords = computed(() => {
+  // 格子8是已掌握（预留），格子7也算已掌握
+  return (gridStats.value.grid_7 || 0) + (gridStats.value.grid_8 || 0)
+})
+
+const masteredPercentage = computed(() => {
+  if (totalWords.value === 0) return 0
+  return Math.round((masteredWords.value / totalWords.value) * 100)
+})
+
+const getGridLabel = (index: number) => {
+  const labels = [
+    '未学习',
+    '阶段1',
+    '阶段2',
+    '阶段3',
+    '阶段4',
+    '阶段5',
+    '阶段6',
+    '阶段7',
+    '已掌握'
+  ]
+  return labels[index] || '未知'
+}
 
 const getHoursClass = (hours: number) => {
   if (!hours || hours <= 0) return 'hours-empty'
@@ -236,6 +365,87 @@ const deleteStudent = async (student: any) => {
   }
 }
 
+// 查看学生学习进度
+const viewProgress = async (student: any) => {
+  selectedStudent.value = student
+  selectedWordSet.value = ''
+  studentWordSets.value = []
+
+  // 重置九宫格数据
+  gridStats.value = {
+    grid_0: 0,
+    grid_1: 0,
+    grid_2: 0,
+    grid_3: 0,
+    grid_4: 0,
+    grid_5: 0,
+    grid_6: 0,
+    grid_7: 0,
+    grid_8: 0
+  }
+
+  progressDialogVisible.value = true
+
+  // 加载学生学习过的词库列表
+  try {
+    // 使用 fetchStudentProgress 获取学生所有学习进度（不传wordSetName）
+    const allProgress = await progressStore.fetchStudentProgress(student.id)
+
+    // 获取学生学习过的所有词库（有进度记录的词库）
+    const wordSetsSet = new Set<string>()
+    allProgress.forEach((progress: any) => {
+      if (progress.word_set_name) {
+        wordSetsSet.add(progress.word_set_name)
+      }
+    })
+
+    studentWordSets.value = Array.from(wordSetsSet)
+
+    if (studentWordSets.value.length === 0) {
+      ElMessage.info('该学生还没有学习记录')
+    }
+  } catch (error) {
+    console.error('加载学生词库列表失败:', error)
+    ElMessage.error('加载词库列表失败')
+  }
+}
+
+// 加载九宫格统计数据
+const loadGridStats = async () => {
+  if (!selectedStudent.value || !selectedWordSet.value) return
+
+  try {
+    const stats = await progressStore.getGridStats(
+      selectedStudent.value.id,
+      selectedWordSet.value
+    )
+
+    gridStats.value = stats
+    console.log('九宫格统计数据:', stats)
+  } catch (error) {
+    console.error('加载九宫格统计失败:', error)
+    ElMessage.error('加载学习进度失败')
+  }
+}
+
+// 关闭进度对话框
+const closeProgressDialog = () => {
+  selectedStudent.value = null
+  selectedWordSet.value = ''
+  studentWordSets.value = []
+  gridStats.value = {
+    grid_0: 0,
+    grid_1: 0,
+    grid_2: 0,
+    grid_3: 0,
+    grid_4: 0,
+    grid_5: 0,
+    grid_6: 0,
+    grid_7: 0,
+    grid_8: 0
+  }
+}
+
 onMounted(async () => {
   // 加载学生列表
   await studentsStore.fetchStudents()
@@ -278,5 +488,131 @@ onMounted(async () => {
 .hours-high {
   color: #67c23a;
   font-weight: bold;
+}
+
+/* 学习进度对话框样式 */
+.progress-dialog-content {
+  min-height: 400px;
+}
+
+.word-set-selector {
+  margin-bottom: 30px;
+}
+
+.grid-stats {
+  margin-top: 20px;
+}
+
+.grid-stats h3 {
+  color: #303133;
+  margin-bottom: 20px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  max-width: 600px;
+  margin-bottom: 30px;
+}
+
+.grid-cell {
+  aspect-ratio: 1;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transition: transform 0.2s ease;
+}
+
+.grid-cell:hover {
+  transform: translateY(-2px);
+}
+
+/* 格子0：未学习 */
+.grid-cell.stage-0 {
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  color: #606266;
+}
+
+/* 格子1-7：学习中 */
+.grid-cell.stage-1,
+.grid-cell.stage-2,
+.grid-cell.stage-3,
+.grid-cell.stage-4,
+.grid-cell.stage-5,
+.grid-cell.stage-6,
+.grid-cell.stage-7 {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+/* 格子8：已掌握 */
+.grid-cell.stage-8 {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  color: white;
+}
+
+.grid-number {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-bottom: 5px;
+}
+
+.grid-count {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.grid-label {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+/* 统计总结样式 */
+.stats-summary {
+  margin-top: 30px;
+}
+
+.stats-summary :deep(.el-descriptions__title) {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.stats-summary :deep(.el-descriptions__body) {
+  background: #f8f9fa;
+}
+
+.stats-summary :deep(.el-descriptions__label) {
+  font-weight: 500;
+  color: #606266;
+}
+
+.stats-summary :deep(.el-descriptions__content) {
+  font-weight: 600;
+  font-size: 16px;
+  color: #409eff;
+}
+
+/* 空提示样式 */
+.empty-hint {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .grid-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 </style>

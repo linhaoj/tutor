@@ -34,7 +34,7 @@
             <!-- 用户信息和操作 -->
             <div class="user-info">
               <el-dropdown @command="handleUserCommand">
-                <el-button type="text" class="user-button">
+                <el-button type="primary" text class="user-button">
                   <el-icon><Avatar /></el-icon>
                   {{ authStore.currentUser?.displayName }}
                   <el-icon class="el-icon--right"><ArrowDown /></el-icon>
@@ -125,7 +125,7 @@
               <!-- 用户信息和操作 -->
               <div class="user-info">
                 <el-dropdown @command="handleUserCommand">
-                  <el-button type="text" class="user-button">
+                  <el-button type="primary" text class="user-button">
                     <el-icon><Avatar /></el-icon>
                     {{ authStore.currentUser?.displayName }}
                     <el-icon class="el-icon--right"><ArrowDown /></el-icon>

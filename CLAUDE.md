@@ -347,7 +347,7 @@ tutor/
 
 | 路径 | 组件 | 权限 | 说明 |
 |------|------|------|------|
-| `/login` | Login | 公开 | 登录页面 |
+| `/login` | Login | 公开 | 登录页面 |w
 | `/` | Dashboard | 认证 | 日程管理 |
 | `/admin` | Admin | 管理员 | 系统管理 |
 | `/students` | Students | 认证 | 学生管理 |

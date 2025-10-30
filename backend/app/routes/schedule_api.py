@@ -27,6 +27,7 @@ class ScheduleCreate(BaseModel):
     course_type: str = "learning"
     duration: int = 60
     class_type: str = "big"
+    session_id: Optional[str] = None  # 抗遗忘会话ID（仅review类型课程）
     teacher_id: Optional[str] = None  # 管理员可以指定教师ID
 
 
@@ -43,6 +44,8 @@ class ScheduleResponse(BaseModel):
     course_type: str
     duration: int
     class_type: str
+    session_id: Optional[str] = None  # 抗遗忘会话ID（仅review类型课程）
+    timer_version: int  # 计时器版本号
     completed: bool
 
 
@@ -115,6 +118,7 @@ async def create_schedule(
         course_type=schedule_data.course_type,
         duration=schedule_data.duration,
         class_type=schedule_data.class_type,
+        session_id=schedule_data.session_id,  # 抗遗忘会话ID
         completed=False
     )
     db.add(schedule)
@@ -134,6 +138,8 @@ async def create_schedule(
         course_type=schedule.course_type,
         duration=schedule.duration,
         class_type=schedule.class_type,
+        session_id=schedule.session_id,  # 抗遗忘会话ID
+        timer_version=schedule.timer_version or 0,  # 计时器版本号
         completed=schedule.completed
     )
 
@@ -172,6 +178,8 @@ async def get_schedules(
             course_type=s.course_type,
             duration=s.duration,
             class_type=s.class_type,
+            session_id=s.session_id,  # 抗遗忘会话ID
+            timer_version=s.timer_version or 0,  # 计时器版本号
             completed=s.completed
         )
         for s in schedules
@@ -215,14 +223,53 @@ async def delete_schedule(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """删除课程"""
-    schedule = db.query(Schedule).filter(
-        Schedule.id == schedule_id,
-        Schedule.teacher_id == current_user.id
-    ).first()
-    if not schedule:
-        raise HTTPException(status_code=404, detail="课程不存在")
+    """删除课程
 
+    - 教师：只能删除自己创建的课程
+    - 管理员：可以删除任意课程
+    """
+    # 管理员可以删除所有课程，教师只能删除自己的课程
+    if current_user.role == "admin":
+        schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+    else:
+        schedule = db.query(Schedule).filter(
+            Schedule.id == schedule_id,
+            Schedule.teacher_id == current_user.id
+        ).first()
+
+    if not schedule:
+        raise HTTPException(status_code=404, detail="课程不存在或无权删除")
+
+    logger.info(f"删除课程: ID={schedule_id}, 教师={schedule.teacher_id}, 学生={schedule.student_name}, 操作人={current_user.username}")
     db.delete(schedule)
     db.commit()
     return {"message": "课程删除成功"}
+
+
+@router.put("/{schedule_id}/reset-timer")
+async def reset_schedule_timer(
+    schedule_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """重置课程计时器（仅管理员）
+
+    当教师不小心提前打开课程时，管理员可以重置计时器
+    重置后，timer_version会递增，前端检测到版本变化后会清空计时器状态
+    """
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="只有管理员可以重置计时器")
+
+    schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="课程不存在")
+
+    # 递增timer_version
+    schedule.timer_version = (schedule.timer_version or 0) + 1
+    db.commit()
+
+    logger.info(f"重置课程计时器: ID={schedule_id}, 新版本={schedule.timer_version}, 学生={schedule.student_name}, 操作人={current_user.username}")
+    return {
+        "message": "计时器已重置",
+        "timer_version": schedule.timer_version
+    }

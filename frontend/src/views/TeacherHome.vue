@@ -182,7 +182,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { 
@@ -216,16 +216,28 @@ const teacherSchedules = ref<Schedule[]>([])
 
 // 计算属性
 const todaySchedules = computed(() => {
-  const today = new Date().toISOString().split('T')[0]
+  // 使用本地时区的日期，而不是UTC日期
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  const todayStr = `${year}-${month}-${day}`
+
+  console.log('🏠 TeacherHome今日课程:', {
+    今天日期: todayStr,
+    所有课程: teacherSchedules.value,
+    今日课程: teacherSchedules.value.filter(s => s.date === todayStr)
+  })
+
   return teacherSchedules.value
-    .filter(s => s.date === today)
+    .filter(s => s.date === todayStr)
     .sort((a, b) => a.time.localeCompare(b.time))
 })
 
 const weeklyCompletedCount = computed(() => {
   const oneWeekAgo = new Date()
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
-  const oneWeekAgoStr = oneWeekAgo.toISOString().split('T')[0]
+  const oneWeekAgoStr = `${oneWeekAgo.getFullYear()}-${String(oneWeekAgo.getMonth() + 1).padStart(2, '0')}-${String(oneWeekAgo.getDate()).padStart(2, '0')}`
   
   return teacherSchedules.value.filter(s => 
     s.completed && s.date >= oneWeekAgoStr
@@ -235,7 +247,7 @@ const weeklyCompletedCount = computed(() => {
 const monthlyCompletedCount = computed(() => {
   const oneMonthAgo = new Date()
   oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1)
-  const oneMonthAgoStr = oneMonthAgo.toISOString().split('T')[0]
+  const oneMonthAgoStr = `${oneMonthAgo.getFullYear()}-${String(oneMonthAgo.getMonth() + 1).padStart(2, '0')}-${String(oneMonthAgo.getDate()).padStart(2, '0')}`
   
   return teacherSchedules.value.filter(s => 
     s.completed && s.date >= oneMonthAgoStr
@@ -293,15 +305,68 @@ const contactAdmin = () => {
   ElMessage.info('联系管理员功能开发中...')
 }
 
+// 存储上次的timer_version，用于检测变化
+const lastTimerVersions = ref<Record<number, number>>({})
+
+// 定期检查timer_version是否被管理员重置
+const checkTimerVersionChanges = async () => {
+  try {
+    // 获取最新的schedules
+    await scheduleStore.fetchSchedules()
+    teacherSchedules.value = scheduleStore.schedules
+
+    // 检查每个课程的timer_version是否变化
+    teacherSchedules.value.forEach(schedule => {
+      const lastVersion = lastTimerVersions.value[schedule.id]
+      const currentVersion = schedule.timer_version || 0
+
+      if (lastVersion !== undefined && lastVersion !== currentVersion) {
+        console.log(`⚠️ 课程 ${schedule.id} 计时器被重置: ${lastVersion} -> ${currentVersion}`)
+        ElMessage.warning(`课程"${schedule.word_set_name}"的计时器已被管理员重置`)
+
+        // 清空该课程的sessionStorage
+        sessionStorage.removeItem('courseStartTime')
+        sessionStorage.removeItem('currentScheduleId')
+        sessionStorage.removeItem(`timer_version_${schedule.id}`)
+      }
+
+      // 更新记录
+      lastTimerVersions.value[schedule.id] = currentVersion
+    })
+  } catch (error) {
+    console.error('检查timer_version失败:', error)
+  }
+}
+
+// 轮询间隔 - 每10秒检查一次
+let timerCheckInterval: number | null = null
+
 // 生命周期
-onMounted(() => {
+onMounted(async () => {
   // 检查教师权限
   if (!authStore.isLoggedIn || authStore.isAdmin) {
     router.push('/login')
     return
   }
-  
-  loadTeacherData()
+
+  await loadTeacherData()
+
+  // 初始化timer_version记录
+  teacherSchedules.value.forEach(schedule => {
+    lastTimerVersions.value[schedule.id] = schedule.timer_version || 0
+  })
+
+  // 启动定期检查（每10秒）
+  timerCheckInterval = window.setInterval(checkTimerVersionChanges, 10000)
+  console.log('🔄 TeacherHome: 已启动timer_version自动检查（每10秒）')
+})
+
+// 组件卸载时清理定时器
+onUnmounted(() => {
+  if (timerCheckInterval) {
+    clearInterval(timerCheckInterval)
+    console.log('🛑 TeacherHome: 已停止timer_version自动检查')
+  }
 })
 </script>
 
