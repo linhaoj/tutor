@@ -355,7 +355,7 @@ onMounted(async () => {
   font-size: 20px;
 }
 
-/* 响应式设计 */
+/* 响应式设计 - 平板 */
 @media (max-width: 768px) {
   .student-review {
     padding: 15px;
@@ -382,6 +382,117 @@ onMounted(async () => {
   .word-actions {
     width: 100%;
     justify-content: center;
+  }
+}
+
+/* 响应式设计 - 手机 */
+@media (max-width: 480px) {
+  .student-review {
+    padding: 10px;
+  }
+
+  /* 头部优化 */
+  .review-header {
+    padding: 15px;
+    margin-bottom: 20px;
+  }
+
+  .header-info h2 {
+    font-size: 18px;
+    margin-bottom: 6px;
+  }
+
+  .review-date {
+    font-size: 13px;
+  }
+
+  .word-count {
+    font-size: 15px;
+  }
+
+  /* 单词列表优化 */
+  .words-container {
+    gap: 15px;
+    margin-bottom: 20px;
+  }
+
+  .word-card-wrapper {
+    gap: 12px;
+  }
+
+  /* 单词卡片优化 - 增大便于点击和阅读 */
+  .word-card {
+    min-height: 120px;
+    padding: 20px;
+    border-radius: 12px;
+  }
+
+  .word-text {
+    font-size: 22px; /* 增大字体便于手机阅读 */
+    font-weight: 700;
+  }
+
+  .word-number {
+    font-size: 13px;
+  }
+
+  /* 星标按钮优化 - 增大点击区域 */
+  .star-button {
+    right: 15px;
+  }
+
+  .star-button .el-icon {
+    font-size: 28px; /* 增大星标图标 */
+  }
+
+  /* 发音按钮优化 - 增大便于点击 */
+  .word-actions {
+    justify-content: center;
+  }
+
+  .word-actions .el-button {
+    width: 56px !important;
+    height: 56px !important;
+    font-size: 24px;
+  }
+
+  /* 底部统计 */
+  .review-footer {
+    padding: 15px;
+  }
+
+  .starred-count {
+    font-size: 15px;
+  }
+
+  .starred-count .el-icon {
+    font-size: 18px;
+  }
+}
+
+/* 超小屏幕优化 */
+@media (max-width: 375px) {
+  .header-info h2 {
+    font-size: 16px;
+  }
+
+  .word-card {
+    min-height: 100px;
+    padding: 18px;
+  }
+
+  .word-text {
+    font-size: 20px;
+  }
+
+  .star-button .el-icon {
+    font-size: 24px;
+  }
+
+  .word-actions .el-button {
+    width: 50px !important;
+    height: 50px !important;
+    font-size: 20px;
   }
 }
 </style>

@@ -241,7 +241,7 @@ onMounted(async () => {
   padding: 12px;
 }
 
-/* 响应式设计 */
+/* 响应式设计 - 平板 */
 @media (max-width: 768px) {
   .student-dashboard {
     padding: 20px 15px;
@@ -258,6 +258,87 @@ onMounted(async () => {
 
   .reviews-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* 响应式设计 - 手机 */
+@media (max-width: 480px) {
+  .student-dashboard {
+    padding: 15px 10px;
+  }
+
+  /* 头部优化 */
+  .dashboard-header {
+    margin-bottom: 30px;
+  }
+
+  .welcome-section h1 {
+    font-size: 22px;
+    margin-bottom: 15px;
+  }
+
+  /* 统计卡片优化 */
+  .stats-card {
+    padding: 25px 20px;
+    border-radius: 12px;
+  }
+
+  .stat-label {
+    font-size: 13px;
+  }
+
+  .stat-value {
+    font-size: 32px;
+  }
+
+  /* 复习列表标题 */
+  .reviews-section h2 {
+    font-size: 20px;
+    margin-bottom: 15px;
+  }
+
+  /* 复习卡片优化 */
+  .review-card {
+    border-radius: 12px;
+  }
+
+  .review-date {
+    font-size: 15px;
+  }
+
+  .info-item {
+    padding: 10px 0;
+  }
+
+  .info-label,
+  .info-value {
+    font-size: 13px;
+  }
+
+  .word-set-name {
+    font-size: 14px;
+  }
+
+  /* 按钮优化 - 增大触摸区域 */
+  .review-actions .el-button {
+    height: 48px;
+    font-size: 16px;
+    font-weight: 600;
+  }
+}
+
+/* 超小屏幕优化 */
+@media (max-width: 375px) {
+  .welcome-section h1 {
+    font-size: 20px;
+  }
+
+  .stat-value {
+    font-size: 28px;
+  }
+
+  .reviews-section h2 {
+    font-size: 18px;
   }
 }
 </style>

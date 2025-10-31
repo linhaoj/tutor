@@ -11,7 +11,7 @@
  * 当学习时间达到此限制时，系统会自动跳转到训后检测
  * 防止课程拖堂，确保按时结束
  */
-export const COURSE_TIME_LIMIT_MINUTES = 10  // 修改时间限制（分钟）
+export const COURSE_TIME_LIMIT_MINUTES = 60  // 修改时间限制（分钟）
 
 /**
  * 转换为秒（内部使用，不需要修改）
