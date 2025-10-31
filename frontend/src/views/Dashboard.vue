@@ -210,7 +210,7 @@
                     <el-button
                       type="success"
                       @click="startStudy(schedule)"
-                      :disabled="false"
+                      :disabled="!isToday(schedule.date)"
                     >
                       {{ schedule.course_type === 'review' ? '复习' : '学习' }}
                     </el-button>
