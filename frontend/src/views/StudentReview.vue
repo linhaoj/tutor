@@ -355,144 +355,189 @@ onMounted(async () => {
   font-size: 20px;
 }
 
-/* 响应式设计 - 平板 */
+/* 响应式设计 - 手机和平板 */
 @media (max-width: 768px) {
-  .student-review {
-    padding: 15px;
-  }
-
-  .review-header {
-    flex-direction: column;
-    gap: 15px;
-  }
-
-  .header-info h2 {
-    font-size: 20px;
-  }
-
-  .word-card-wrapper {
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .word-text {
-    font-size: 20px;
-  }
-
-  .word-actions {
-    width: 100%;
-    justify-content: center;
-  }
-}
-
-/* 响应式设计 - 手机 */
-@media (max-width: 480px) {
   .student-review {
     padding: 10px;
   }
 
   /* 头部优化 */
   .review-header {
-    padding: 15px;
-    margin-bottom: 20px;
+    padding: 12px;
+    margin-bottom: 15px;
+    gap: 12px;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  /* 返回按钮优化 - 增大便于点击 */
+  .review-header .el-button {
+    min-width: 70px !important;
+    height: 38px !important;
+    font-size: 15px !important;
+    padding: 8px 12px !important;
+    flex-shrink: 0;
+  }
+
+  .header-info {
+    flex: 0 0 auto;
+    text-align: left;
   }
 
   .header-info h2 {
-    font-size: 18px;
-    margin-bottom: 6px;
+    font-size: 16px;
+    margin-bottom: 4px;
   }
 
   .review-date {
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .word-count {
-    font-size: 15px;
+    font-size: 14px;
+    padding: 6px 12px;
+    background: rgba(64, 158, 255, 0.1);
+    border-radius: 12px;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 
   /* 单词列表优化 */
   .words-container {
-    gap: 15px;
+    gap: 12px;
     margin-bottom: 20px;
   }
 
   .word-card-wrapper {
-    gap: 12px;
+    gap: 15px;
+    flex-direction: row;
+    align-items: center;
   }
 
-  /* 单词卡片优化 - 增大便于点击和阅读 */
+  /* 单词卡片优化 - 紧凑布局便于阅读 */
   .word-card {
-    min-height: 120px;
-    padding: 20px;
+    min-height: 60px;
+    padding: 12px 20px;
     border-radius: 12px;
+    border-width: 3px;
+  }
+
+  .word-content {
+    padding-right: 48px;
   }
 
   .word-text {
-    font-size: 22px; /* 增大字体便于手机阅读 */
-    font-weight: 700;
+    font-size: 24px;
+    font-weight: 600;
+    color: #1b5e20;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.7);
+  }
+
+  .show-chinese .word-text {
+    color: #0d47a1;
   }
 
   .word-number {
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   }
 
   /* 星标按钮优化 - 增大点击区域 */
   .star-button {
-    right: 15px;
+    right: 20px;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    backdrop-filter: blur(4px);
   }
 
   .star-button .el-icon {
-    font-size: 28px; /* 增大星标图标 */
+    font-size: 32px;
   }
 
   /* 发音按钮优化 - 增大便于点击 */
   .word-actions {
+    flex-shrink: 0;
     justify-content: center;
+  }
+
+  .word-actions .el-button {
+    width: 64px !important;
+    height: 64px !important;
+    font-size: 28px !important;
+    box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+  }
+
+  /* 底部统计 */
+  .review-footer {
+    padding: 16px;
+    margin-top: 10px;
+  }
+
+  .starred-count {
+    font-size: 16px;
+  }
+
+  .starred-count .el-icon {
+    font-size: 20px;
+  }
+}
+
+/* 超小屏幕优化 (iPhone SE等小屏幕) */
+@media (max-width: 390px) {
+  .review-header {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .review-header .el-button {
+    min-width: 60px !important;
+    height: 36px !important;
+    font-size: 14px !important;
+    padding: 6px 10px !important;
+  }
+
+  .header-info h2 {
+    font-size: 15px;
+  }
+
+  .review-date {
+    font-size: 11px;
+  }
+
+  .word-count {
+    font-size: 13px;
+    padding: 5px 10px;
+  }
+
+  .word-card {
+    min-height: 55px;
+    padding: 10px 18px;
+  }
+
+  .word-text {
+    font-size: 22px;
+  }
+
+  .star-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .star-button .el-icon {
+    font-size: 28px;
   }
 
   .word-actions .el-button {
     width: 56px !important;
     height: 56px !important;
-    font-size: 24px;
-  }
-
-  /* 底部统计 */
-  .review-footer {
-    padding: 15px;
-  }
-
-  .starred-count {
-    font-size: 15px;
-  }
-
-  .starred-count .el-icon {
-    font-size: 18px;
-  }
-}
-
-/* 超小屏幕优化 */
-@media (max-width: 375px) {
-  .header-info h2 {
-    font-size: 16px;
-  }
-
-  .word-card {
-    min-height: 100px;
-    padding: 18px;
-  }
-
-  .word-text {
-    font-size: 20px;
-  }
-
-  .star-button .el-icon {
-    font-size: 24px;
-  }
-
-  .word-actions .el-button {
-    width: 50px !important;
-    height: 50px !important;
-    font-size: 20px;
+    font-size: 24px !important;
   }
 }
 </style>

@@ -564,7 +564,8 @@ const startStudy = async (schedule: any) => {
       params: { studentId: schedule.student_id },
       query: {
         wordSet: schedule.word_set_name,
-        teacherId: authStore.currentUser?.id || ''
+        teacherId: authStore.currentUser?.id || '',
+        scheduleId: schedule.id.toString()
       }
     })
   } else {

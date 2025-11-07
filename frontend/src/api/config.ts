@@ -6,7 +6,8 @@ import axios, { type AxiosInstance, type AxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
 
 // API基础URL
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+// 开发环境使用局域网IP，支持手机访问
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://10.2.118.25:8000'
 
 // 创建axios实例
 const api: AxiosInstance = axios.create({

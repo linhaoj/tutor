@@ -24,7 +24,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://47.108.248.168:5173",
-        "http://127.0.0.1:5173"
+        "http://127.0.0.1:5173",
+        "http://10.2.118.25:5173"  # 支持局域网访问（手机端）
     ],
     allow_credentials=True,
     allow_methods=["*"],

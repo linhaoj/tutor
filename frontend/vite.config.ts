@@ -19,7 +19,7 @@ const buildTime = new Date().toLocaleString('zh-CN', {
 export default defineConfig({
   plugins: [
     vue(),
-    vueDevTools(),
+    // vueDevTools(), // 已禁用，避免遮挡手机端底部内容
   ],
   resolve: {
     alias: {
@@ -28,5 +28,10 @@ export default defineConfig({
   },
   define: {
     'import.meta.env.VITE_BUILD_TIME': JSON.stringify(buildTime)
+  },
+  server: {
+    host: '0.0.0.0', // 允许局域网访问
+    port: 5173,
+    strictPort: true
   }
 })

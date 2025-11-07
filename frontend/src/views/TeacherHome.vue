@@ -59,7 +59,7 @@
                   <el-icon><Calendar /></el-icon>
                 </div>
                 <div class="stat-info">
-                  <div class="stat-number">{{ teacherSchedules.length }}</div>
+                  <div class="stat-number">{{ regularCoursesCount }}</div>
                   <div class="stat-label">课程安排</div>
                 </div>
               </div>
@@ -73,7 +73,7 @@
                   <el-icon><Clock /></el-icon>
                 </div>
                 <div class="stat-info">
-                  <div class="stat-number">{{ todaySchedules.length }}</div>
+                  <div class="stat-number">{{ todayRegularCoursesCount }}</div>
                   <div class="stat-label">今日课程</div>
                 </div>
               </div>
@@ -215,6 +215,13 @@ const teacherWordSets = ref<WordSet[]>([])
 const teacherSchedules = ref<Schedule[]>([])
 
 // 计算属性
+
+// 只统计正课（不含抗遗忘）的课程安排总数
+const regularCoursesCount = computed(() => {
+  return teacherSchedules.value.filter(s => s.course_type !== 'review').length
+})
+
+// 今日所有课程（用于下方列表显示）
 const todaySchedules = computed(() => {
   // 使用本地时区的日期，而不是UTC日期
   const today = new Date()
@@ -234,29 +241,52 @@ const todaySchedules = computed(() => {
     .sort((a, b) => a.time.localeCompare(b.time))
 })
 
+// 今日正课数量（不含抗遗忘）
+const todayRegularCoursesCount = computed(() => {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  const todayStr = `${year}-${month}-${day}`
+
+  return teacherSchedules.value.filter(s =>
+    s.date === todayStr && s.course_type !== 'review'
+  ).length
+})
+
+// 本周完成的正课数量（不含抗遗忘）
 const weeklyCompletedCount = computed(() => {
   const oneWeekAgo = new Date()
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
   const oneWeekAgoStr = `${oneWeekAgo.getFullYear()}-${String(oneWeekAgo.getMonth() + 1).padStart(2, '0')}-${String(oneWeekAgo.getDate()).padStart(2, '0')}`
-  
-  return teacherSchedules.value.filter(s => 
-    s.completed && s.date >= oneWeekAgoStr
+
+  return teacherSchedules.value.filter(s =>
+    s.completed && s.date >= oneWeekAgoStr && s.course_type !== 'review'
   ).length
 })
 
+// 本月完成的正课数量（不含抗遗忘）
 const monthlyCompletedCount = computed(() => {
   const oneMonthAgo = new Date()
   oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1)
   const oneMonthAgoStr = `${oneMonthAgo.getFullYear()}-${String(oneMonthAgo.getMonth() + 1).padStart(2, '0')}-${String(oneMonthAgo.getDate()).padStart(2, '0')}`
-  
-  return teacherSchedules.value.filter(s => 
-    s.completed && s.date >= oneMonthAgoStr
+
+  return teacherSchedules.value.filter(s =>
+    s.completed && s.date >= oneMonthAgoStr && s.course_type !== 'review'
   ).length
 })
 
+// 总正课学习时长（不含抗遗忘，按课程时长累计）
 const totalLearningHours = computed(() => {
-  // 假设每个课程1小时，实际项目中应该记录真实时长
-  return teacherSchedules.value.filter(s => s.completed).length
+  const completedRegularCourses = teacherSchedules.value.filter(s =>
+    s.completed && s.course_type !== 'review'
+  )
+
+  // 累计实际时长（大课1.0h，小课0.5h）
+  return completedRegularCourses.reduce((total, course) => {
+    const hours = course.class_type === 'big' ? 1.0 : 0.5
+    return total + hours
+  }, 0)
 })
 
 // 方法

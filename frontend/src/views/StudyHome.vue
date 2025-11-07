@@ -236,7 +236,8 @@ const startLearning = () => {
       wordSet: route.query.wordSet || '',
       wordsCount: finalWordsCount.value,
       teacherId: teacherId.value,
-      learningMode: learningMode.value // 传递学习模式
+      learningMode: learningMode.value, // 传递学习模式
+      scheduleId: route.query.scheduleId || '' // 传递课程ID
     }
   })
 }

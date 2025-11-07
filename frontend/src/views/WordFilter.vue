@@ -105,9 +105,7 @@
               @click="confirmSelection"
               :loading="processing"
             >
-              {{ learningMode === 'review'
-                ? (selectedKnownWords.length === 0 ? '全部会了' : '开始学习')
-                : (selectedKnownWords.length === 0 ? '开始学习' : '替换并继续') }}
+              {{ getButtonText() }}
             </el-button>
           </div>
         </div>
@@ -124,6 +122,7 @@ import { Check, VideoPlay } from '@element-plus/icons-vue'
 import { useWordsStore } from '@/stores/words'
 import { useStudentsStore } from '@/stores/students'
 import { useLearningProgressStore } from '@/stores/learningProgress'
+import { useScheduleStore } from '@/stores/schedule'
 import { useUIStore } from '@/stores/ui'
 import CourseTimer from '@/components/CourseTimer.vue'
 
@@ -148,6 +147,7 @@ const teacherId = ref<string>(route.query.teacherId as string || '')
 const wordSetName = ref<string>(route.query.wordSet as string || '')
 const wordsCount = ref<number>(parseInt(route.query.wordsCount as string) || 10)
 const learningMode = ref<'new' | 'review'>(route.query.learningMode as 'new' | 'review' || 'new')
+const scheduleId = ref<string>(route.query.scheduleId as string || '')
 
 // 状态数据
 const studentName = ref<string>('')
@@ -303,8 +303,64 @@ const toggleWordSelection = (index: number) => {
   }
 }
 
+// 获取按钮文案
+const getButtonText = () => {
+  // 如果没有单词可学了，显示"结束词库"
+  if (currentWords.value.length === 0) {
+    return '结束词库'
+  }
+
+  // 复习模式
+  if (learningMode.value === 'review') {
+    return selectedKnownWords.value.length === 0 ? '全部会了' : '开始学习'
+  }
+
+  // 新词模式
+  return selectedKnownWords.value.length === 0 ? '开始学习' : '替换并继续'
+}
+
+// 结束词库功能
+const finishWordSet = async () => {
+  try {
+    // 1. 获取当前课程ID（优先使用URL参数，其次是sessionStorage）
+    let currentScheduleId = scheduleId.value || sessionStorage.getItem('currentScheduleId')
+    if (!currentScheduleId) {
+      ElMessage.error('未找到课程信息')
+      console.error('scheduleId not found in URL or sessionStorage')
+      return
+    }
+
+    // 2. 标记课程为完成
+    const scheduleStore = useScheduleStore()
+    await scheduleStore.completeSchedule(parseInt(currentScheduleId))
+
+    // 3. 扣除课时（通过后端API自动处理）
+    // completeSchedule API会自动扣除课时
+
+    // 4. 退出课程模式
+    uiStore.exitCourseMode()
+
+    // 5. 显示提示
+    ElMessage.success('词库已学完，课程已完成，课时已扣除')
+
+    // 6. 返回首页
+    router.push({
+      name: 'Dashboard'
+    })
+  } catch (error) {
+    console.error('结束词库失败:', error)
+    ElMessage.error('操作失败，请重试')
+  }
+}
+
 // 确认选择
 const confirmSelection = async () => {
+  // 如果没有单词可学了，调用结束词库功能
+  if (currentWords.value.length === 0) {
+    await finishWordSet()
+    return
+  }
+
   processing.value = true
 
   try {
@@ -420,33 +476,57 @@ const confirmSelection = async () => {
       // 获取可用的替换单词（现在是异步调用）
       const availableReplacements = await getAvailableReplacementWords(currentWords.value)
 
-      if (availableReplacements.length < selectedKnownWords.value.length) {
+      const selectedCount = selectedKnownWords.value.length
+      const replacementCount = availableReplacements.length
+
+      if (replacementCount < selectedCount) {
         ElMessage({
-          message: `可替换的单词不足，只能替换 ${availableReplacements.length} 个单词`,
+          message: `可替换的单词不足，只能替换 ${replacementCount} 个单词，${selectedCount - replacementCount} 个单词将被移除`,
           type: 'warning'
         })
       }
 
       // 替换已认识的单词
-      const replacementWords = shuffleArray(availableReplacements).slice(0, selectedKnownWords.value.length)
+      const replacementWords = shuffleArray(availableReplacements).slice(0, selectedCount)
 
-      // 创建新的单词列表
-      const newWords = [...currentWords.value]
-      selectedKnownWords.value.forEach((selectedIndex, i) => {
-        if (i < replacementWords.length) {
-          newWords[selectedIndex] = replacementWords[i]
+      // 创建新的单词列表：能替换的替换，不能替换的移除
+      const newWords: Word[] = []
+      let replacementIndex = 0
+
+      currentWords.value.forEach((word, index) => {
+        if (selectedKnownWords.value.includes(index)) {
+          // 这个单词被标记为已掌握
+          if (replacementIndex < replacementWords.length) {
+            // 有替换单词，替换它
+            newWords.push(replacementWords[replacementIndex])
+            replacementIndex++
+          }
+          // 如果没有替换单词，不添加到新列表（移除）
+        } else {
+          // 这个单词未被标记，保留
+          newWords.push(word)
         }
       })
 
-      // 更新当前单词列表
+      // 更新当前单词列表和计数
       currentWords.value = newWords
+      wordsCount.value = newWords.length
       selectedKnownWords.value = []
       currentRound.value++
 
-      ElMessage({
-        message: `第${currentRound.value - 1}轮筛选完成，请继续选择认识的单词`,
-        type: 'success'
-      })
+      // 检查是否还有单词可以学习
+      if (newWords.length === 0) {
+        ElMessage({
+          message: '词库已学完所有可学单词，点击"结束词库"完成本次课程',
+          type: 'info',
+          duration: 5000
+        })
+      } else {
+        ElMessage({
+          message: `第${currentRound.value - 1}轮筛选完成，剩余 ${newWords.length} 个单词可学习`,
+          type: 'success'
+        })
+      }
     }
 
   } catch (error) {

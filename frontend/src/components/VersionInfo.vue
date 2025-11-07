@@ -37,11 +37,7 @@ const buildTime = ref(import.meta.env.VITE_BUILD_TIME || '开发模式')
 
 @media (max-width: 768px) {
   .version-info {
-    bottom: 5px;
-    right: 5px;
-    font-size: 11px;
-    padding: 6px 12px;
-    gap: 10px;
+    display: none; /* 手机端隐藏版本信息 */
   }
 }
 </style>
