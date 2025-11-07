@@ -27,3 +27,4 @@ node_modules/
 # 构建输出
 dist/
 build/
+backend/english_tutor.db
