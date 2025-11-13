@@ -5,9 +5,24 @@
 import axios, { type AxiosInstance, type AxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
 
-// API基础URL
-// 开发环境使用局域网IP，支持手机访问
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://10.2.118.25:8000'
+// API基础URL - 自动检测
+// 优先使用环境变量，否则根据当前访问地址自动判断
+const API_BASE_URL = (() => {
+  // 如果有环境变量配置，优先使用
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL
+  }
+
+  // 根据当前访问地址自动判断
+  const hostname = window.location.hostname
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    // 电脑本地访问
+    return 'http://localhost:8000'
+  } else {
+    // 手机局域网访问（使用当前访问的IP）
+    return `http://${hostname}:8000`
+  }
+})()
 
 // 创建axios实例
 const api: AxiosInstance = axios.create({

@@ -317,12 +317,26 @@ const handleCommand = (command: string) => {
 }
 
 const startLearning = (schedule: Schedule) => {
+  // 记录课程开始时间（只在首次设置）
+  if (!sessionStorage.getItem('courseStartTime')) {
+    const startTime = Date.now()
+    sessionStorage.setItem('courseStartTime', startTime.toString())
+    console.log('设置课程开始时间:', new Date().toLocaleTimeString())
+  } else {
+    console.log('课程已在进行中，继续计时')
+  }
+
+  // 保存课程ID，用于后续标记课程完成和扣减课时
+  sessionStorage.setItem('currentScheduleId', schedule.id.toString())
+  console.log('已设置 currentScheduleId:', schedule.id)
+
   router.push({
     name: 'StudyHome',
     params: { studentId: schedule.student_id.toString() },
     query: {
       wordSet: schedule.word_set_name,
-      teacherId: authStore.currentUser?.id || ''
+      teacherId: authStore.currentUser?.id || '',
+      scheduleId: schedule.id.toString() // 传递课程ID
     }
   })
 }

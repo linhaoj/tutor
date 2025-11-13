@@ -381,59 +381,62 @@ const markCourseAsCompleted = async () => {
       courseStartTime,
       teacherId,
       studentId,
-      '所有sessionStorage': Object.keys(sessionStorage).reduce((acc, key) => {
-        acc[key] = sessionStorage.getItem(key)
-        return acc
-      }, {}),
-      '条件检查': {
-        'scheduleIdStr存在': !!scheduleIdStr,
-        'teacherId存在': !!teacherId,
-        'studentId有效': !isNaN(studentId) && studentId > 0
-      }
+      'scheduleIdStr存在': !!scheduleIdStr,
+      'teacherId存在': !!teacherId,
+      'studentId有效': !isNaN(studentId) && studentId > 0
     })
 
-    if (scheduleIdStr && teacherId && studentId) {
-      const scheduleId = parseInt(scheduleIdStr)
+    // 如果缺少信息，给出详细提示但不影响其他功能
+    if (!scheduleIdStr || !teacherId || !studentId) {
+      const missing = []
+      if (!scheduleIdStr) missing.push('课程ID(scheduleId)')
+      if (!teacherId) missing.push('教师ID(teacherId)')
+      if (!studentId || isNaN(studentId)) missing.push('学生ID(studentId)')
 
-      // 注意：只有单词学习课程才扣减课时，抗遗忘复习不扣课时
-      // 获取课程信息来确定扣减时长（后端API自动过滤）
-      await scheduleStore.fetchSchedules()
-      const schedule = scheduleStore.schedules.find(s => s.id === scheduleId)
-
-      console.log('📅 找到的课程信息:', schedule)
-
-      if (schedule) {
-        // 🚨 防止重复标记：如果课程已完成，跳过
-        if (schedule.completed) {
-          console.log('⚠️ 课程已完成，跳过重复标记和扣课时')
-          return
-        }
-        // 根据课程类型扣减时长：大课(60分钟) = 1.0h，小课(30分钟) = 0.5h
-        const hoursToDeduct = schedule.class_type === 'big' ? 1.0 : 0.5
-
-        console.log(`⏰ 准备扣减课时: ${hoursToDeduct}h (${schedule.class_type === 'big' ? '大课' : '小课'})`)
-
-        // 扣减学生课程时长（单词学习课程）
-        const success = await studentsStore.deductStudentHours(studentId, hoursToDeduct)
-        if (success) {
-          console.log(`✅ 单词学习课程时长已扣减: ${hoursToDeduct}h`)
-          ElMessage.success(`课时已扣减: ${hoursToDeduct}h`)
-        } else {
-          console.warn('❌ 扣减学生课程时长失败')
-          ElMessage.warning('扣减课时失败')
-        }
-      } else {
-        console.warn('⚠️ 未找到课程信息, scheduleId:', scheduleId)
-      }
-
-      // 标记课程为已完成（后端API通过JWT自动识别用户）
-      await scheduleStore.completeSchedule(scheduleId)
-      console.log('✅ 单词学习课程已标记为完成:', scheduleId)
-      ElMessage.success('课程已标记为完成')
-    } else {
-      console.warn('⚠️ 缺少课程完成所需信息', { scheduleIdStr, teacherId, studentId })
-      ElMessage.warning('无法标记课程完成：缺少必要信息（请查看控制台）')
+      console.warn('⚠️ 无法自动标记课程完成，缺少以下信息:', missing.join(', '))
+      console.info('💡 提示: 请从日程管理页面点击"学习"按钮进入课程，避免直接刷新或书签访问')
+      // 不显示错误消息，因为核心学习功能已完成
+      return
     }
+
+    // 所有信息齐全，开始标记课程完成
+    const scheduleId = parseInt(scheduleIdStr)
+
+    // 注意：只有单词学习课程才扣减课时，抗遗忘复习不扣课时
+    // 获取课程信息来确定扣减时长（后端API自动过滤）
+    await scheduleStore.fetchSchedules()
+    const schedule = scheduleStore.schedules.find(s => s.id === scheduleId)
+
+    console.log('📅 找到的课程信息:', schedule)
+
+    if (schedule) {
+      // 🚨 防止重复标记：如果课程已完成，跳过
+      if (schedule.completed) {
+        console.log('⚠️ 课程已完成，跳过重复标记和扣课时')
+        return
+      }
+      // 根据课程类型扣减时长：大课(60分钟) = 1.0h，小课(30分钟) = 0.5h
+      const hoursToDeduct = schedule.class_type === 'big' ? 1.0 : 0.5
+
+      console.log(`⏰ 准备扣减课时: ${hoursToDeduct}h (${schedule.class_type === 'big' ? '大课' : '小课'})`)
+
+      // 扣减学生课程时长（单词学习课程）
+      const success = await studentsStore.deductStudentHours(studentId, hoursToDeduct)
+      if (success) {
+        console.log(`✅ 单词学习课程时长已扣减: ${hoursToDeduct}h`)
+        ElMessage.success(`课时已扣减: ${hoursToDeduct}h`)
+      } else {
+        console.warn('❌ 扣减学生课程时长失败')
+        ElMessage.warning('扣减课时失败')
+      }
+    } else {
+      console.warn('⚠️ 未找到课程信息, scheduleId:', scheduleId)
+    }
+
+    // 标记课程为已完成（后端API通过JWT自动识别用户）
+    await scheduleStore.completeSchedule(scheduleId)
+    console.log('✅ 单词学习课程已标记为完成:', scheduleId)
+    ElMessage.success('课程已标记为完成')
   } catch (error) {
     console.error('❌ 标记课程完成失败:', error)
     ElMessage.error('标记课程完成失败')
