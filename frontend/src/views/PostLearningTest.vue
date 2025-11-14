@@ -654,27 +654,31 @@ const promptForAntiForgetTime = (): Promise<string | null> => {
       '设置抗遗忘时间',
       {
         confirmButtonText: '确定',
-        cancelButtonText: '取消',
+        showCancelButton: false, // 隐藏取消按钮
+        closeOnClickModal: false, // 禁止点击外部关闭
+        closeOnPressEscape: false, // 禁止按ESC关闭
         dangerouslyUseHTMLString: true,
         beforeClose: (action, instance, done) => {
           if (action === 'confirm') {
             const select = document.getElementById('antiForgetTimeSelect') as HTMLSelectElement
             const selectedTime = select?.value
-            
+
             if (!selectedTime) {
               ElMessage.warning('请选择上课时间')
               return false // 阻止关闭
             }
-            
+
             resolve(selectedTime)
             done()
           } else {
+            // 不应该执行到这里（因为没有取消按钮）
             resolve(null)
             done()
           }
         }
       }
     ).catch(() => {
+      // 不应该执行到这里（因为禁用了所有关闭方式）
       resolve(null)
     })
   })
@@ -793,6 +797,9 @@ const createAntiForgetSchedule = async (session: any, time: string) => {
             confirmButtonText: '自动延后30分钟',
             cancelButtonText: '重新选择时间',
             type: 'warning',
+            closeOnClickModal: false, // 禁止点击外部关闭
+            closeOnPressEscape: false, // 禁止按ESC关闭
+            showClose: false, // 隐藏右上角的X按钮
             distinguishCancelAndClose: true
           }
         )
@@ -846,54 +853,76 @@ const createAntiForgetSchedule = async (session: any, time: string) => {
           console.log('📋 冲突列表:', conflictList)
           console.log('🔔 即将弹出时间输入框...')
 
-          try {
-            // 显示时间选择对话框
-            console.log('🪟 正在调用 ElMessageBox.prompt...')
-            const { value: newTime } = await ElMessageBox.prompt(
-              `请为这 ${conflicts.length} 个冲突的日期选择新的上课时间：\n${conflictList}`,
-              '重新选择时间',
-              {
-                confirmButtonText: '确定',
-                cancelButtonText: '取消',
-                inputPlaceholder: '请输入时间，格式如 14:00',
-                inputPattern: /^([01]\d|2[0-3]):([0-5]\d)$/,
-                inputErrorMessage: '时间格式不正确，请输入如 14:00'
-              }
-            )
+          // 循环重试，直到用户输入一个不冲突的时间
+          let validTimeSelected = false
+          let newTime = ''
 
-            console.log('✅ 用户输入的新时间:', newTime)
-
-            // 验证新时间是否还有冲突
-            let hasConflictWithNewTime = false
-            for (const conflict of conflicts) {
-              const stillConflict = scheduleStore.schedules.some(
-                s => s.student_id === studentId &&
-                     s.date === conflict.date &&
-                     s.time === newTime
+          while (!validTimeSelected) {
+            try {
+              // 显示时间选择对话框
+              console.log('🪟 正在调用 ElMessageBox.prompt...')
+              const result = await ElMessageBox.prompt(
+                `请为这 ${conflicts.length} 个冲突的日期选择新的上课时间：\n${conflictList}`,
+                '重新选择时间',
+                {
+                  confirmButtonText: '确定',
+                  showCancelButton: false, // 隐藏取消按钮
+                  closeOnClickModal: false, // 禁止点击外部关闭
+                  closeOnPressEscape: false, // 禁止按ESC关闭
+                  inputPlaceholder: '请输入时间，格式如 14:00',
+                  inputPattern: /^([01]\d|2[0-3]):([0-5]\d)$/,
+                  inputErrorMessage: '时间格式不正确，请输入如 14:00'
+                }
               )
-              if (stillConflict) {
-                hasConflictWithNewTime = true
-                break
+
+              newTime = result.value
+              console.log('✅ 用户输入的新时间:', newTime)
+
+              // 验证新时间是否还有冲突
+              let hasConflictWithNewTime = false
+              for (const conflict of conflicts) {
+                const stillConflict = scheduleStore.schedules.some(
+                  s => s.student_id === studentId &&
+                       s.date === conflict.date &&
+                       s.time === newTime
+                )
+                if (stillConflict) {
+                  hasConflictWithNewTime = true
+                  break
+                }
               }
-            }
 
-            if (hasConflictWithNewTime) {
-              ElMessage.error('选择的时间仍有冲突，已取消创建抗遗忘课程')
-              throw new Error('时间仍有冲突')
-            }
+              if (hasConflictWithNewTime) {
+                // 时间仍然冲突，提示用户重新输入
+                await ElMessageBox.alert(
+                  `输入的时间 ${newTime} 仍有冲突，请重新选择其他时间`,
+                  '时间冲突',
+                  {
+                    confirmButtonText: '重新选择',
+                    type: 'warning'
+                  }
+                )
+                // 继续循环，让用户重新输入
+                continue
+              }
 
-            // 为所有冲突日期使用新时间
-            for (const conflict of conflicts) {
-              scheduleTimes[conflict.dayOffset] = newTime
-            }
+              // 时间有效，退出循环
+              validTimeSelected = true
 
-            console.log(`✅ 所有冲突日期使用新时间: ${newTime}`)
-          } catch (promptAction) {
-            // 用户在时间输入框中点击了取消
-            console.log('❌ 用户取消了时间输入，promptAction:', promptAction)
-            ElMessage.info('已取消创建抗遗忘课程')
-            throw new Error('用户取消时间输入')
+            } catch (promptAction) {
+              // 理论上不会执行到这里（因为禁用了取消按钮）
+              console.log('❌ 意外的prompt错误:', promptAction)
+              ElMessage.error('时间选择出现错误，请重试')
+              // 继续循环，不抛出错误
+            }
           }
+
+          // 为所有冲突日期使用新时间
+          for (const conflict of conflicts) {
+            scheduleTimes[conflict.dayOffset] = newTime
+          }
+
+          console.log(`✅ 所有冲突日期使用新时间: ${newTime}`)
         } else {
           // 用户点击了关闭按钮，取消操作
           ElMessage.info('已取消创建抗遗忘课程')
