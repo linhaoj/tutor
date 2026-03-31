@@ -48,7 +48,8 @@
           @click="toggleWordDisplay(index)"
         >
           <div class="word-text" v-if="word.status !== 'failed'">
-            {{ word.showChinese ? word.chinese : word.english }}
+            <span v-if="word.displayState === 'english'">{{ word.english }}</span>
+            <span v-else-if="word.displayState === 'chinese'">{{ word.english }} {{ word.chinese }}</span>
           </div>
           <div class="hidden-text" v-else>
             <el-icon><Hide /></el-icon>
@@ -177,7 +178,7 @@ interface CheckWord {
   id: number
   english: string
   chinese: string
-  showChinese: boolean
+  displayState: 'hidden' | 'english' | 'chinese'  // 空 → 英文 → 中文 → 空
   status: 'unchecked' | 'passed' | 'failed'  // 未检查、过关、不过关
 }
 
@@ -208,9 +209,11 @@ const remainingWordsCount = computed(() => {
 
 // 方法
 const toggleWordDisplay = (index: number) => {
-  if (displayWords.value[index]) {
-    displayWords.value[index].showChinese = !displayWords.value[index].showChinese
-  }
+  const word = displayWords.value[index]
+  if (!word) return
+  if (word.displayState === 'hidden') word.displayState = 'english'
+  else if (word.displayState === 'english') word.displayState = 'chinese'
+  else word.displayState = 'hidden'
 }
 
 const markWordStatus = (index: number, status: 'passed' | 'failed') => {
@@ -246,7 +249,7 @@ const resetWordStatus = (index: number) => {
   const word = displayWords.value[index]
   if (word && word.status === 'passed') {
     word.status = 'unchecked'
-    word.showChinese = false
+    word.displayState = 'hidden'
     
     // 更新原数组中的状态
     const originalWord = allWords.value.find(w => w.id === word.id)
@@ -267,12 +270,12 @@ const returnWordToCheck = (word: CheckWord) => {
   if (basketIndex !== -1) {
     failedWords.value.splice(basketIndex, 1)
   }
-  
+
   // 重置为未检查状态
   const displayIndex = displayWords.value.findIndex(w => w.id === word.id)
   if (displayIndex !== -1) {
     displayWords.value[displayIndex].status = 'unchecked'
-    displayWords.value[displayIndex].showChinese = false
+    displayWords.value[displayIndex].displayState = 'hidden'
     
     // 更新原数组
     const originalWord = allWords.value.find(w => w.id === word.id)
@@ -445,7 +448,7 @@ const initializeWords = async () => {
     id: word.id,
     english: word.english,
     chinese: word.chinese,
-    showChinese: false,
+    displayState: 'hidden' as const,
     status: 'unchecked' as const
   }))
 
@@ -478,13 +481,15 @@ onMounted(async () => {
 
 <style scoped>
 .word-check-task {
+  width: 100%;
   max-width: 800px;
   margin: 0 auto;
   padding: 15px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #fefefe;
+  background-color: #f7f8f6;
+  box-sizing: border-box;
 }
 
 .study-header {
@@ -529,46 +534,47 @@ onMounted(async () => {
 
 .word-card-row {
   display: flex;
-  align-items: center;
-  gap: 15px;
+  flex-direction: column;
+  gap: 8px;
   padding: 8px;
   border-radius: 10px;
-  background: #f8fdf8;
+  background: #f5f9f5;
   box-shadow: 0 2px 6px rgba(0,0,0,0.05);
   transition: all 0.3s ease;
 }
 
 .word-card-row:hover {
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.10);
 }
 
 .word-card {
-  flex: 1;
-  background: linear-gradient(135deg, #81c784 0%, #66bb6a 100%);
+  width: 100%;
+  background: linear-gradient(135deg, #d4e8d4 0%, #b8d9b8 100%);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
-  min-height: 100px;
+  min-height: 68px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(129, 199, 132, 0.3);
+  border: 1px solid rgba(160, 210, 160, 0.4);
+  box-sizing: border-box;
 }
 
 .word-card:hover {
-  background: linear-gradient(135deg, #66bb6a 0%, #4caf50 100%);
+  background: linear-gradient(135deg, #c2dfc2 0%, #a8cda8 100%);
   transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(76, 175, 80, 0.2);
+  box-shadow: 0 3px 8px rgba(100, 160, 100, 0.18);
 }
 
 .word-card.passed {
-  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
-  border-color: rgba(76, 175, 80, 0.5);
+  background: linear-gradient(135deg, #7ab87a 0%, #5ea05e 100%);
+  border-color: rgba(120, 185, 120, 0.5);
 }
 
 .word-card.failed {
-  background: linear-gradient(135deg, #ef5350 0%, #d32f2f 100%);
-  border-color: rgba(239, 83, 80, 0.5);
+  background: linear-gradient(135deg, #d97b78 0%, #bf5552 100%);
+  border-color: rgba(200, 100, 100, 0.4);
 }
 
 .word-card.hidden {
@@ -579,12 +585,12 @@ onMounted(async () => {
 .word-text {
   font-size: 24px;
   font-weight: 600;
-  color: #1b5e20;
+  color: #2d5a2d;
   text-align: center;
   line-height: 1.4;
   word-break: break-word;
-  padding: 15px;
-  text-shadow: 0 1px 2px rgba(255,255,255,0.7);
+  padding: 10px 15px;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.6);
 }
 
 .hidden-text {
@@ -604,40 +610,40 @@ onMounted(async () => {
 
 .card-actions {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 130px;
+  flex-direction: row;
+  gap: 8px;
+  width: 100%;
 }
 
 .pass-button, .fail-button, .speak-button {
-  width: 100%;
-  height: 44px;
+  flex: 1;
+  height: 40px;
   font-size: 14px;
   font-weight: 600;
 }
 
 .pass-button {
-  background: #52c41a;
-  border-color: #52c41a;
+  background: #6aaa6a;
+  border-color: #6aaa6a;
 }
 
 .pass-button:hover {
-  background: #389e0d;
-  border-color: #389e0d;
+  background: #5a975a;
+  border-color: #5a975a;
 }
 
 .fail-button {
-  background: #f5222d;
-  border-color: #f5222d;
+  background: #c0544e;
+  border-color: #c0544e;
 }
 
 .fail-button:hover {
-  background: #cf1322;
-  border-color: #cf1322;
+  background: #a84440;
+  border-color: #a84440;
 }
 
 .status-mark {
-  min-width: 160px;
+  width: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -648,13 +654,13 @@ onMounted(async () => {
   height: 55px;
   font-size: 14px;
   font-weight: 600;
-  background: #52c41a;
-  border-color: #52c41a;
+  background: #6aaa6a;
+  border-color: #6aaa6a;
 }
 
 .reset-button:hover {
-  background: #73d13d;
-  border-color: #73d13d;
+  background: #5a975a;
+  border-color: #5a975a;
 }
 
 /* 红色篮子区域 */
@@ -670,10 +676,10 @@ onMounted(async () => {
 
 .failed-basket {
   min-height: 100px;
-  border: 3px dashed #f5222d;
+  border: 3px dashed #c0544e;
   border-radius: 12px;
   padding: 20px;
-  background: #fff2f0;
+  background: #fdf4f4;
   display: flex;
   flex-wrap: wrap;
   gap: 15px;
@@ -683,12 +689,12 @@ onMounted(async () => {
 }
 
 .failed-basket.has-words {
-  border-color: #cf1322;
-  background: #fff1f0;
+  border-color: #a84440;
+  background: #faeeed;
 }
 
 .failed-word-item {
-  background: #f5222d;
+  background: #c0544e;
   color: white;
   padding: 15px 20px;
   border-radius: 8px;
@@ -702,7 +708,7 @@ onMounted(async () => {
 }
 
 .failed-word-item:hover {
-  background: #cf1322;
+  background: #a84440;
   transform: translateY(-2px);
 }
 
@@ -727,7 +733,7 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  color: #52c41a;
+  color: #6aaa6a;
   text-align: center;
 }
 
@@ -758,42 +764,19 @@ onMounted(async () => {
 }
 
 .completion-hint {
-  color: #f5222d;
+  color: #b05550;
   font-weight: 500;
   font-size: 16px;
 }
 
 /* 响应式设计 */
 @media (max-width: 768px) {
-  .word-check-task {
-    padding: 15px;
-  }
-  
   .header-content {
     flex-direction: column;
     gap: 15px;
     text-align: center;
   }
-  
-  .word-card-row {
-    flex-direction: column;
-    gap: 15px;
-  }
-  
-  .card-actions {
-    flex-direction: row;
-    min-width: auto;
-    width: 100%;
-  }
-  
-  .status-mark {
-    min-width: auto;
-  }
-  
-  .word-text {
-    font-size: 24px;
-  }
-  
+
   .action-buttons {
     flex-direction: column;
     gap: 15px;

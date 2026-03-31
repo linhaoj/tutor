@@ -253,11 +253,11 @@
                                   {{ schedule.course_type === 'review' ? '抗遗忘' : '单词学习' }}
                                 </el-tag>
                                 <el-tag
-                                  :type="schedule.class_type === 'big' ? 'primary' : 'info'"
+                                  type="primary"
                                   size="small"
                                   style="margin-left: 8px"
                                 >
-                                  {{ schedule.class_type === 'big' ? '大课' : '小课' }}
+                                  大课
                                 </el-tag>
                                 <span class="duration-text">{{ schedule.duration || 60 }}分钟</span>
                               </div>
@@ -465,7 +465,7 @@
             style="width: 100%"
           />
           <div style="font-size: 12px; color: #909399; margin-top: 5px;">
-            大课60分钟 = 1.0h，小课30分钟 = 0.5h
+            1节课 = 1.0小时
           </div>
         </el-form-item>
       </el-form>
@@ -538,7 +538,7 @@
             style="width: 100%"
           />
           <div style="font-size: 12px; color: #909399; margin-top: 5px;">
-            大课60分钟 = 1.0h，小课30分钟 = 0.5h
+            1节课 = 1.0小时
           </div>
         </el-form-item>
         <el-form-item label="备注" v-if="hoursAdjustmentType !== 'set'">
@@ -624,12 +624,6 @@
           </el-radio-group>
         </el-form-item>
         
-        <el-form-item label="课程规模">
-          <el-radio-group v-model="scheduleForm.classType" @change="updateScheduleDuration">
-            <el-radio value="big">大课 (60分钟)</el-radio>
-            <el-radio value="small">小课 (30分钟)</el-radio>
-          </el-radio-group>
-        </el-form-item>
         
         <el-form-item label="课程时长">
           <el-input-number
@@ -1818,7 +1812,7 @@ const submitAddSchedule = async () => {
       word_set_name: scheduleForm.wordSet,
       course_type: scheduleForm.type,
       duration: scheduleForm.duration,
-      class_type: scheduleForm.classType,
+      class_type: 'big',
       teacher_id: selectedTeacherId.value  // 管理员为指定教师创建课程
     })
 

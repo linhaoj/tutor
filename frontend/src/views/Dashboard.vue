@@ -69,13 +69,13 @@
                         {{ schedule.course_type === 'review' ? '抗遗忘' : '单词学习' }}
                       </el-tag>
                       <el-tag
-                        :type="schedule.class_type === 'big' ? 'primary' : 'info'"
+                        type="primary"
                         size="small"
                         style="margin-left: 8px"
                       >
-                        {{ schedule.class_type === 'big' ? '大课' : '小课' }}
+                        大课
                       </el-tag>
-                      <span class="duration-text">{{ schedule.duration || (schedule.class_type === 'big' ? 60 : 30) }}分钟</span>
+                      <span class="duration-text">{{ schedule.duration || 60 }}分钟</span>
                       <span v-if="getLastReviewTime(schedule)" class="last-review-text">
                         · 最后复习: {{ getLastReviewTime(schedule) }}
                       </span>
@@ -144,13 +144,13 @@
                         {{ schedule.course_type === 'review' ? '抗遗忘' : '单词学习' }}
                       </el-tag>
                       <el-tag
-                        :type="schedule.class_type === 'big' ? 'primary' : 'info'"
+                        type="primary"
                         size="small"
                         style="margin-left: 8px"
                       >
-                        {{ schedule.class_type === 'big' ? '大课' : '小课' }}
+                        大课
                       </el-tag>
-                      <span class="duration-text">{{ schedule.duration || (schedule.class_type === 'big' ? 60 : 30) }}分钟</span>
+                      <span class="duration-text">{{ schedule.duration || 60 }}分钟</span>
                       <el-tag type="success" size="small" style="margin-left: 8px">
                         ✓ 已完成
                       </el-tag>
@@ -189,13 +189,13 @@
                     {{ schedule.course_type === 'review' ? '抗遗忘' : '单词学习' }}
                   </el-tag>
                   <el-tag
-                    :type="schedule.class_type === 'big' ? 'primary' : 'info'"
+                    type="primary"
                     size="small"
                     style="margin-left: 8px"
                   >
-                    {{ schedule.class_type === 'big' ? '大课' : '小课' }}
+                    大课
                   </el-tag>
-                  <span class="duration-text">{{ schedule.duration || (schedule.class_type === 'big' ? 60 : 30) }}分钟</span>
+                  <span class="duration-text">{{ schedule.duration || 60 }}分钟</span>
                   <span v-if="getLastReviewTime(schedule)" class="last-review-text">
                     · 最后复习: {{ getLastReviewTime(schedule) }}
                   </span>
@@ -272,12 +272,6 @@
           </el-radio-group>
         </el-form-item>
         
-        <el-form-item label="课程规模">
-          <el-radio-group v-model="courseForm.classType" @change="updateDuration">
-            <el-radio value="big">大课 (60分钟)</el-radio>
-            <el-radio value="small">小课 (30分钟)</el-radio>
-          </el-radio-group>
-        </el-form-item>
         
         <el-form-item label="课程时长">
           <el-input-number
@@ -620,7 +614,7 @@ const addCourse = async () => {
     }
 
     // 检查学生课时是否足够
-    const requiredHours = courseForm.classType === 'big' ? 1.0 : 0.5
+    const requiredHours = 1.0
     const remainingHours = student.remaining_hours || 0
 
     console.log('课时检查:', {
@@ -636,7 +630,7 @@ const addCourse = async () => {
       await ElMessageBox.alert(
         `学生 ${student.name} 的剩余课时不足！\n\n` +
         `剩余课时: ${remainingHours}小时\n` +
-        `需要课时: ${requiredHours}小时 (${courseForm.classType === 'big' ? '大课' : '小课'})\n` +
+        `需要课时: ${requiredHours}小时\n` +
         `缺少课时: ${(requiredHours - remainingHours).toFixed(1)}小时\n\n` +
         `请先为学生充值课时后再安排课程。`,
         '课时不足',
@@ -668,7 +662,7 @@ const addCourse = async () => {
       student_id: parseInt(courseForm.studentId),
       course_type: courseForm.type as 'learning' | 'review',
       duration: courseForm.duration,
-      class_type: courseForm.classType as 'big' | 'small'
+      class_type: 'big' as 'big' | 'small'
     }
 
     const result = await scheduleStore.addSchedule(newSchedule)

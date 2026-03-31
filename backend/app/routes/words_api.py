@@ -26,6 +26,11 @@ class WordCreate(BaseModel):
     chinese: str
 
 
+class WordUpdate(BaseModel):
+    english: str
+    chinese: str
+
+
 class WordResponse(BaseModel):
     id: int
     english: str
@@ -184,6 +189,25 @@ async def import_words_from_excel(
     except Exception as e:
         logger.error(f"导入单词失败: 单词集={word_set_name}, 错误={str(e)}")
         raise HTTPException(status_code=400, detail=f"导入失败: {str(e)}")
+
+
+@router.put("/words/{word_id}", response_model=WordResponse)
+async def update_word(
+    word_id: int,
+    word_data: WordUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """更新单词（只改英文/中文）"""
+    word = db.query(Word).filter(Word.id == word_id).first()
+    if not word:
+        raise HTTPException(status_code=404, detail="单词不存在")
+
+    word.english = word_data.english
+    word.chinese = word_data.chinese
+    db.commit()
+    db.refresh(word)
+    return word
 
 
 @router.delete("/words/{word_id}")

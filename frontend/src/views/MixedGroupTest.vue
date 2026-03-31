@@ -75,7 +75,8 @@
           @click="toggleWordDisplay(index)"
         >
           <div class="word-text">
-            {{ word.showChinese ? word.chinese : word.english }}
+            <span v-if="word.displayState === 'english'">{{ word.english }}</span>
+            <span v-else-if="word.displayState === 'chinese'">{{ word.english }} {{ word.chinese }}</span>
           </div>
         </div>
         
@@ -195,7 +196,7 @@ interface TestWord {
   id: number
   english: string
   chinese: string
-  showChinese: boolean
+  displayState: 'english' | 'chinese'
   status: 'unchecked' | 'mastered' | 'need-review'
   groupNumber: number
 }
@@ -250,9 +251,10 @@ const remainingWordsInGroup = computed(() => {
 
 // 方法
 const toggleWordDisplay = (index: number) => {
-  if (currentGroupWords.value[index]) {
-    currentGroupWords.value[index].showChinese = !currentGroupWords.value[index].showChinese
-  }
+  const word = currentGroupWords.value[index]
+  if (!word) return
+  if (word.displayState === 'english') word.displayState = 'chinese'
+  else word.displayState = 'english'
 }
 
 const markWordStatus = (index: number, status: 'mastered' | 'need-review') => {
@@ -304,7 +306,7 @@ const resetWordStatus = (index: number) => {
   const word = currentGroupWords.value[index]
   if (word && word.status !== 'unchecked') {
     word.status = 'unchecked'
-    word.showChinese = false
+    word.displayState = 'english'
     
     ElMessage.info(`"${word.english}" 重新设为未检测状态`)
   }
@@ -539,7 +541,7 @@ const initializeWords = async () => {
       id: word.id,
       english: word.english,
       chinese: word.chinese,
-      showChinese: false,
+      displayState: 'english' as const,
       status: 'unchecked' as const,
       groupNumber: i + 1
     }))
@@ -579,13 +581,15 @@ onMounted(async () => {
 
 <style scoped>
 .mixed-group-test {
+  width: 100%;
   max-width: 800px;
   margin: 0 auto;
   padding: 15px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #fefefe;
+  background-color: #f7f8f6;
+  box-sizing: border-box;
 }
 
 .study-header {
@@ -659,96 +663,97 @@ onMounted(async () => {
 
 .word-card-row {
   display: flex;
-  align-items: center;
-  gap: 15px;
+  flex-direction: column;
+  gap: 8px;
   padding: 8px;
   border-radius: 10px;
-  background: #f8fdf8;
+  background: #f5f9f5;
   box-shadow: 0 2px 6px rgba(0,0,0,0.05);
   transition: all 0.3s ease;
 }
 
 .word-card-row:hover {
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.10);
 }
 
 .word-card {
-  flex: 1;
-  background: linear-gradient(135deg, #81c784 0%, #66bb6a 100%);
+  width: 100%;
+  background: linear-gradient(135deg, #d4e8d4 0%, #b8d9b8 100%);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
-  min-height: 100px;
+  min-height: 68px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(129, 199, 132, 0.3);
+  border: 1px solid rgba(160, 210, 160, 0.4);
+  box-sizing: border-box;
 }
 
 .word-card:hover {
-  background: linear-gradient(135deg, #66bb6a 0%, #4caf50 100%);
+  background: linear-gradient(135deg, #c2dfc2 0%, #a8cda8 100%);
   transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(76, 175, 80, 0.2);
+  box-shadow: 0 3px 8px rgba(100, 160, 100, 0.18);
 }
 
 .word-card.mastered {
-  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
-  border-color: rgba(76, 175, 80, 0.5);
+  background: linear-gradient(135deg, #7ab87a 0%, #5ea05e 100%);
+  border-color: rgba(120, 185, 120, 0.5);
 }
 
 .word-card.need-review {
-  background: linear-gradient(135deg, #ffb74d 0%, #ffa726 100%);
-  border-color: rgba(255, 183, 77, 0.5);
+  background: linear-gradient(135deg, #e8a96a 0%, #d4904e 100%);
+  border-color: rgba(210, 150, 90, 0.4);
 }
 
 .word-text {
   font-size: 24px;
   font-weight: 600;
-  color: #1b5e20;
+  color: #2d5a2d;
   text-align: center;
   line-height: 1.4;
   word-break: break-word;
-  padding: 15px;
-  text-shadow: 0 1px 2px rgba(255,255,255,0.7);
+  padding: 10px 15px;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.6);
 }
 
 .card-actions {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 130px;
+  flex-direction: row;
+  gap: 8px;
+  width: 100%;
 }
 
 .master-button, .review-button, .speak-button {
-  width: 100%;
-  height: 44px;
+  flex: 1;
+  height: 40px;
   font-size: 14px;
   font-weight: 600;
 }
 
 .master-button {
-  background: #4caf50;
-  border-color: #4caf50;
+  background: #6aaa6a;
+  border-color: #6aaa6a;
 }
 
 .master-button:hover {
-  background: #388e3c;
-  border-color: #388e3c;
+  background: #5a975a;
+  border-color: #5a975a;
 }
 
 .review-button {
-  background: #ff9800;
-  border-color: #ff9800;
+  background: #d4814a;
+  border-color: #d4814a;
   color: white;
 }
 
 .review-button:hover {
-  background: #f57c00;
-  border-color: #f57c00;
+  background: #bb6e3c;
+  border-color: #bb6e3c;
 }
 
 .status-mark {
-  min-width: 130px;
+  width: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -785,40 +790,16 @@ onMounted(async () => {
 
 /* 响应式设计 */
 @media (max-width: 768px) {
-  .mixed-group-test {
-    padding: 15px;
-  }
-  
   .header-content {
     flex-direction: column;
     text-align: center;
   }
-  
+
   .progress-info {
     min-width: auto;
     justify-content: center;
   }
-  
-  .word-card-row {
-    flex-direction: column;
-    gap: 15px;
-  }
-  
-  .card-actions {
-    flex-direction: row;
-    min-width: auto;
-    width: 100%;
-  }
-  
-  .status-mark {
-    min-width: auto;
-    width: 100%;
-  }
-  
-  .word-text {
-    font-size: 24px;
-  }
-  
+
   .action-buttons {
     flex-direction: column;
     gap: 15px;

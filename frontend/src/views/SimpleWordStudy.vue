@@ -26,7 +26,7 @@
           @click="toggleWordDisplay(index)"
         >
           <div class="word-text">
-            {{ word.showChinese ? word.chinese : word.english }}
+            {{ word.english }}<span v-if="word.showChinese" class="word-chinese">{{ word.chinese }}</span>
           </div>
         </div>
         
@@ -627,13 +627,15 @@ onMounted(async () => {
 
 <style scoped>
 .simple-word-study {
+  width: 100%;
   max-width: 800px;
   margin: 0 auto;
   padding: 15px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #fefefe;
+  background-color: #f7f8f6;
+  box-sizing: border-box;
 }
 
 .study-header {
@@ -663,49 +665,57 @@ onMounted(async () => {
   gap: 15px;
   padding: 8px;
   border-radius: 10px;
-  background: #f8fdf8;
+  background: #f5f9f5;
   box-shadow: 0 2px 6px rgba(0,0,0,0.05);
   transition: all 0.3s ease;
 }
 
 .word-card-row:hover {
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.10);
 }
 
 .word-card {
   flex: 1;
-  background: linear-gradient(135deg, #81c784 0%, #66bb6a 100%);
+  background: linear-gradient(135deg, #d4e8d4 0%, #b8d9b8 100%);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
-  min-height: 100px;
+  min-height: 68px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(129, 199, 132, 0.3);
+  border: 1px solid rgba(160, 210, 160, 0.4);
 }
 
 .word-card:hover {
-  background: linear-gradient(135deg, #66bb6a 0%, #4caf50 100%);
+  background: linear-gradient(135deg, #c2dfc2 0%, #a8cda8 100%);
   transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(76, 175, 80, 0.2);
+  box-shadow: 0 3px 8px rgba(100, 160, 100, 0.18);
 }
 
 .word-card.moved-to-box {
-  background: linear-gradient(135deg, #c8e6c9 0%, #a5d6a7 100%);
+  background: linear-gradient(135deg, #e6f2e6 0%, #d0e8d0 100%);
   opacity: 0.8;
-  border-color: rgba(165, 214, 167, 0.5);
+  border-color: rgba(180, 220, 180, 0.5);
 }
 
 .word-text {
   font-size: 24px;
   font-weight: 600;
-  color: #1b5e20;
+  color: #2d5a2d;
   text-align: center;
   line-height: 1.4;
   word-break: break-word;
-  padding: 15px;
-  text-shadow: 0 1px 2px rgba(255,255,255,0.7);
+  padding: 10px 15px;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.6);
+}
+
+.word-chinese {
+  font-size: 18px;
+  font-weight: 400;
+  margin-left: 12px;
+  color: #3d6b3d;
+  opacity: 0.9;
 }
 
 .card-actions {
@@ -727,13 +737,13 @@ onMounted(async () => {
   height: 36px;
   font-size: 13px;
   font-weight: 500;
-  background: #42a5f5;
-  border-color: #42a5f5;
+  background: #5b8db8;
+  border-color: #5b8db8;
 }
 
 .speak-button:hover {
-  background: #1e88e5;
-  border-color: #1e88e5;
+  background: #4a7aa3;
+  border-color: #4a7aa3;
 }
 
 .completed-mark {
@@ -756,10 +766,10 @@ onMounted(async () => {
 
 .word-box {
   min-height: 100px;
-  border: 2px dashed #c8e6c9;
+  border: 2px dashed #b8d9b8;
   border-radius: 10px;
   padding: 15px;
-  background: #f1f8e9;
+  background: #f5f9f5;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -769,12 +779,12 @@ onMounted(async () => {
 }
 
 .word-box.has-words {
-  border-color: #4caf50;
-  background: #e8f5e8;
+  border-color: #7ab87a;
+  background: #edf5ed;
 }
 
 .box-word-item {
-  background: #67c23a;
+  background: #6aaa6a;
   color: white;
   padding: 8px 16px;
   border-radius: 20px;
@@ -784,7 +794,7 @@ onMounted(async () => {
 }
 
 .box-word-item:hover {
-  background: #5daf34;
+  background: #5a975a;
   transform: translateY(-2px);
 }
 
@@ -838,7 +848,7 @@ onMounted(async () => {
   }
 
   .word-card {
-    min-height: 80px;
+    min-height: 60px;
   }
 
   .word-text {

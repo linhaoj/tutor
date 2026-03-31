@@ -111,6 +111,29 @@ export const useWordsStore = defineStore('words', () => {
   }
 
   /**
+   * 更新单词（只改英文/中文）
+   */
+  const updateWord = async (wordId: number, wordData: {
+    english: string
+    chinese: string
+  }): Promise<{ success: boolean, message: string }> => {
+    try {
+      const response = await api.put(`/api/words/words/${wordId}`, wordData)
+      const index = words.value.findIndex(w => w.id === wordId)
+      if (index !== -1) {
+        words.value[index].english = response.data.english
+        words.value[index].chinese = response.data.chinese
+      }
+      return { success: true, message: '单词更新成功' }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '更新单词失败'
+      }
+    }
+  }
+
+  /**
    * 删除单词
    */
   const deleteWord = async (wordId: number): Promise<{ success: boolean, message: string }> => {
@@ -310,6 +333,7 @@ export const useWordsStore = defineStore('words', () => {
     fetchWords,
     createWordSet,
     addWord,
+    updateWord,
     deleteWord,
     renameWordSet,
     deleteWordSet,

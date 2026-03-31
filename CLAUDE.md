@@ -59,7 +59,10 @@ pm2 status
 ### 访问地址
 - **生产环境**: http://47.108.248.168:5173
 - **本地开发**: http://localhost:5173
+- **局域网访问**: http://[你的局域网IP]:5173（如 http://10.2.118.25:5173）
 - **默认管理员账号**: admin / admin123
+
+💡 **智能API检测**：系统会根据访问地址自动选择正确的API服务器，支持电脑和手机无缝切换，无需手动配置。
 
 ---
 
@@ -138,13 +141,25 @@ SQLite数据库包含7张核心表：
 
 ### 5. 环境变量（可选）
 
-创建 `backend/.env` 文件：
+**后端环境变量** - 创建 `backend/.env` 文件：
 ```env
 DATABASE_URL=sqlite:///./english_tutor.db
 SECRET_KEY=your-secret-key-here
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 ```
+
+**前端环境变量** - 创建 `frontend/.env.development` 文件：
+```env
+# 留空表示自动检测API地址（推荐）
+# 自动检测：本地用localhost，局域网用当前IP
+# VITE_API_BASE_URL=
+
+# 或手动指定（不推荐）
+# VITE_API_BASE_URL=http://localhost:8000
+```
+
+💡 **建议**：不设置 `VITE_API_BASE_URL`，让系统自动检测，支持多环境无缝切换。
 
 ### 6. 生产部署
 
@@ -574,9 +589,51 @@ A: 使用 [DB Browser for SQLite](https://sqlitebrowser.org/) 打开 `backend/en
 - 单词学习：大课扣1.0h，小课扣0.5h
 - 抗遗忘复习：不扣课时
 
+### 测试模式（本地开发）
+如需测试非今日课程（如测试抗遗忘流程），可临时修改日期限制：
+
+**位置**: `frontend/src/views/Dashboard.vue`
+
+**方法1（快速）**: 直接移除日期限制
+- 第93行：`:disabled="!isToday(schedule.date)"` → `:disabled="false"`
+- 第213行：`:disabled="!isToday(schedule.date)"` → `:disabled="false"`
+
+**方法2（全局）**: 修改isToday函数（约第441行）
+```javascript
+const isToday = (dateString: string) => {
+  return true  // 🚨 测试模式：所有日期都可访问
+}
+```
+
+⚠️ **重要提醒**：测试完成后必须恢复原设置，否则生产环境用户可以操作任意日期的课程！
+
 ---
 
 ## 更新记录
+
+### 2025-11-14
+- ✅ **API智能检测功能**（api/config.ts）
+  - 根据访问地址自动选择API URL
+  - 本地访问 → `http://localhost:8000`
+  - 局域网访问 → 使用当前访问IP（如 `http://10.2.118.25:8000`）
+  - 服务器访问 → 自动使用服务器IP（如 `http://47.108.248.168:8000`）
+  - 支持电脑和手机无缝切换，无需手动配置
+- ✅ **TeacherHome学习流程修复**
+  - 修复教师工作台"开始学习"功能缺失scheduleId的bug
+  - 添加课程开始时间记录（courseStartTime）
+  - 添加课程ID保存（currentScheduleId）
+  - 确保课程完成后能正确标记和扣减课时
+- ✅ **课程完成错误处理优化**（PostLearningTest.vue）
+  - 改进缺少scheduleId/teacherId时的错误提示
+  - 详细列出缺失的信息类型
+  - 给出用户友好的操作建议
+  - 核心学习功能不受影响（进度、抗遗忘、PDF生成）
+- ✅ **抗遗忘时间选择强制完成机制**
+  - 移除所有"取消"按钮，防止用户中途退出
+  - 禁用所有关闭方式（ESC、点击外部、右上角X）
+  - 实现循环重试：输入冲突时间时不再报错，而是提示并让用户重新输入
+  - 彻底解决"继续练习"时只记录最后一次单词的数据丢失bug
+  - 确保所有学习的单词都被正确记录到抗遗忘任务中
 
 ### 2025-11-09
 - ✅ **学生端手机适配优化**（StudentReview.vue）
@@ -621,6 +678,6 @@ A: 使用 [DB Browser for SQLite](https://sqlitebrowser.org/) 打开 `backend/en
 
 ---
 
-**最后更新**: 2025-11-09
+**最后更新**: 2025-11-14
 **开发者**: Claude Code Assistant
-**项目状态**: ✅ 多用户系统已完成，手机端已优化，生产环境运行中
+**项目状态**: ✅ 多用户系统已完成，手机端已优化，API智能检测已部署，生产环境稳定运行

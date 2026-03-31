@@ -219,7 +219,7 @@ async def complete_schedule(
     # 根据课程类型扣除课时（仅learning类型扣课时）
     if schedule.course_type == 'learning':
         # 计算需要扣除的课时
-        hours_to_deduct = 1.0 if schedule.class_type == 'big' else 0.5
+        hours_to_deduct = 1.0
 
         # 检查课时是否充足
         if student.remaining_hours < hours_to_deduct:

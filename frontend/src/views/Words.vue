@@ -59,9 +59,9 @@
     <el-table :data="paginatedWords" style="width: 100%" stripe>
       <el-table-column prop="english" label="英文" width="200" />
       <el-table-column prop="chinese" label="中文" />
-      <el-table-column prop="word_set" label="单词集">
+      <el-table-column prop="word_set_name" label="单词集">
         <template #default="scope">
-          <el-tag size="small" type="info">{{ scope.row.word_set || '未分类' }}</el-tag>
+          <el-tag size="small" type="info">{{ scope.row.word_set_name || '未分类' }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column v-if="authStore.isAdmin" label="操作" width="150">
@@ -107,19 +107,19 @@
             placeholder="请输入中文释义"
           />
         </el-form-item>
-        <el-form-item label="单词集">
-          <el-select 
-            v-model="wordForm.word_set" 
+        <el-form-item v-if="!isEditingWord" label="单词集">
+          <el-select
+            v-model="wordForm.word_set"
             placeholder="选择或输入新的单词集"
             filterable
             allow-create
             style="width: 100%"
           >
-            <el-option 
-              v-for="set in wordSets" 
-              :key="set.name" 
-              :label="set.name" 
-              :value="set.name" 
+            <el-option
+              v-for="set in wordSets"
+              :key="set.name"
+              :label="set.name"
+              :value="set.name"
             />
           </el-select>
         </el-form-item>
@@ -322,7 +322,7 @@ const importForm = reactive({
 // 计算属性
 const filteredWords = computed(() => {
   if (!selectedWordSet.value) return words.value
-  return words.value.filter(word => word.word_set === selectedWordSet.value)
+  return words.value.filter(word => word.word_set_name === selectedWordSet.value)
 })
 
 const paginatedWords = computed(() => {
@@ -358,20 +358,42 @@ const editWord = (word: any) => {
 
 const saveWord = async () => {
   if (savingWord.value) return
-  
+
   savingWord.value = true
-  
+
   try {
     if (isEditingWord.value) {
-      wordsStore.updateWord(wordForm.id, wordForm)
-      ElMessage.success('单词更新成功')
+      const result = await wordsStore.updateWord(wordForm.id, {
+        english: wordForm.english,
+        chinese: wordForm.chinese
+      })
+      if (result.success) {
+        ElMessage.success('单词更新成功')
+        wordDialogVisible.value = false
+      } else {
+        ElMessage.error(result.message)
+      }
     } else {
-      const newWord = { ...wordForm, id: Date.now() }
-      wordsStore.addWord(newWord)
-      ElMessage.success('单词添加成功')
+      if (!wordForm.word_set) {
+        ElMessage.error('请选择或输入单词集')
+        return
+      }
+      // 如果单词集不存在则先创建
+      const exists = wordSets.value.some(s => s.name === wordForm.word_set)
+      if (!exists) {
+        await wordsStore.createWordSet({ name: wordForm.word_set, is_global: true })
+      }
+      const result = await wordsStore.addWord(wordForm.word_set, {
+        english: wordForm.english,
+        chinese: wordForm.chinese
+      })
+      if (result.success) {
+        ElMessage.success('单词添加成功')
+        wordDialogVisible.value = false
+      } else {
+        ElMessage.error(result.message)
+      }
     }
-    
-    wordDialogVisible.value = false
   } catch (error) {
     ElMessage.error('保存失败')
     console.error('保存错误:', error)
@@ -438,7 +460,7 @@ const renameWordSet = async () => {
 const deleteWordSet = async () => {
   if (!selectedWordSet.value) return
 
-  const wordsInSet = words.value.filter(w => w.word_set === selectedWordSet.value)
+  const wordsInSet = words.value.filter(w => w.word_set_name === selectedWordSet.value)
 
   try {
     await ElMessageBox.confirm(
@@ -550,26 +572,15 @@ const importWords = async () => {
       return
     }
     
-    const allImportedWords: any[] = []
-    
+    let totalImported = 0
+
     for (const sheet of selectedSheets) {
       const wordSetName = sheet.customName || sheet.name
-      
-      // 将sheet数据转换为Word格式
-      const sheetWords = sheet.data.map(wordData => ({
-        id: Date.now() + Math.random(),
-        english: wordData.english,
-        chinese: wordData.chinese,
-        word_set: wordSetName
-      }))
-      
-      allImportedWords.push(...sheetWords)
+      await wordsStore.importWords(wordSetName, sheet.data)
+      totalImported += sheet.data.length
     }
-    
-    // 使用store导入所有单词
-    wordsStore.importWords(allImportedWords)
-    
-    ElMessage.success(`成功导入 ${allImportedWords.length} 个单词，来自 ${selectedSheets.length} 个Sheet`)
+
+    ElMessage.success(`成功导入 ${totalImported} 个单词，来自 ${selectedSheets.length} 个Sheet`)
     importDialogVisible.value = false
     
   } catch (error) {

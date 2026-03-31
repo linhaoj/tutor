@@ -402,38 +402,7 @@ const markCourseAsCompleted = async () => {
     // 所有信息齐全，开始标记课程完成
     const scheduleId = parseInt(scheduleIdStr)
 
-    // 注意：只有单词学习课程才扣减课时，抗遗忘复习不扣课时
-    // 获取课程信息来确定扣减时长（后端API自动过滤）
-    await scheduleStore.fetchSchedules()
-    const schedule = scheduleStore.schedules.find(s => s.id === scheduleId)
-
-    console.log('📅 找到的课程信息:', schedule)
-
-    if (schedule) {
-      // 🚨 防止重复标记：如果课程已完成，跳过
-      if (schedule.completed) {
-        console.log('⚠️ 课程已完成，跳过重复标记和扣课时')
-        return
-      }
-      // 根据课程类型扣减时长：大课(60分钟) = 1.0h，小课(30分钟) = 0.5h
-      const hoursToDeduct = schedule.class_type === 'big' ? 1.0 : 0.5
-
-      console.log(`⏰ 准备扣减课时: ${hoursToDeduct}h (${schedule.class_type === 'big' ? '大课' : '小课'})`)
-
-      // 扣减学生课程时长（单词学习课程）
-      const success = await studentsStore.deductStudentHours(studentId, hoursToDeduct)
-      if (success) {
-        console.log(`✅ 单词学习课程时长已扣减: ${hoursToDeduct}h`)
-        ElMessage.success(`课时已扣减: ${hoursToDeduct}h`)
-      } else {
-        console.warn('❌ 扣减学生课程时长失败')
-        ElMessage.warning('扣减课时失败')
-      }
-    } else {
-      console.warn('⚠️ 未找到课程信息, scheduleId:', scheduleId)
-    }
-
-    // 标记课程为已完成（后端API通过JWT自动识别用户）
+    // 标记课程为已完成，后端会自动扣减课时（learning类型扣1.0h，抗遗忘不扣）
     await scheduleStore.completeSchedule(scheduleId)
     console.log('✅ 单词学习课程已标记为完成:', scheduleId)
     ElMessage.success('课程已标记为完成')

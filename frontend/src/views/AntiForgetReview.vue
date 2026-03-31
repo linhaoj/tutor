@@ -376,10 +376,12 @@ onMounted(async () => {
 
 <style scoped>
 .anti-forget-review {
-  max-width: 1400px;
+  width: 100%;
+  max-width: 800px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 15px;
   min-height: 100vh;
+  box-sizing: border-box;
 }
 
 .review-header {
@@ -456,64 +458,67 @@ onMounted(async () => {
 }
 
 .words-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 20px;
-  padding: 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px 0;
 }
 
 .word-item {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 15px;
-  padding: 15px;
-  border-radius: 12px;
-  background: white;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  gap: 10px;
+  padding: 8px;
+  border-radius: 10px;
+  background: #f5f9f5;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
   transition: all 0.3s ease;
 }
 
 .word-item:hover {
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-  transform: translateY(-2px);
-}
-
-.word-item.starred {
-  background: linear-gradient(135deg, #fff7e6 0%, #fff1d6 100%);
-  border: 2px solid #f7ba2a;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.10);
 }
 
 .word-card {
   flex: 1;
-  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+  background: linear-gradient(135deg, #d4e8d4 0%, #b8d9b8 100%);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
-  min-height: 100px;
+  min-height: 68px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  border: 1px solid rgba(160, 210, 160, 0.4);
 }
 
 .word-card:hover {
-  background: linear-gradient(135deg, #4fd1c7 0%, #38b2ac 100%);
+  background: linear-gradient(135deg, #c2dfc2 0%, #a8cda8 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(100, 160, 100, 0.18);
 }
 
 .word-card.starred {
-  background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+  background: linear-gradient(135deg, #e8c87a 0%, #d4a84e 100%);
+  border-color: rgba(220, 180, 90, 0.4);
 }
 
 .word-content {
   text-align: center;
-  color: white;
 }
 
 .word-text {
   font-size: 22px;
   font-weight: 600;
   line-height: 1.4;
-  color: white;
+  color: #2d5a2d;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.6);
+  padding: 10px 15px;
+}
+
+.word-card.starred .word-text {
+  color: #5a3a00;
 }
 
 .action-buttons-container {
@@ -521,29 +526,30 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
+  min-width: 50px;
 }
 
 .pronunciation-button {
-  width: 50px;
-  height: 50px;
-  border: 2px solid #e4e7ed;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #c2dfc2;
   background: white;
-  color: #48bb78;
+  color: #6aaa6a;
   transition: all 0.3s ease;
 }
 
 .pronunciation-button:hover {
-  border-color: #48bb78;
-  color: #38a169;
-  background: #f0fff4;
-  transform: scale(1.1);
+  border-color: #6aaa6a;
+  color: #5a975a;
+  background: #f5f9f5;
+  transform: scale(1.08);
 }
 
 .star-button {
-  width: 50px;
-  height: 50px;
-  border: 2px solid #e4e7ed;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #e4e7ed;
   background: white;
   color: #c0c4cc;
   transition: all 0.3s ease;
@@ -552,14 +558,14 @@ onMounted(async () => {
 .star-button:hover {
   border-color: #f7ba2a;
   color: #f7ba2a;
-  transform: scale(1.1);
+  transform: scale(1.08);
 }
 
 .star-button.starred {
-  border-color: #f7ba2a;
+  border-color: #e5a800;
   background: #f7ba2a;
   color: white;
-  box-shadow: 0 4px 12px rgba(247, 186, 42, 0.3);
+  box-shadow: 0 3px 10px rgba(247, 186, 42, 0.3);
 }
 
 .review-footer {
@@ -599,35 +605,16 @@ onMounted(async () => {
 
 /* 响应式设计 */
 @media (max-width: 768px) {
-  .anti-forget-review {
-    padding: 15px;
-  }
-  
   .header-content {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .action-section {
     flex-direction: row;
     min-width: auto;
   }
-  
-  .words-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .word-item {
-    flex-direction: column;
-    gap: 15px;
-  }
 
-  .action-buttons-container {
-    width: 100%;
-    flex-direction: row;
-    justify-content: center;
-  }
-  
   .stats-grid {
     grid-template-columns: 1fr;
   }
@@ -639,13 +626,9 @@ onMounted(async () => {
     gap: 10px;
     align-items: flex-start;
   }
-  
+
   .word-text {
     font-size: 18px;
-  }
-  
-  .word-hint {
-    font-size: 12px;
   }
 }
 </style>
