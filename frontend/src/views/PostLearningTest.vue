@@ -1318,13 +1318,15 @@ onMounted(async () => {
 
 <style scoped>
 .post-learning-test {
+  width: 100%;
   max-width: 800px;
   margin: 0 auto;
   padding: 15px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #fefefe;
+  background-color: #f7f8f6;
+  box-sizing: border-box;
 }
 
 .study-header {
@@ -1363,53 +1365,53 @@ onMounted(async () => {
 .words-list {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 20px;
   margin-bottom: 30px;
 }
 
 .word-item {
   display: flex;
-  align-items: center;
-  gap: 15px;
-  padding: 10px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
   border-radius: 10px;
-  background: #f8fdf8;
+  background: #f5f9f5;
   box-shadow: 0 2px 6px rgba(0,0,0,0.05);
   transition: all 0.3s ease;
 }
 
 .word-item:hover {
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.10);
 }
 
 .word-card {
-  flex: 1;
-  background: linear-gradient(135deg, #81c784 0%, #66bb6a 100%);
+  width: 100%;
+  background: linear-gradient(135deg, #d4e8d4 0%, #b8d9b8 100%);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
-  min-height: 80px;
+  min-height: 68px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 15px;
-  border: 1px solid rgba(129, 199, 132, 0.3);
+  justify-content: center;
+  border: 1px solid rgba(160, 210, 160, 0.4);
+  box-sizing: border-box;
 }
 
 .word-card:hover {
-  background: linear-gradient(135deg, #66bb6a 0%, #4caf50 100%);
+  background: linear-gradient(135deg, #c2dfc2 0%, #a8cda8 100%);
   transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(76, 175, 80, 0.2);
+  box-shadow: 0 3px 8px rgba(100, 160, 100, 0.18);
 }
 
 .word-card.passed {
-  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
-  border-color: rgba(76, 175, 80, 0.5);
+  background: linear-gradient(135deg, #7ab87a 0%, #5ea05e 100%);
+  border-color: rgba(120, 185, 120, 0.5);
 }
 
 .word-card.failed {
-  background: linear-gradient(135deg, #ef5350 0%, #d32f2f 100%);
-  border-color: rgba(239, 83, 80, 0.5);
+  background: linear-gradient(135deg, #d97b78 0%, #bf5552 100%);
+  border-color: rgba(200, 100, 100, 0.4);
 }
 
 .word-content {
@@ -1417,62 +1419,65 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  padding: 0 15px;
 }
 
 .word-text {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 600;
-  color: #1b5e20;
-  text-align: left;
+  color: #2d5a2d;
+  text-align: center;
   line-height: 1.4;
   word-break: break-word;
   flex: 1;
-  text-shadow: 0 1px 2px rgba(255,255,255,0.7);
+  text-shadow: 0 1px 2px rgba(255,255,255,0.6);
+  padding: 10px 0;
 }
 
 .word-number {
   font-size: 13px;
-  color: #2e7d32;
+  color: #2d5a2d;
   font-weight: 500;
-  text-shadow: 0 1px 2px rgba(255,255,255,0.7);
+  opacity: 0.7;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.6);
 }
 
 .test-actions {
   display: flex;
   flex-direction: row;
-  gap: 10px;
-  min-width: 280px;
+  gap: 8px;
+  width: 100%;
 }
 
 .pass-button, .fail-button, .speak-button {
   flex: 1;
-  height: 50px;
+  height: 40px;
   font-size: 14px;
   font-weight: 600;
 }
 
 .pass-button {
-  background: #52c41a;
-  border-color: #52c41a;
+  background: #6aaa6a;
+  border-color: #6aaa6a;
 }
 
 .pass-button:hover {
-  background: #389e0d;
-  border-color: #389e0d;
+  background: #5a975a;
+  border-color: #5a975a;
 }
 
 .fail-button {
-  background: #f5222d;
-  border-color: #f5222d;
+  background: #c0544e;
+  border-color: #c0544e;
 }
 
 .fail-button:hover {
-  background: #cf1322;
-  border-color: #cf1322;
+  background: #a84440;
+  border-color: #a84440;
 }
 
 .status-mark {
-  min-width: 200px;
+  width: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1480,7 +1485,7 @@ onMounted(async () => {
 
 .reset-button {
   width: 100%;
-  height: 50px;
+  height: 40px;
   font-size: 14px;
   font-weight: 600;
 }
@@ -1513,40 +1518,26 @@ onMounted(async () => {
 
 /* 响应式设计 */
 @media (max-width: 768px) {
-  .post-learning-test {
-    padding: 15px;
-  }
-  
   .header-content {
     flex-direction: column;
     gap: 15px;
     text-align: center;
   }
-  
+
   .progress-info {
     min-width: auto;
     justify-content: center;
   }
-  
-  .word-item {
-    flex-direction: column;
-    gap: 15px;
-  }
-  
-  .test-actions, .status-mark {
-    min-width: auto;
-    width: 100%;
-  }
-  
+
   .word-text {
     font-size: 20px;
   }
-  
+
   .main-actions {
     flex-direction: column;
     width: 100%;
   }
-  
+
   .main-actions .el-button {
     width: 100%;
   }

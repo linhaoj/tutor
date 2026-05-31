@@ -60,14 +60,16 @@
     <!-- 主应用布局（教师和管理员） -->
     <el-container v-else class="app-container">
       <!-- 侧边导航 -->
-      <el-aside width="250px" class="sidebar">
-        <div class="logo">
-          <h2>英语陪练系统</h2>
+      <el-aside :width="sidebarCollapsed ? '64px' : '250px'" class="sidebar">
+        <div class="logo" :class="{ 'logo-collapsed': sidebarCollapsed }">
+          <h2 v-if="!sidebarCollapsed">英语陪练系统</h2>
         </div>
-        
+
         <el-menu
           :default-active="$route.path"
           router
+          :collapse="sidebarCollapsed"
+          :collapse-transition="false"
           background-color="#304156"
           text-color="#bfcbd9"
           active-text-color="#409EFF"
@@ -83,23 +85,23 @@
               <el-icon><Calendar /></el-icon>
               <span>日程管理</span>
             </el-menu-item>
-            
+
             <el-menu-item index="/students">
               <el-icon><User /></el-icon>
               <span>学生管理</span>
             </el-menu-item>
-            
+
             <el-menu-item index="/words">
               <el-icon><Document /></el-icon>
               <span>单词管理</span>
             </el-menu-item>
-            
+
             <el-menu-item index="/stats">
               <el-icon><DataAnalysis /></el-icon>
               <span>统计分析</span>
             </el-menu-item>
           </template>
-          
+
           <!-- 管理员菜单 -->
           <template v-if="authStore.isAdmin">
             <el-menu-item index="/admin">
@@ -109,11 +111,18 @@
           </template>
         </el-menu>
       </el-aside>
-      
+
       <!-- 主内容区 -->
       <el-container>
         <el-header class="header">
           <div class="header-content">
+            <!-- 折叠按钮 -->
+            <el-button
+              text
+              :icon="sidebarCollapsed ? Expand : Fold"
+              class="collapse-btn"
+              @click="sidebarCollapsed = !sidebarCollapsed"
+            />
             <h3>{{ pageTitle }}</h3>
             <div class="header-actions">
               <el-badge :value="todayReviewCount" class="review-badge">
@@ -157,7 +166,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Calendar, User, Document, DataAnalysis, Setting, Avatar, ArrowDown, ArrowLeft } from '@element-plus/icons-vue'
+import { Calendar, User, Document, DataAnalysis, Setting, Avatar, ArrowDown, ArrowLeft, Expand, Fold } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useStudentsStore } from '@/stores/students'
 import { useScheduleStore } from '@/stores/schedule'
@@ -174,6 +183,7 @@ const progressStore = useLearningProgressStore()
 const uiStore = useUIStore()
 
 const todayReviewCount = ref(0)
+const sidebarCollapsed = ref(false)
 
 // 计算属性
 const isLoginPage = computed(() => route.path === '/login')
@@ -282,6 +292,8 @@ watch(() => route.path, (newPath, oldPath) => {
 
 .sidebar {
   background-color: #304156;
+  transition: width 0.25s ease;
+  overflow: hidden;
 }
 
 .logo {
@@ -289,12 +301,30 @@ watch(() => route.path, (newPath, oldPath) => {
   text-align: center;
   color: #bfcbd9;
   border-bottom: 1px solid #434a50;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.logo-collapsed {
+  padding: 0;
 }
 
 .logo h2 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+  white-space: nowrap;
+}
+
+.collapse-btn {
+  font-size: 20px;
+  color: #606266;
+  padding: 0 4px;
+  margin-right: 8px;
+  flex-shrink: 0;
 }
 
 .header {
