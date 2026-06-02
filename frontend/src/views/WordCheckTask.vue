@@ -301,7 +301,7 @@ const speakWord = (text: string) => {
     utterance.volume = 1 // 音量最大
 
     utterance.onstart = () => {
-      ElMessage.info(`正在播放: ${text}`)
+      // 不显示单词内容，避免泄露隐藏的单词
     }
 
     utterance.onerror = (event) => {

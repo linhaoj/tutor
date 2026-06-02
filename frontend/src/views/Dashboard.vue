@@ -861,6 +861,8 @@ onUnmounted(() => {
   padding: 20px;
   max-width: 900px;
   margin: 0 auto;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .loading-container {
@@ -1029,38 +1031,42 @@ onUnmounted(() => {
 
 .schedule-item {
   display: flex;
-  align-items: center;
-  padding: 20px;
+  align-items: flex-start;
+  padding: 14px 16px;
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  margin-left: 30px;
+  margin-left: 0;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .schedule-time {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: bold;
   color: #303133;
-  margin-right: 20px;
-  min-width: 80px;
+  min-width: 60px;
+  flex-shrink: 0;
 }
 
 .schedule-content {
   flex: 1;
+  min-width: 0;
 }
 
 .schedule-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: #303133;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  word-break: break-word;
 }
 
 .schedule-student {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: #409eff;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .schedule-type {
@@ -1069,7 +1075,9 @@ onUnmounted(() => {
 
 .schedule-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
+  flex-shrink: 0;
+  align-items: center;
 }
 
 /* 禁用的按钮样式优化 */
@@ -1094,17 +1102,16 @@ onUnmounted(() => {
 
 /* 新增课程显示样式 */
 .schedule-meta {
-  margin-top: 8px;
+  margin-top: 6px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
 .duration-text {
   color: #909399;
   font-size: 12px;
-  margin-left: 4px;
 }
 
 .word-count-badge {
@@ -1114,14 +1121,37 @@ onUnmounted(() => {
   font-size: 12px;
   padding: 2px 8px;
   border-radius: 12px;
-  margin-left: 8px;
+  margin-left: 6px;
   font-weight: 500;
 }
 
 .last-review-text {
   color: #67c23a;
   font-size: 12px;
-  margin-left: 4px;
   font-weight: 500;
+}
+
+/* 响应式：窄屏下 schedule-item 操作按钮换行到底部 */
+@media (max-width: 480px) {
+  .schedule-item {
+    padding: 12px;
+  }
+
+  .schedule-time {
+    font-size: 18px;
+  }
+
+  .schedule-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .date-header {
+    padding: 12px 14px;
+  }
+
+  .column-content {
+    padding: 10px;
+  }
 }
 </style>

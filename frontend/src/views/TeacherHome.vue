@@ -23,8 +23,8 @@
 
     <div class="teacher-content">
       <div class="stats-cards">
-        <el-row :gutter="20">
-          <el-col :span="6">
+        <el-row :gutter="16">
+          <el-col :xs="12" :sm="12" :md="6">
             <el-card class="stat-card">
               <div class="stat-content">
                 <div class="stat-icon students">
@@ -37,8 +37,8 @@
               </div>
             </el-card>
           </el-col>
-          
-          <el-col :span="6">
+
+          <el-col :xs="12" :sm="12" :md="6">
             <el-card class="stat-card">
               <div class="stat-content">
                 <div class="stat-icon wordsets">
@@ -51,8 +51,8 @@
               </div>
             </el-card>
           </el-col>
-          
-          <el-col :span="6">
+
+          <el-col :xs="12" :sm="12" :md="6">
             <el-card class="stat-card">
               <div class="stat-content">
                 <div class="stat-icon schedules">
@@ -65,8 +65,8 @@
               </div>
             </el-card>
           </el-col>
-          
-          <el-col :span="6">
+
+          <el-col :xs="12" :sm="12" :md="6">
             <el-card class="stat-card">
               <div class="stat-content">
                 <div class="stat-icon today">
@@ -83,8 +83,8 @@
       </div>
 
       <div class="main-content">
-        <el-row :gutter="20">
-          <el-col :span="12">
+        <el-row :gutter="16">
+          <el-col :xs="24" :sm="24" :md="12">
             <el-card>
               <template #header>
                 <span>今日课程安排</span>
@@ -128,7 +128,7 @@
             </el-card>
           </el-col>
           
-          <el-col :span="12">
+          <el-col :xs="24" :sm="24" :md="12">
             <el-card>
               <template #header>
                 <span>最近学习统计</span>
@@ -422,29 +422,31 @@ onUnmounted(() => {
 
 .page-header {
   background: white;
-  padding: 20px 40px;
+  padding: 16px 24px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 12px;
 }
 
 .header-left h1 {
   margin: 0;
   color: #303133;
-  font-size: 24px;
+  font-size: 20px;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 12px;
 }
 
 .welcome-text {
@@ -453,17 +455,22 @@ onUnmounted(() => {
 }
 
 .teacher-content {
-  padding: 30px 40px;
+  padding: 20px;
   max-width: 1400px;
   margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .stats-cards {
-  margin-bottom: 30px;
+  margin-bottom: 20px;
+}
+
+.stats-cards .el-col {
+  margin-bottom: 16px;
 }
 
 .stat-card {
-  height: 120px;
+  height: 100px;
 }
 
 .stat-content {
@@ -617,26 +624,46 @@ onUnmounted(() => {
 /* 响应式设计 */
 @media (max-width: 768px) {
   .page-header {
-    padding: 15px 20px;
-    flex-direction: column;
-    gap: 15px;
-    text-align: center;
+    padding: 12px 16px;
   }
-  
+
+  .header-left h1 {
+    font-size: 18px;
+  }
+
+  .welcome-text {
+    display: none;
+  }
+
   .teacher-content {
-    padding: 20px;
+    padding: 12px;
   }
-  
-  .stats-cards .el-col {
-    margin-bottom: 15px;
+
+  .stat-icon {
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
+    margin-right: 12px;
   }
-  
+
+  .stat-number {
+    font-size: 22px;
+  }
+
   .actions-grid {
     flex-direction: column;
   }
-  
+
   .actions-grid .el-button {
     min-width: auto;
+  }
+
+  .main-content {
+    margin-bottom: 16px;
+  }
+
+  .main-content .el-col {
+    margin-bottom: 16px;
   }
 }
 </style>
