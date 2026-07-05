@@ -156,7 +156,7 @@ async def get_session(
 @safe_transaction("切换单词五角星状态")
 async def toggle_word_star(
     session_id: str,
-    word_id: int,
+    word_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -175,7 +175,8 @@ async def toggle_word_star(
     new_state = False
 
     for word in words:
-        if word.get('id') == word_id:
+        # word_id 现在是 str，但旧单词课的 id 存的是 int，用 str() 统一比较
+        if str(word.get('id', '')) == str(word_id):
             word['is_starred'] = not word.get('is_starred', False)
             new_state = word['is_starred']
             updated = True

@@ -589,42 +589,195 @@
     </el-dialog>
 
     <!-- 添加课程对话框 -->
-    <el-dialog 
-      v-model="addScheduleDialogVisible" 
+    <el-dialog
+      v-model="addScheduleDialogVisible"
       title="添加课程"
-      width="600px"
+      width="620px"
+      :close-on-click-modal="false"
     >
       <el-form :model="scheduleForm" label-width="100px">
         <el-form-item label="选择学生" required>
           <el-select v-model="scheduleForm.studentId" placeholder="请选择学生" style="width: 100%">
-            <el-option 
-              v-for="student in teacherStudents" 
-              :key="student.id" 
-              :label="student.name" 
-              :value="student.id" 
+            <el-option
+              v-for="student in teacherStudents"
+              :key="student.id"
+              :label="student.name"
+              :value="student.id"
             />
           </el-select>
         </el-form-item>
-        
+
         <el-form-item label="选择单词集" required>
           <el-select v-model="scheduleForm.wordSet" placeholder="请选择单词集" style="width: 100%">
-            <el-option 
-              v-for="set in teacherWordSets" 
-              :key="set.name" 
-              :label="set.name" 
-              :value="set.name" 
+            <el-option
+              v-for="set in teacherWordSets"
+              :key="set.name"
+              :label="set.name"
+              :value="set.name"
             />
           </el-select>
         </el-form-item>
-        
+
         <el-form-item label="课程类型" required>
-          <el-radio-group v-model="scheduleForm.type">
-            <el-radio value="learning">单词学习</el-radio>
+          <el-radio-group v-model="scheduleForm.type" @change="onCourseTypeChange">
+            <el-radio value="learning">单词课</el-radio>
             <el-radio value="review">抗遗忘</el-radio>
+            <el-radio value="reading">阅读课</el-radio>
           </el-radio-group>
         </el-form-item>
-        
-        
+
+        <!-- ── 阅读课专属配置 ────────────────────── -->
+        <template v-if="scheduleForm.type === 'reading'">
+          <el-form-item label="选词数量" required>
+            <el-select v-model="readingConfig.wordsCount" style="width: 160px" @change="onWordsCountChange">
+              <el-option label="5个单词" :value="5" />
+              <el-option label="10个单词" :value="10" />
+              <el-option label="15个单词" :value="15" />
+              <el-option label="20个单词" :value="20" />
+              <el-option label="自定义" :value="0" />
+            </el-select>
+            <el-input-number
+              v-if="readingConfig.wordsCount === 0"
+              v-model="readingConfig.customCount"
+              :min="1"
+              :max="readingConfig.learnedWords.length"
+              style="width: 120px; margin-left: 10px"
+            />
+            <span style="color: #909399; font-size: 12px; margin-left: 10px">
+              可用已学单词：{{ readingConfig.learnedWords.length }} 个
+            </span>
+          </el-form-item>
+
+          <el-form-item label="选词方式" required>
+            <el-radio-group v-model="readingConfig.wordSelectMode">
+              <el-radio value="random">随机选取（格子1-7）</el-radio>
+              <el-radio value="search">搜索选取</el-radio>
+              <el-radio value="manual">完全自定义</el-radio>
+            </el-radio-group>
+          </el-form-item>
+
+          <el-form-item v-if="readingConfig.wordSelectMode === 'search'" label="搜索单词">
+            <div style="width: 100%">
+              <el-input
+                v-model="readingConfig.searchKeyword"
+                placeholder="输入字母实时搜索已学单词..."
+                clearable
+                style="margin-bottom: 8px"
+              />
+              <div class="search-results" v-if="readingConfig.searchKeyword">
+                <el-tag
+                  v-for="word in filteredLearnedWords"
+                  :key="word.id"
+                  class="search-word-tag"
+                  @click="addSearchWord(word)"
+                  style="cursor: pointer; margin: 3px"
+                >{{ word.english }}</el-tag>
+                <span v-if="filteredLearnedWords.length === 0" style="color: #909399; font-size: 13px">无匹配单词</span>
+              </div>
+              <div v-if="readingConfig.selectedWords.length > 0" style="margin-top: 8px">
+                <div style="font-size: 13px; color: #606266; margin-bottom: 4px">
+                  已选 {{ readingConfig.selectedWords.length }} 个：
+                </div>
+                <el-tag
+                  v-for="(word, idx) in readingConfig.selectedWords"
+                  :key="idx"
+                  closable type="success"
+                  @close="removeSelectedWord(idx)"
+                  style="margin: 3px"
+                >{{ word.english }}</el-tag>
+              </div>
+            </div>
+          </el-form-item>
+
+          <el-form-item v-if="readingConfig.wordSelectMode === 'manual'" label="输入单词">
+            <div style="width: 100%">
+              <div style="display: flex; gap: 8px; margin-bottom: 8px">
+                <el-input v-model="readingConfig.manualInput.english" placeholder="英文" style="flex: 1" />
+                <el-input v-model="readingConfig.manualInput.chinese" placeholder="中文释义" style="flex: 1" />
+                <el-button type="primary" @click="addManualWord">添加</el-button>
+              </div>
+              <div v-if="readingConfig.selectedWords.length > 0">
+                <el-tag
+                  v-for="(word, idx) in readingConfig.selectedWords"
+                  :key="idx"
+                  closable type="success"
+                  @close="removeSelectedWord(idx)"
+                  style="margin: 3px"
+                >{{ word.english }}</el-tag>
+              </div>
+            </div>
+          </el-form-item>
+
+          <el-form-item label=" ">
+            <el-button
+              type="primary"
+              :loading="readingConfig.generating"
+              :disabled="!canGenerateArticle"
+              @click="generateArticle"
+            >
+              {{ readingConfig.generating ? '生成中...' : '生成文章' }}
+            </el-button>
+            <span v-if="readingConfig.article" style="color: #67c23a; margin-left: 12px; font-size: 13px">
+              ✓ 已生成（{{ readingConfig.wordCount }} 词）
+              <el-button link type="primary" @click="regenerateArticle" style="margin-left: 8px">重新生成</el-button>
+            </span>
+          </el-form-item>
+
+          <el-form-item v-if="readingConfig.article" label="文章预览">
+            <div style="width: 100%">
+
+              <!-- 按段显示：英文 + 中文翻译 -->
+              <div
+                v-for="(para, pIdx) in articleParagraphs"
+                :key="pIdx"
+                class="preview-paragraph"
+              >
+                <!-- 英文段落 -->
+                <div v-if="!readingConfig.editing" class="preview-en" v-html="highlightParagraph(para)" />
+                <el-input
+                  v-else
+                  v-model="editableParagraphs[pIdx]"
+                  type="textarea"
+                  :autosize="{ minRows: 2 }"
+                  style="width: 100%; margin-bottom: 4px"
+                  @input="onParagraphEdit"
+                />
+
+                <!-- 中文翻译：点击标题折叠/展开，展开时可编辑 -->
+                <div
+                  class="preview-zh-header"
+                  @click="toggleTranslationCollapse(pIdx)"
+                >
+                  <span class="zh-toggle-icon">{{ collapsedTranslations[pIdx] ? '▶' : '▼' }}</span>
+                  <span class="zh-toggle-label">译文</span>
+                </div>
+                <div v-show="!collapsedTranslations[pIdx]">
+                  <el-input
+                    v-model="readingConfig.translation[pIdx]"
+                    type="textarea"
+                    :autosize="{ minRows: 1 }"
+                    placeholder="中文翻译（可编辑）"
+                    class="preview-zh-input"
+                    resize="none"
+                  />
+                </div>
+              </div>
+
+              <!-- 操作栏 -->
+              <div style="margin-top: 10px; display: flex; gap: 8px; align-items: center">
+                <el-button size="small" @click="toggleArticleEdit">
+                  {{ readingConfig.editing ? '完成编辑' : '编辑英文' }}
+                </el-button>
+                <span style="color: #909399; font-size: 12px">Word count: {{ readingConfig.wordCount }}</span>
+                <span v-if="!isWordCountInRange" style="color: #f56c6c; font-size: 12px">
+                  ⚠ 建议范围：{{ wordCountRange[0] }}-{{ wordCountRange[1] }} 词
+                </span>
+              </div>
+            </div>
+          </el-form-item>
+        </template>
+        <!-- ── 阅读课配置结束 ────────────────────── -->
+
         <el-form-item label="课程时长">
           <el-input-number
             v-model="scheduleForm.duration"
@@ -635,7 +788,7 @@
           />
           <span style="color: #999; font-size: 12px; margin-left: 8px;">分钟</span>
         </el-form-item>
-        
+
         <el-form-item label="上课日期" required>
           <el-date-picker
             v-model="scheduleForm.date"
@@ -644,33 +797,29 @@
             style="width: 100%"
           />
         </el-form-item>
-        
+
         <el-form-item label="上课时间" required>
-          <el-select 
-            v-model="scheduleForm.time" 
+          <el-select
+            v-model="scheduleForm.time"
             placeholder="选择时间"
             filterable
             allow-create
             style="width: 100%"
           >
-            <el-option 
-              v-for="timeSlot in timeSlots" 
-              :key="timeSlot" 
-              :label="timeSlot" 
-              :value="timeSlot" 
+            <el-option
+              v-for="timeSlot in timeSlots"
+              :key="timeSlot"
+              :label="timeSlot"
+              :value="timeSlot"
             />
           </el-select>
-          <div class="form-help">
-            可选择预设时间或输入自定义时间（如：14:15）
-          </div>
+          <div class="form-help">可选择预设时间或输入自定义时间（如：14:15）</div>
         </el-form-item>
       </el-form>
-      
+
       <template #footer>
         <el-button @click="addScheduleDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitAddSchedule">
-          添加课程
-        </el-button>
+        <el-button type="primary" @click="submitAddSchedule">添加课程</el-button>
       </template>
     </el-dialog>
 
@@ -772,7 +921,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElForm } from 'element-plus'
 import { Plus, Avatar, ArrowDown, Upload, Setting, Download, Delete } from '@element-plus/icons-vue'
@@ -781,6 +930,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useStudentsStore } from '@/stores/students'
 import { useWordsStore } from '@/stores/words'
 import { useScheduleStore } from '@/stores/schedule'
+import { useReadingStore, type WordItem } from '@/stores/reading'
 import tutorDB from '@/utils/localDatabase'
 import type { User } from '@/stores/auth'
 import type { Student } from '@/stores/students'
@@ -792,6 +942,7 @@ const authStore = useAuthStore()
 const studentsStore = useStudentsStore()
 const wordsStore = useWordsStore()
 const scheduleStore = useScheduleStore()
+const readingStore = useReadingStore()
 
 // 标签页状态
 const activeTab = ref('users')
@@ -1245,6 +1396,208 @@ const scheduleForm = reactive({
   duration: 60,
   classType: 'big'
 })
+
+// ── 阅读课专属状态 ────────────────────────────────────────
+const readingConfig = reactive({
+  wordsCount: 10,
+  customCount: 10,
+  wordSelectMode: 'random' as 'random' | 'search' | 'manual',
+  learnedWords: [] as Array<{ id: number; english: string; chinese: string; stage: number; index: number }>,
+  searchKeyword: '',
+  selectedWords: [] as WordItem[],
+  manualInput: { english: '', chinese: '' },
+  generating: false,
+  article: '',
+  translation: [] as string[],
+  wordCount: 0,
+  editing: false,
+  savedArticleId: null as number | null,
+})
+
+const finalReadingWordsCount = computed(() =>
+  readingConfig.wordsCount === 0 ? readingConfig.customCount : readingConfig.wordsCount
+)
+
+const wordCountRange = computed((): [number, number] => {
+  const n = finalReadingWordsCount.value
+  if (n <= 5) return [100, 200]
+  if (n <= 10) return [200, 350]
+  return [300, 500]
+})
+
+const isWordCountInRange = computed(() => {
+  const [min, max] = wordCountRange.value
+  return readingConfig.wordCount >= min && readingConfig.wordCount <= max
+})
+
+const filteredLearnedWords = computed(() => {
+  const kw = readingConfig.searchKeyword.toLowerCase()
+  if (!kw) return []
+  const selectedEnglish = new Set(readingConfig.selectedWords.map(w => w.english.toLowerCase()))
+  return readingConfig.learnedWords.filter(
+    w => w.english.toLowerCase().includes(kw) && !selectedEnglish.has(w.english.toLowerCase())
+  )
+})
+
+// 按段落拆分文章（只读）
+const articleParagraphs = computed(() => {
+  if (!readingConfig.article) return []
+  return readingConfig.article.split(/\n\n+/).map((p: string) => p.trim()).filter((p: string) => p.length > 0)
+})
+
+// 编辑时每段独立的 ref
+const editableParagraphs = ref<string[]>([])
+
+// 每段译文的折叠状态（true=折叠），用 reactive 保证响应式
+const collapsedTranslations = reactive<Record<number, boolean>>({})
+
+const toggleTranslationCollapse = (pIdx: number) => {
+  collapsedTranslations[pIdx] = !collapsedTranslations[pIdx]
+}
+
+// 单段高亮 - 直接用 selectedWords（生成后已固定，不再随机）
+const highlightParagraph = (para: string) => {
+  let text = para.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  readingConfig.selectedWords.forEach((w: WordItem) => {
+    const escaped = w.english.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(`\\b(${escaped})\\b`, 'gi')
+    text = text.replace(regex, '<mark>$1</mark>')
+  })
+  return `<span style="line-height:1.9">${text}</span>`
+}
+
+// 切换英文编辑模式
+const toggleArticleEdit = () => {
+  if (readingConfig.editing) {
+    // 完成编辑：把各段合并回 article
+    readingConfig.article = editableParagraphs.value.join('\n\n')
+    onArticleEdit()
+  } else {
+    // 进入编辑：初始化可编辑段落
+    editableParagraphs.value = articleParagraphs.value.slice()
+  }
+  readingConfig.editing = !readingConfig.editing
+}
+
+// 编辑某段英文时实时更新 wordCount
+const onParagraphEdit = () => {
+  const merged = editableParagraphs.value.join('\n\n')
+  const words = merged.match(/\b[a-zA-Z']+\b/g) || []
+  readingConfig.wordCount = words.length
+}
+
+const canGenerateArticle = computed(() => {
+  if (!scheduleForm.studentId || !scheduleForm.wordSet) return false
+  if (readingConfig.wordSelectMode === 'random') {
+    return readingConfig.learnedWords.length >= finalReadingWordsCount.value
+  }
+  return readingConfig.selectedWords.length > 0
+})
+
+function getArticleWords(): WordItem[] {
+  if (readingConfig.wordSelectMode === 'random') {
+    const shuffled = [...readingConfig.learnedWords].sort(() => Math.random() - 0.5)
+    return shuffled.slice(0, finalReadingWordsCount.value).map(w => ({ english: w.english, chinese: w.chinese }))
+  }
+  return readingConfig.selectedWords
+}
+
+const onCourseTypeChange = async () => {
+  if (scheduleForm.type === 'reading') {
+    await loadLearnedWordsForReading()
+  }
+}
+
+const loadLearnedWordsForReading = async () => {
+  if (!scheduleForm.studentId || !scheduleForm.wordSet) return
+  try {
+    readingConfig.learnedWords = await readingStore.getLearnedWords(
+      parseInt(scheduleForm.studentId), scheduleForm.wordSet
+    )
+  } catch { ElMessage.error('加载已学单词失败') }
+}
+
+watch(() => [scheduleForm.studentId, scheduleForm.wordSet], async () => {
+  if (scheduleForm.type === 'reading' && scheduleForm.studentId && scheduleForm.wordSet) {
+    await loadLearnedWordsForReading()
+  }
+})
+
+const onWordsCountChange = () => {
+  if (readingConfig.wordsCount === 0) {
+    readingConfig.customCount = Math.min(10, readingConfig.learnedWords.length)
+  }
+}
+
+const addSearchWord = (word: { english: string; chinese: string }) => {
+  if (readingConfig.selectedWords.some(w => w.english === word.english)) return
+  readingConfig.selectedWords.push({ english: word.english, chinese: word.chinese })
+  readingConfig.searchKeyword = ''
+}
+
+const addManualWord = () => {
+  const eng = readingConfig.manualInput.english.trim()
+  const chn = readingConfig.manualInput.chinese.trim()
+  if (!eng) { ElMessage.warning('请输入英文单词'); return }
+  if (readingConfig.selectedWords.some(w => w.english.toLowerCase() === eng.toLowerCase())) {
+    ElMessage.warning('该单词已添加'); return
+  }
+  readingConfig.selectedWords.push({ english: eng, chinese: chn || '—' })
+  readingConfig.manualInput.english = ''
+  readingConfig.manualInput.chinese = ''
+}
+
+const removeSelectedWord = (idx: number) => { readingConfig.selectedWords.splice(idx, 1) }
+
+const generateArticle = async () => {
+  if (readingConfig.wordSelectMode === 'random') {
+    const need = finalReadingWordsCount.value
+    const have = readingConfig.learnedWords.length
+    if (have < need) {
+      ElMessageBox.alert(
+        `可用已学单词不足！\n需要：${need} 个\n可用：${have} 个\n\n请减少选词数量，或先完成更多单词学习。`,
+        '单词不足', { confirmButtonText: '知道了', type: 'warning' }
+      )
+      return
+    }
+  }
+  readingConfig.generating = true
+  readingConfig.article = ''
+  readingConfig.savedArticleId = null
+  try {
+    const wordsToUse = getArticleWords()
+    const result = await readingStore.generateArticle(scheduleForm.wordSet, wordsToUse)
+    readingConfig.article = result.article
+    readingConfig.translation = result.translation || []
+    readingConfig.wordCount = result.word_count
+    editableParagraphs.value = result.article.split(/\n\n+/).map((p: string) => p.trim()).filter((p: string) => p.length > 0)
+    if (readingConfig.wordSelectMode === 'random') readingConfig.selectedWords = wordsToUse
+    ElMessage.success(`文章生成成功（${result.word_count} 词，${readingConfig.translation.length} 段翻译）`)
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '生成文章失败，请重试')
+  } finally {
+    readingConfig.generating = false
+  }
+}
+
+const regenerateArticle = async () => { readingConfig.savedArticleId = null; await generateArticle() }
+
+const onArticleEdit = () => {
+  const words = readingConfig.article.match(/\b[a-zA-Z']+\b/g) || []
+  readingConfig.wordCount = words.length
+}
+
+const resetReadingConfig = () => {
+  Object.assign(readingConfig, {
+    wordsCount: 10, customCount: 10, wordSelectMode: 'random',
+    learnedWords: [], searchKeyword: '', selectedWords: [],
+    manualInput: { english: '', chinese: '' },
+    generating: false, article: '', translation: [], wordCount: 0, editing: false, savedArticleId: null
+  })
+  editableParagraphs.value = []
+  Object.keys(collapsedTranslations).forEach(k => delete collapsedTranslations[k as any])
+}
+// ── 阅读课配置结束 ─────────────────────────────────────────
 
 // 生成时间选项（6:00-22:00，每30分钟一个）
 const timeSlots = computed(() => {
@@ -1774,6 +2127,7 @@ const showAddScheduleDialog = () => {
     duration: 60,
     classType: 'big'
   })
+  resetReadingConfig()
   addScheduleDialogVisible.value = true
 }
 
@@ -1817,6 +2171,30 @@ const submitAddSchedule = async () => {
     })
 
     if (result.success) {
+      // 阅读课：保存文章并绑定课程
+      if (scheduleForm.type === 'reading' && readingConfig.article) {
+        try {
+          let articleId = readingConfig.savedArticleId
+          if (!articleId) {
+            const saved = await readingStore.saveArticle(
+              scheduleForm.wordSet,
+              readingConfig.selectedWords,
+              readingConfig.article,
+              readingConfig.translation,
+              readingConfig.wordCount
+            )
+            articleId = saved.id
+          }
+          // 从 store 里取刚创建的课程（最后一条）
+          const scheduleStore2 = useScheduleStore()
+          const newSchedule = scheduleStore2.schedules[scheduleStore2.schedules.length - 1]
+          if (newSchedule?.id) {
+            await readingStore.bindArticleToSchedule(articleId, newSchedule.id)
+          }
+        } catch (e) {
+          console.error('保存文章失败:', e)
+        }
+      }
       ElMessage.success(result.message)
       addScheduleDialogVisible.value = false
       await loadTeacherData()
@@ -2399,5 +2777,105 @@ onMounted(() => {
 .hours-high {
   color: #67c23a;
   font-weight: bold;
+}
+
+/* 阅读课文章预览 */
+.article-preview {
+  background: #fafafa;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  padding: 14px 16px;
+  font-size: 15px;
+  color: #303133;
+  max-height: 260px;
+  overflow-y: auto;
+  line-height: 1.9;
+}
+
+.article-preview :deep(mark) {
+  background: #fff3b0;
+  color: #303133;
+  border-radius: 2px;
+  padding: 0 2px;
+  font-weight: 600;
+}
+
+.search-results {
+  background: #f5f7fa;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  padding: 8px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.search-word-tag:hover {
+  background: #409eff;
+  color: white;
+}
+
+/* 文章预览 - 按段显示 */
+.preview-paragraph {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed #e4e7ed;
+}
+
+.preview-paragraph:last-child {
+  border-bottom: none;
+}
+
+.preview-en {
+  font-size: 15px;
+  line-height: 1.9;
+  color: #303133;
+  margin-bottom: 6px;
+  padding: 8px 10px;
+  background: #fafafa;
+  border-radius: 4px;
+}
+
+.preview-en :deep(mark) {
+  background: #fff3b0;
+  color: #303133;
+  border-radius: 2px;
+  padding: 0 2px;
+  font-weight: 600;
+}
+
+.preview-zh-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 3px 6px;
+  margin-top: 4px;
+  border-radius: 4px;
+  user-select: none;
+  width: fit-content;
+}
+
+.preview-zh-header:hover {
+  background: #e8f5e0;
+}
+
+.zh-toggle-icon {
+  font-size: 10px;
+  color: #67c23a;
+}
+
+.zh-toggle-label {
+  font-size: 12px;
+  color: #67c23a;
+  font-weight: 500;
+}
+
+.preview-zh-input :deep(.el-textarea__inner) {
+  background: #f0f9eb;
+  color: #4a6741;
+  font-size: 14px;
+  border-color: #b7d9a8;
+  line-height: 1.7;
+  resize: none;
 }
 </style>

@@ -28,3 +28,11 @@ node_modules/
 dist/
 build/
 backend/english_tutor.db
+
+# macOS系统文件
+.DS_Store
+**/.DS_Store
+
+# 本地/服务器专属密钥（不进git，需在各环境手动创建）
+.env.local
+**/.env.local

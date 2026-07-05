@@ -104,6 +104,18 @@ def migrate_database():
             logger.info("✅ schedules.session_id 列添加成功（用于关联抗遗忘会话）")
             migration_count += 1
 
+        # ========== reading_articles 表迁移 ==========
+        # 表可能由旧版本创建（没有 translation 列），需要补上
+        inspector = inspect(engine)
+        existing_tables = inspector.get_table_names()
+        if 'reading_articles' in existing_tables:
+            if not check_column_exists('reading_articles', 'translation'):
+                logger.info("🔧 迁移 #10: 给 reading_articles 表添加 translation 列")
+                db.execute(text("ALTER TABLE reading_articles ADD COLUMN translation JSON"))
+                db.commit()
+                logger.info("✅ reading_articles.translation 列添加成功")
+                migration_count += 1
+
         # ========== 完成迁移 ==========
         if migration_count > 0:
             logger.info(f"🎉 数据库迁移完成！共执行 {migration_count} 项迁移")
@@ -128,7 +140,7 @@ def verify_migrations():
         'students': ['user_id', 'teacher_id', 'remaining_hours'],
         'schedules': ['scheduled_at', 'teacher_id', 'session_id'],
         'word_sets': ['owner_id', 'is_global'],
-        'words': ['word_set_id']
+        'words': ['word_set_id'],
     }
 
     logger.info("🔍 验证数据库架构...")

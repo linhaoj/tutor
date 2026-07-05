@@ -4,8 +4,9 @@ from sqlalchemy.orm import declarative_base
 import os
 from dotenv import load_dotenv
 
-# 加载环境变量
+# 加载环境变量（.env 是已提交的基础配置，.env.local 是不进git的本地/服务器专属密钥，不会覆盖已有变量）
 load_dotenv()
+load_dotenv(".env.local")
 
 # 数据库URL
 DATABASE_URL = os.getenv(

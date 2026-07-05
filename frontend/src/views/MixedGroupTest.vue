@@ -208,6 +208,7 @@ const currentTestingGroup = ref(1) // 当前正在检测的组
 const totalGroups = ref(1) // 当前需要检测的组数（不是总学习组数）
 const totalLearningGroups = ref(1) // 总学习目标组数（例如10个单词=2组）
 const completedGroups = ref(0) // 已完成的组数
+const realTotalWords = ref(0) // 真实总单词数（不按5取整，支持自定义数量）
 
 // 计算属性
 const currentGroupWords = computed(() => {
@@ -370,7 +371,8 @@ const completeAllTests = () => {
   // 跳转到训后检测页面
   const studentId = route.params.studentId
   const wordSet = route.query.wordSet as string
-  const totalWordsCount = totalLearningGroups.value * 5
+  // 使用真实词数（不按5取整），兼容自定义数量不是5的倍数的情况（如阅读课临时抗遗忘词）
+  const totalWordsCount = realTotalWords.value || totalLearningGroups.value * 5
 
   // 计算本轮学习的所有组数
   // 本轮学习从第1组开始，到当前最后一组结束
@@ -398,7 +400,9 @@ const completeAllTests = () => {
       currentBatchStartGroup: currentBatchStartGroup, // 当前批次起始组号
       currentBatchGroupCount: currentBatchGroupCount, // 当前批次组数
       learningMode: route.query.learningMode, // 传递学习模式
-      filtered: route.query.filtered // 传递筛选标记
+      filtered: route.query.filtered, // 传递筛选标记
+      skipProgress: route.query.skipProgress,
+      antiForgetTime: route.query.antiForgetTime
     }
   })
 }
@@ -430,7 +434,9 @@ const startNextGroupLearning = (skipMode = false) => {
       startIndex: totalGroups.value * 5, // 从当前组数*5的位置开始
       teacherId: route.query.teacherId || '', // 传递teacherId
       learningMode: route.query.learningMode, // 传递学习模式
-      filtered: route.query.filtered // 传递筛选标记
+      filtered: route.query.filtered, // 传递筛选标记
+      skipProgress: route.query.skipProgress,
+      antiForgetTime: route.query.antiForgetTime
     }
   })
 }
@@ -445,7 +451,10 @@ const handleTimeExpired = () => {
   // 使用当前已学习的组数
   const currentBatchStartGroup = 1  // 批次总是从第1组开始
   const currentBatchGroupCount = totalGroups.value  // 当前已经学习到第几组
-  const totalWordsCount = currentBatchGroupCount * 5
+  // 如果已经学完全部组（包括最后一组可能不满5个），用真实总词数；否则按5倍数估算（中间组固定5个）
+  const totalWordsCount = (currentBatchGroupCount >= totalLearningGroups.value && realTotalWords.value)
+    ? realTotalWords.value
+    : currentBatchGroupCount * 5
 
   console.log('⏰ MixedGroupTest自动结束 - 训后检测参数:', {
     totalGroups: totalGroups.value,
@@ -473,6 +482,8 @@ const handleTimeExpired = () => {
         teacherId: route.query.teacherId,
         learningMode: route.query.learningMode,
         filtered: route.query.filtered,
+        skipProgress: route.query.skipProgress,
+        antiForgetTime: route.query.antiForgetTime,
         currentBatchStartGroup: currentBatchStartGroup,
         currentBatchGroupCount: currentBatchGroupCount,
         autoEnd: 'true'  // 标记为自动结束
@@ -508,6 +519,7 @@ const initializeWords = async () => {
 
   // 计算总学习组数
   totalLearningGroups.value = Math.ceil(totalWordsCount / 5)
+  realTotalWords.value = totalWordsCount
 
   // 按组分配单词（每组5个）并打乱顺序
   const groupedWords: TestWord[][] = []

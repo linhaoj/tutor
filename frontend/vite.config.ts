@@ -32,7 +32,14 @@ export default defineConfig({
   server: {
     host: '0.0.0.0', // 允许局域网访问
     port: 5173,
-    strictPort: true
+    strictPort: true,
+    allowedHosts: ['.ngrok-free.dev', '.ngrok-free.app', '.ngrok.io', 'all'],  // 允许ngrok等外部域名访问
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      }
+    }
   },
   preview: {
     host: '0.0.0.0',

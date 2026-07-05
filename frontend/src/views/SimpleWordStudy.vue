@@ -400,7 +400,9 @@ const goToNextTask = () => {
       startIndex: route.query.startIndex, // 传递起始位置
       teacherId: route.query.teacherId, // 传递教师ID
       learningMode: route.query.learningMode, // 传递学习模式
-      filtered: route.query.filtered // 传递筛选标记
+      filtered: route.query.filtered, // 传递筛选标记
+      skipProgress: route.query.skipProgress,
+      antiForgetTime: route.query.antiForgetTime
     }
   })
 
@@ -460,6 +462,8 @@ const handleTimeExpired = () => {
         teacherId: route.query.teacherId,
         learningMode: route.query.learningMode,
         filtered: route.query.filtered,
+        skipProgress: route.query.skipProgress,
+        antiForgetTime: route.query.antiForgetTime,
         currentBatchStartGroup: currentBatchStartGroup,
         currentBatchGroupCount: currentBatchGroupCount,
         autoEnd: 'true'  // 标记为自动结束

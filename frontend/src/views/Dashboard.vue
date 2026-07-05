@@ -63,10 +63,10 @@
                     <div class="schedule-student">{{ schedule.student_name }}</div>
                     <div class="schedule-meta">
                       <el-tag
-                        :type="schedule.course_type === 'review' ? 'warning' : 'success'"
+                        :type="schedule.course_type === 'review' ? 'warning' : schedule.course_type === 'reading' ? 'primary' : 'success'"
                         size="small"
                       >
-                        {{ schedule.course_type === 'review' ? '抗遗忘' : '单词学习' }}
+                        {{ schedule.course_type === 'review' ? '抗遗忘' : schedule.course_type === 'reading' ? '阅读课' : '单词学习' }}
                       </el-tag>
                       <el-tag
                         type="primary"
@@ -90,7 +90,7 @@
                         <el-button
                           type="success"
                           @click="startStudy(schedule)"
-                          :disabled="false"
+                          :disabled="!isToday(schedule.date)"
                         >
                           {{ schedule.course_type === 'review' ? '复习' : '学习' }}
                         </el-button>
@@ -138,10 +138,10 @@
                     <div class="schedule-student">{{ schedule.student_name }}</div>
                     <div class="schedule-meta">
                       <el-tag
-                        :type="schedule.course_type === 'review' ? 'warning' : 'success'"
+                        :type="schedule.course_type === 'review' ? 'warning' : schedule.course_type === 'reading' ? 'primary' : 'success'"
                         size="small"
                       >
-                        {{ schedule.course_type === 'review' ? '抗遗忘' : '单词学习' }}
+                        {{ schedule.course_type === 'review' ? '抗遗忘' : schedule.course_type === 'reading' ? '阅读课' : '单词学习' }}
                       </el-tag>
                       <el-tag
                         type="primary"
@@ -183,10 +183,10 @@
                 <div class="schedule-student">{{ schedule.student_name }}</div>
                 <div class="schedule-meta">
                   <el-tag
-                    :type="schedule.course_type === 'review' ? 'warning' : 'success'"
+                    :type="schedule.course_type === 'review' ? 'warning' : schedule.course_type === 'reading' ? 'primary' : 'success'"
                     size="small"
                   >
-                    {{ schedule.course_type === 'review' ? '抗遗忘' : '单词学习' }}
+                    {{ schedule.course_type === 'review' ? '抗遗忘' : schedule.course_type === 'reading' ? '阅读课' : '单词学习' }}
                   </el-tag>
                   <el-tag
                     type="primary"
@@ -210,7 +210,7 @@
                     <el-button
                       type="success"
                       @click="startStudy(schedule)"
-                      :disabled="false"
+                      :disabled="!isToday(schedule.date)"
                     >
                       {{ schedule.course_type === 'review' ? '复习' : '学习' }}
                     </el-button>
@@ -237,42 +237,41 @@
     </div>
 
     <!-- 添加课程对话框 -->
-    <el-dialog 
-      v-model="addDialogVisible" 
+    <el-dialog
+      v-model="addDialogVisible"
       title="添加课程"
       width="500px"
     >
       <el-form :model="courseForm" label-width="100px">
         <el-form-item label="选择学生" required>
           <el-select v-model="courseForm.studentId" placeholder="请选择学生" style="width: 100%">
-            <el-option 
-              v-for="student in students" 
-              :key="student.id" 
-              :label="student.name" 
-              :value="student.id" 
+            <el-option
+              v-for="student in students"
+              :key="student.id"
+              :label="student.name"
+              :value="student.id"
             />
           </el-select>
         </el-form-item>
-        
+
         <el-form-item label="选择单词集" required>
           <el-select v-model="courseForm.wordSet" placeholder="请选择单词集" style="width: 100%">
-            <el-option 
-              v-for="set in wordSets" 
-              :key="set.name" 
-              :label="set.name" 
-              :value="set.name" 
+            <el-option
+              v-for="set in wordSets"
+              :key="set.name"
+              :label="set.name"
+              :value="set.name"
             />
           </el-select>
         </el-form-item>
-        
+
         <el-form-item label="课程类型" required>
           <el-radio-group v-model="courseForm.type">
             <el-radio value="learning">单词学习</el-radio>
             <el-radio value="review">抗遗忘</el-radio>
           </el-radio-group>
         </el-form-item>
-        
-        
+
         <el-form-item label="课程时长">
           <el-input-number
             v-model="courseForm.duration"
@@ -283,7 +282,7 @@
           />
           <span style="color: #999; font-size: 12px; margin-left: 8px;">分钟</span>
         </el-form-item>
-        
+
         <el-form-item label="上课日期" required>
           <el-date-picker
             v-model="courseForm.date"
@@ -292,28 +291,26 @@
             style="width: 100%"
           />
         </el-form-item>
-        
+
         <el-form-item label="上课时间" required>
-  <el-select 
-    v-model="courseForm.time" 
-    placeholder="选择时间"
-    filterable
-    allow-create
-    style="width: 100%"
-  >
-    <el-option 
-      v-for="timeSlot in timeSlots" 
-      :key="timeSlot" 
-      :label="timeSlot" 
-      :value="timeSlot" 
-    />
-  </el-select>
-  <div class="form-help">
-    可选择预设时间或输入自定义时间（如：14:15）
-  </div>
-</el-form-item>
+          <el-select
+            v-model="courseForm.time"
+            placeholder="选择时间"
+            filterable
+            allow-create
+            style="width: 100%"
+          >
+            <el-option
+              v-for="timeSlot in timeSlots"
+              :key="timeSlot"
+              :label="timeSlot"
+              :value="timeSlot"
+            />
+          </el-select>
+          <div class="form-help">可选择预设时间或输入自定义时间（如：14:15）</div>
+        </el-form-item>
       </el-form>
-      
+
       <template #footer>
         <el-button @click="addDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="addCourse" :loading="adding">
@@ -374,12 +371,14 @@ const courseForm = reactive<{
 }>({
   studentId: '',
   wordSet: '',
-  type: 'study',
+  type: 'learning',
   date: '',
   time: '',
   duration: 60,
   classType: 'big'
 })
+
+
 
 // 计算属性 - 按日期分组（使用store的computed属性）
 const groupedSchedules = computed(() => {
@@ -440,8 +439,6 @@ const isToday = (dateString: string) => {
   const month = String(today.getMonth() + 1).padStart(2, '0')
   const day = String(today.getDate()).padStart(2, '0')
   const todayStr = `${year}-${month}-${day}`
-
-  console.log('🔍 isToday检查:', { dateString, todayStr, 结果: dateString === todayStr })
 
   // 直接比较日期字符串
   return dateString === todayStr
@@ -560,6 +557,16 @@ const startStudy = async (schedule: any) => {
         wordSet: schedule.word_set_name,
         teacherId: authStore.currentUser?.id || '',
         scheduleId: schedule.id.toString()
+      }
+    })
+  } else if (schedule.course_type === 'reading') {
+    // 跳转到阅读课界面
+    router.push({
+      name: 'ReadingLesson',
+      params: { studentId: schedule.student_id },
+      query: {
+        scheduleId: schedule.id.toString(),
+        wordSet: schedule.word_set_name
       }
     })
   } else {
@@ -769,7 +776,11 @@ const getLastReviewTime = (schedule: any) => {
   }
 
   // 格式化日期时间 (使用created_at作为最后复习时间)
-  const date = new Date(session.created_at)
+  // 后端created_at是不带时区标记的UTC时间字符串，需要显式标记为UTC再转换为本地时间显示
+  const utcString = session.created_at.endsWith('Z') || session.created_at.includes('+')
+    ? session.created_at
+    : session.created_at + 'Z'
+  const date = new Date(utcString)
   return date.toLocaleString('zh-CN', {
     month: 'short',
     day: 'numeric',

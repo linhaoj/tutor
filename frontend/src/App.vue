@@ -249,7 +249,8 @@ watch(() => route.path, (newPath) => {
     '/mixed-test/',
     '/post-test/',
     '/anti-forget/',
-    '/word-filter/'
+    '/word-filter/',
+    '/reading-lesson/'
   ]
 
   // 检查当前路径是否为学习相关页面

@@ -16,10 +16,17 @@ const API_BASE_URL = (() => {
   // 根据当前访问地址自动判断
   const hostname = window.location.hostname
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    // 电脑本地访问
+    // 本地访问
     return 'http://localhost:8000'
+  } else if (hostname.endsWith('.ngrok-free.app') || hostname.endsWith('.ngrok-free.dev') || hostname.endsWith('.ngrok.io') || hostname.includes('ngrok')) {
+    // ngrok穿透访问：Vite dev server会把 /api 代理到 localhost:8000
+    // 所以直接用空字符串，请求走相对路径即可
+    return ''
+  } else if (/^10\.|^172\.(1[6-9]|2\d|3[01])\.|^192\.168\./.test(hostname)) {
+    // 局域网IP访问（手机等）
+    return `http://${hostname}:8000`
   } else {
-    // 手机局域网访问（使用当前访问的IP）
+    // 服务器或其他公网访问（如 47.108.248.168）
     return `http://${hostname}:8000`
   }
 })()

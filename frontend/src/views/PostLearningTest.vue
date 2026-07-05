@@ -333,6 +333,10 @@ const clearTestStatusStorage = () => {
   }
 }
 
+// 临时模式：阅读课等场景传入的单词不属于任何word_set/格子进度系统
+// 此模式下跳过"更新格子进度"和"标记课程完成"（阅读课已自行处理这两件事）
+const isTempWordsMode = computed(() => route.query.skipProgress === 'true')
+
 const endPracticeAndCreateAntiForget = async () => {
   try {
     // 在路由跳转前，先保存当前路由参数（避免跳转后丢失）
@@ -341,14 +345,18 @@ const endPracticeAndCreateAntiForget = async () => {
     const startIndex = parseInt(route.query.startIndex as string) || 0
     const studentId = parseInt(route.params.studentId as string)
 
-    // 更新学习进度
-    await updateLearningProgress()
+    if (!isTempWordsMode.value) {
+      // 更新学习进度（临时单词模式跳过，不影响格子进度）
+      await updateLearningProgress()
+    }
 
     // 创建抗遗忘任务（内部会自动记录通过的单词）
     await createAntiForgetTasks()
 
-    // 标记当前课程为已完成（只有创建抗遗忘成功后才执行）
-    await markCourseAsCompleted()
+    if (!isTempWordsMode.value) {
+      // 标记当前课程为已完成（临时单词模式跳过，调用方自行处理课程完成）
+      await markCourseAsCompleted()
+    }
 
     // 清理sessionStorage中的检测状态数据（使用保存的参数）
     const storageKey =
@@ -551,15 +559,18 @@ const createAntiForgetTasks = async () => {
   }
 
   try {
-    // 让用户选择抗遗忘课程的时间（此时显示正确的单词数量）
-    const selectedTime = await promptForAntiForgetTime()
+    // 让用户选择抗遗忘课程的时间（临时单词模式下若已预设时间，跳过弹窗直接使用）
+    const presetTime = route.query.antiForgetTime as string | undefined
+    const selectedTime = (isTempWordsMode.value && presetTime)
+      ? presetTime
+      : await promptForAntiForgetTime()
 
     if (!selectedTime) {
       ElMessage.info('已取消创建抗遗忘课程')
       throw new Error('用户取消创建抗遗忘课程')
     }
 
-    // 现在完成会话并获取所有累积的单词
+    // 现在完成会话并获取所有累积的单词（注意：selectedTime已在上面通过promptForAntiForgetTime或预设值获得）
     const completedSession = antiForgetSessionStore.completeSession(studentId)
 
     if (!completedSession) {
@@ -570,9 +581,11 @@ const createAntiForgetTasks = async () => {
     // 创建抗遗忘日程
     await createAntiForgetSchedule(completedSession, selectedTime)
 
-    // 生成PDF文件（使用会话中的所有通过单词）
-    await generateWordsReport(completedSession.words)
-    
+    if (!isTempWordsMode.value) {
+      // 生成PDF文件（临时单词模式下由调用方自行生成PDF，避免重复下载）
+      await generateWordsReport(completedSession.words)
+    }
+
     ElMessage.success('抗遗忘课程已创建完成！')
     
     // 跳转到日程管理页面查看

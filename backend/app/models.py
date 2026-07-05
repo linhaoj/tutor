@@ -225,6 +225,25 @@ class StudentReview(Base):
     student = relationship("Student", back_populates="student_reviews")
 
 
+class ReadingArticle(Base):
+    """阅读课文章表 - 排课时生成，与课程绑定"""
+    __tablename__ = "reading_articles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    schedule_id = Column(Integer, ForeignKey("schedules.id"), nullable=True)
+    word_set_name = Column(String(100), nullable=False)
+    words_used = Column(JSON, nullable=False)      # [{english, chinese}]
+    article_content = Column(Text, nullable=False)  # 文章正文（英文）
+    translation = Column(JSON, nullable=True)       # 按段落的中文翻译 ["段落1译文", "段落2译文", ...]
+    word_count = Column(Integer, nullable=False)
+    created_by = Column(String(50), ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # 关系
+    creator = relationship("User", foreign_keys=[created_by])
+
+
 # 用于Excel导入的临时表
 class WordImport(Base):
     __tablename__ = "word_imports"

@@ -7,9 +7,9 @@ from app.database import get_db, create_tables
 from app.models import (
     User, Student, WordSet, Word, StudentWord,
     Schedule, LearningSession, LearningRecord,
-    LearningProgress, AntiForgetSession, StudentReview
+    LearningProgress, AntiForgetSession, StudentReview, ReadingArticle
 )
-from app.routes import auth, students_api, words_api, schedule_api, progress_api, anti_forget_api, student_reviews_api
+from app.routes import auth, students_api, words_api, schedule_api, progress_api, anti_forget_api, student_reviews_api, reading_api
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -25,8 +25,9 @@ app.add_middleware(
         "http://localhost:5173",
         "http://47.108.248.168:5173",
         "http://127.0.0.1:5173",
-        "http://10.2.118.25:5173"  # 支持局域网访问（手机端）
+        "http://10.2.118.25:5173",  # 支持局域网访问（手机端）
     ],
+    allow_origin_regex=r"https://.*\.ngrok-free\.app|https://.*\.ngrok\.io",  # 支持ngrok穿透
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -55,6 +56,7 @@ app.include_router(schedule_api.router)
 app.include_router(progress_api.router)
 app.include_router(anti_forget_api.router)
 app.include_router(student_reviews_api.router)
+app.include_router(reading_api.router)
 
 @app.get("/")
 async def root():

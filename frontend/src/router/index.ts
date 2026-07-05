@@ -146,6 +146,13 @@ const routes: RouteRecordRaw[] = [
     name: 'Stats',
     component: Stats,
     meta: { title: '统计分析', requiresAuth: true, requiresTeacher: true }
+  },
+  {
+    path: '/reading-lesson/:studentId',
+    name: 'ReadingLesson',
+    component: () => import('../views/ReadingLesson.vue'),
+    meta: { title: '阅读课', requiresAuth: true },
+    props: true
   }
 ]
 

@@ -707,34 +707,21 @@ const initializeWords = async () => {
       console.warn('无法加载最近学习记录:', error)
     }
 
-    // 智能选择单词：根据学习模式选择，排除最近学过的
-    const selectedWords: Word[] = []
-    let remainingCount = wordsCount.value
+    // 复习模式：把1-7所有格子的单词合并后完全随机选择，不区分格子优先级
+    // 新词模式：只有格子0，直接随机选
+    const allCandidates: Word[] = stageRange.flatMap(stage => wordsByStage[stage] || [])
 
-    // 按优先级顺序遍历格子
-    for (const stage of stageRange) {
-      if (selectedWords.length >= wordsCount.value) break
+    // 过滤掉最近学过的单词
+    const availableCandidates = allCandidates.filter(word => !recentlyLearned.includes(word.id))
 
-      const stageWords = wordsByStage[stage] || []
+    // 如果过滤后不够，使用全部候选单词（避免无法选择）
+    const wordsToSelect = availableCandidates.length > 0 ? availableCandidates : allCandidates
 
-      // 过滤掉最近学过的单词
-      const availableWords = stageWords.filter(word =>
-        !recentlyLearned.includes(word.id)
-      )
+    // 完全随机打乱后取需要的数量
+    const shuffled = shuffleArray([...wordsToSelect])
+    const selectedWords = shuffled.slice(0, wordsCount.value)
 
-      // 如果过滤后不够，使用全部单词（避免无法选择）
-      const wordsToSelect = availableWords.length > 0 ? availableWords : stageWords
-
-      // 随机打乱当前格子的单词
-      const shuffled = shuffleArray([...wordsToSelect])
-
-      // 取需要的数量
-      const count = Math.min(remainingCount, shuffled.length)
-      selectedWords.push(...shuffled.slice(0, count))
-      remainingCount -= count
-
-      console.log(`[${learningMode.value}模式] 从格子${stage}选择了${count}个单词 (可用:${wordsToSelect.length}, 最近学过排除:${stageWords.length - availableWords.length})`)
-    }
+    console.log(`[${learningMode.value}模式] 从格子[${stageRange.join(',')}]合并后随机选择${selectedWords.length}个单词 (总候选:${wordsToSelect.length}, 最近学过排除:${allCandidates.length - availableCandidates.length})`)
 
     if (selectedWords.length < wordsCount.value) {
       ElMessage({

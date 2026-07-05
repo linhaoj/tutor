@@ -105,10 +105,10 @@
                       <div class="schedule-student">{{ schedule.student_name }}</div>
                       <div class="schedule-type">
                         <el-tag
-                          :type="schedule.course_type === 'review' ? 'warning' : 'success'"
+                          :type="schedule.course_type === 'review' ? 'warning' : schedule.course_type === 'reading' ? 'primary' : 'success'"
                           size="small"
                         >
-                          {{ schedule.course_type === 'review' ? '抗遗忘' : '单词学习' }}
+                          {{ schedule.course_type === 'review' ? '抗遗忘' : schedule.course_type === 'reading' ? '阅读课' : '单词学习' }}
                         </el-tag>
                       </div>
                     </div>
@@ -330,15 +330,26 @@ const startLearning = (schedule: Schedule) => {
   sessionStorage.setItem('currentScheduleId', schedule.id.toString())
   console.log('已设置 currentScheduleId:', schedule.id)
 
-  router.push({
-    name: 'StudyHome',
-    params: { studentId: schedule.student_id.toString() },
-    query: {
-      wordSet: schedule.word_set_name,
-      teacherId: authStore.currentUser?.id || '',
-      scheduleId: schedule.id.toString() // 传递课程ID
-    }
-  })
+  if (schedule.course_type === 'reading') {
+    router.push({
+      name: 'ReadingLesson',
+      params: { studentId: schedule.student_id.toString() },
+      query: {
+        scheduleId: schedule.id.toString(),
+        wordSet: schedule.word_set_name
+      }
+    })
+  } else {
+    router.push({
+      name: 'StudyHome',
+      params: { studentId: schedule.student_id.toString() },
+      query: {
+        wordSet: schedule.word_set_name,
+        teacherId: authStore.currentUser?.id || '',
+        scheduleId: schedule.id.toString()
+      }
+    })
+  }
 }
 
 const goToStats = () => {
