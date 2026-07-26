@@ -247,10 +247,10 @@
                               </div>
                               <div class="schedule-type">
                                 <el-tag
-                                  :type="schedule.course_type === 'review' ? 'warning' : 'success'"
+                                  :type="courseTypeTagType(schedule.course_type)"
                                   size="small"
                                 >
-                                  {{ schedule.course_type === 'review' ? '抗遗忘' : '单词学习' }}
+                                  {{ courseTypeLabel(schedule.course_type) }}
                                 </el-tag>
                                 <el-tag
                                   type="primary"
@@ -607,7 +607,7 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="选择单词集" required>
+        <el-form-item v-if="scheduleForm.type !== 'listening'" label="选择单词集" required>
           <el-select v-model="scheduleForm.wordSet" placeholder="请选择单词集" style="width: 100%">
             <el-option
               v-for="set in teacherWordSets"
@@ -623,6 +623,7 @@
             <el-radio value="learning">单词课</el-radio>
             <el-radio value="review">抗遗忘</el-radio>
             <el-radio value="reading">阅读课</el-radio>
+            <el-radio value="listening">听力课</el-radio>
           </el-radio-group>
         </el-form-item>
 
@@ -778,6 +779,128 @@
         </template>
         <!-- ── 阅读课配置结束 ────────────────────── -->
 
+        <!-- ── 听力课专属配置 ────────────────────── -->
+        <template v-if="scheduleForm.type === 'listening'">
+          <el-form-item label="材料标题">
+            <el-input v-model="listeningConfig.title" placeholder="可选，如：餐厅推荐对话" style="width: 100%" />
+          </el-form-item>
+
+          <el-form-item label="原文录入" required>
+            <div style="width: 100%">
+              <el-radio-group v-model="listeningConfig.inputMode" style="margin-bottom: 12px">
+                <el-radio value="paste">粘贴文本</el-radio>
+                <el-radio value="ocr">截图识别</el-radio>
+              </el-radio-group>
+
+              <div v-if="listeningConfig.inputMode === 'ocr'" style="margin-bottom: 12px">
+                <el-upload
+                  drag
+                  :auto-upload="false"
+                  :show-file-list="false"
+                  accept="image/*"
+                  :on-change="handleOcrImageChange"
+                  class="upload-drag-area"
+                >
+                  <el-icon v-if="!listeningConfig.ocrUploading" class="upload-drag-icon"><Upload /></el-icon>
+                  <el-icon v-else class="upload-drag-icon is-loading"><Loading /></el-icon>
+                  <div class="el-upload__text">
+                    {{ listeningConfig.ocrUploading ? '识别中...' : '将截图拖到此处，或点击上传' }}
+                  </div>
+                </el-upload>
+                <span style="color: #909399; font-size: 12px">可连续上传多张，识别结果会追加到下方文本框</span>
+              </div>
+
+              <el-input
+                v-model="listeningConfig.articleText"
+                type="textarea"
+                :rows="8"
+                placeholder="原文内容，用空行分隔段落，可随时手动编辑"
+                style="width: 100%"
+              />
+            </div>
+          </el-form-item>
+
+          <el-form-item label="段落翻译">
+            <div style="width: 100%">
+              <el-button
+                size="small"
+                :loading="listeningConfig.translating"
+                :disabled="!listeningParagraphs.length"
+                @click="translateListeningArticle"
+              >
+                {{ listeningConfig.translating ? '翻译中...' : 'AI 翻译' }}
+              </el-button>
+              <span style="color: #909399; font-size: 12px; margin-left: 8px">如果原文自带翻译，可直接在下方填写，不必点击此按钮</span>
+
+              <div class="translation-scroll-box">
+                <div
+                  v-for="(para, pIdx) in listeningParagraphs"
+                  :key="pIdx"
+                  class="translation-para-item"
+                >
+                  <div class="translation-para-en">{{ para }}</div>
+                  <el-input
+                    v-model="listeningConfig.translation[pIdx]"
+                    type="textarea"
+                    :autosize="{ minRows: 1, maxRows: 4 }"
+                    placeholder="中文翻译（可编辑）"
+                    resize="none"
+                  />
+                </div>
+              </div>
+            </div>
+          </el-form-item>
+
+          <el-form-item label="音频文件" required>
+            <div style="width: 100%">
+              <el-upload
+                drag
+                :auto-upload="false"
+                :show-file-list="false"
+                accept="audio/mp3,audio/wav,audio/ogg,.mp3,.wav,.ogg"
+                :on-change="handleAudioFileChange"
+                class="upload-drag-area"
+              >
+                <el-icon v-if="!listeningConfig.audioUploading" class="upload-drag-icon"><Upload /></el-icon>
+                <el-icon v-else class="upload-drag-icon is-loading"><Loading /></el-icon>
+                <div class="el-upload__text">
+                  {{ listeningConfig.audioUploading ? '上传中...' : '将音频文件拖到此处，或点击上传' }}
+                </div>
+                <div class="el-upload__tip">支持 mp3 / wav / ogg 格式</div>
+              </el-upload>
+              <span v-if="listeningConfig.tempAudioId" style="color: #67c23a; font-size: 13px">
+                ✓ 已上传（{{ listeningConfig.audioDuration.toFixed(1) }}秒）
+              </span>
+            </div>
+          </el-form-item>
+
+          <el-form-item label=" ">
+            <el-button
+              type="primary"
+              :loading="listeningConfig.aligning"
+              :disabled="!canAlignTimestamps"
+              @click="doAlignTimestamps"
+            >
+              {{ listeningConfig.aligning ? '识别中...' : '自动对齐时间戳' }}
+            </el-button>
+          </el-form-item>
+
+          <el-form-item v-if="listeningConfig.alignmentPreview.length > 0" label="时间戳确认">
+            <div style="width: 100%">
+              <TimelineEditor
+                v-model="listeningConfig.alignmentPreview"
+                :audio-duration="listeningConfig.audioDuration"
+                @preview="previewSegment"
+              />
+              <audio ref="previewAudioEl" :src="previewAudioSrc" style="display: none" />
+              <el-checkbox v-model="listeningConfig.alignmentConfirmed" style="margin-top: 10px">
+                我已核对以上时间戳，确认无误
+              </el-checkbox>
+            </div>
+          </el-form-item>
+        </template>
+        <!-- ── 听力课配置结束 ────────────────────── -->
+
         <el-form-item label="课程时长">
           <el-input-number
             v-model="scheduleForm.duration"
@@ -921,16 +1044,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElForm } from 'element-plus'
-import { Plus, Avatar, ArrowDown, Upload, Setting, Download, Delete } from '@element-plus/icons-vue'
+import { Plus, Avatar, ArrowDown, Upload, Setting, Download, Delete, Loading } from '@element-plus/icons-vue'
 import * as XLSX from 'xlsx'
 import { useAuthStore } from '@/stores/auth'
 import { useStudentsStore } from '@/stores/students'
 import { useWordsStore } from '@/stores/words'
 import { useScheduleStore } from '@/stores/schedule'
 import { useReadingStore, type WordItem } from '@/stores/reading'
+import { useListeningStore } from '@/stores/listening'
+import TimelineEditor from '@/components/TimelineEditor.vue'
 import tutorDB from '@/utils/localDatabase'
 import type { User } from '@/stores/auth'
 import type { Student } from '@/stores/students'
@@ -943,6 +1068,28 @@ const studentsStore = useStudentsStore()
 const wordsStore = useWordsStore()
 const scheduleStore = useScheduleStore()
 const readingStore = useReadingStore()
+const listeningStore = useListeningStore()
+
+// 课程类型 -> 标签文字/颜色映射（与Dashboard.vue/TeacherHome.vue保持一致）
+const courseTypeLabel = (type: string): string => {
+  const map: Record<string, string> = {
+    review: '抗遗忘',
+    reading: '阅读课',
+    listening: '听力课',
+    learning: '单词学习'
+  }
+  return map[type] || '单词学习'
+}
+
+const courseTypeTagType = (type: string): string => {
+  const map: Record<string, string> = {
+    review: 'warning',
+    reading: 'primary',
+    listening: 'info',
+    learning: 'success'
+  }
+  return map[type] || 'success'
+}
 
 // 标签页状态
 const activeTab = ref('users')
@@ -1414,6 +1561,40 @@ const readingConfig = reactive({
   savedArticleId: null as number | null,
 })
 
+// ── 听力课专属状态 ────────────────────────────────────────
+const listeningConfig = reactive({
+  title: '',
+  inputMode: 'paste' as 'paste' | 'ocr',
+  articleText: '',
+  translation: [] as string[],
+  translating: false,
+  ocrUploading: false,
+  audioUploading: false,
+  tempAudioId: '',
+  audioOriginalFilename: '',
+  audioMimetype: '',
+  audioDuration: 0,
+  aligning: false,
+  alignmentPreview: [] as Array<{ index: number; text: string; start: number; end: number; match_score?: number }>,
+  alignmentConfirmed: false,
+  savedArticleId: null as number | null,
+})
+
+const previewAudioEl = ref<HTMLAudioElement>()
+const previewAudioSrc = ref('')
+
+// 听力课按单个换行分段（不是双换行/空行），换行本身决定原文翻译对应关系和时间戳切分
+const listeningParagraphs = computed(() => {
+  return listeningConfig.articleText
+    .split(/\n/)
+    .map((p: string) => p.trim())
+    .filter((p: string) => p.length > 0)
+})
+
+const canAlignTimestamps = computed(() => {
+  return listeningParagraphs.value.length > 0 && !!listeningConfig.tempAudioId
+})
+
 const finalReadingWordsCount = computed(() =>
   readingConfig.wordsCount === 0 ? readingConfig.customCount : readingConfig.wordsCount
 )
@@ -1506,6 +1687,137 @@ const onCourseTypeChange = async () => {
   if (scheduleForm.type === 'reading') {
     await loadLearnedWordsForReading()
   }
+}
+
+// ── 听力课方法 ────────────────────────────────────────
+const handleOcrImageChange = async (file: any) => {
+  if (!file.raw) return
+  listeningConfig.ocrUploading = true
+  try {
+    const result = await listeningStore.ocrImage(file.raw)
+    const recognized = result.recognized_text?.trim()
+    if (recognized) {
+      listeningConfig.articleText = listeningConfig.articleText
+        ? `${listeningConfig.articleText}\n\n${recognized}`
+        : recognized
+      ElMessage.success('识别成功，已追加到文本框')
+    } else {
+      ElMessage.warning('未识别到文字')
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '识别失败，请重试')
+  } finally {
+    listeningConfig.ocrUploading = false
+  }
+}
+
+const translateListeningArticle = async () => {
+  if (!listeningParagraphs.value.length) return
+  listeningConfig.translating = true
+  try {
+    const result = await listeningStore.translateArticle(listeningConfig.articleText)
+    listeningConfig.translation = result.translation
+    ElMessage.success('翻译完成')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '翻译失败，请重试')
+  } finally {
+    listeningConfig.translating = false
+  }
+}
+
+const handleAudioFileChange = async (file: any) => {
+  if (!file.raw) return
+  listeningConfig.audioUploading = true
+  try {
+    const result = await listeningStore.uploadAudio(file.raw)
+    listeningConfig.tempAudioId = result.temp_audio_id
+    listeningConfig.audioDuration = result.duration_seconds
+    listeningConfig.audioOriginalFilename = result.original_filename
+    listeningConfig.audioMimetype = file.raw.type || 'audio/mpeg'
+    // 本地生成blob URL用于排课预览阶段的试听，不经过后端（此时文章还未保存，没有article_id）
+    if (previewAudioSrc.value) URL.revokeObjectURL(previewAudioSrc.value)
+    previewAudioSrc.value = URL.createObjectURL(file.raw)
+    // 音频上传成功后立即生成空白时间戳表，让"时间戳确认"区域直接可用（无需先点自动对齐）
+    initBlankAlignmentPreview()
+    ElMessage.success('音频上传成功，可点击"自动对齐时间戳"或直接手动填写')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '音频上传失败')
+  } finally {
+    listeningConfig.audioUploading = false
+  }
+}
+
+// 生成一份起止时间都为0的空白时间戳表，供手动填写；如果原文有更新会保留已有的手动输入
+const initBlankAlignmentPreview = () => {
+  listeningConfig.alignmentPreview = listeningParagraphs.value.map((text, index) => ({
+    index,
+    text,
+    start: 0,
+    end: 0,
+    match_score: undefined,
+  }))
+  listeningConfig.alignmentConfirmed = false
+}
+
+// 音频上传后如果又编辑了原文（增删段落），同步时间戳表的段落数量，
+// 已经手动填过的时间戳按段落文字是否相同尽量保留，避免白填一遍
+watch(listeningParagraphs, (newParas) => {
+  if (!listeningConfig.tempAudioId || listeningConfig.alignmentPreview.length === 0) return
+
+  const oldByText = new Map(listeningConfig.alignmentPreview.map(p => [p.text, p]))
+  const samePlainList =
+    newParas.length === listeningConfig.alignmentPreview.length &&
+    newParas.every((text, i) => text === listeningConfig.alignmentPreview[i].text)
+  if (samePlainList) return // 内容完全没变，不用重建
+
+  listeningConfig.alignmentPreview = newParas.map((text, index) => {
+    const existing = oldByText.get(text)
+    return existing
+      ? { ...existing, index }
+      : { index, text, start: 0, end: 0, match_score: undefined }
+  })
+  listeningConfig.alignmentConfirmed = false
+})
+
+const doAlignTimestamps = async () => {
+  listeningConfig.aligning = true
+  try {
+    const result = await listeningStore.alignTimestamps(listeningConfig.tempAudioId, listeningConfig.articleText)
+    listeningConfig.alignmentPreview = result.paragraphs
+    listeningConfig.audioDuration = result.audio_duration_seconds
+    listeningConfig.alignmentConfirmed = false
+    ElMessage.success('自动对齐完成，请核对每段时间戳')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '自动对齐失败')
+  } finally {
+    listeningConfig.aligning = false
+  }
+}
+
+// 试听某一段（用于排课预览阶段核对时间戳是否准确，直接用本地blob URL播放）
+const previewSegment = (idx: number) => {
+  const seg = listeningConfig.alignmentPreview[idx]
+  const el = previewAudioEl.value
+  if (!seg || !el || !previewAudioSrc.value) return
+  el.currentTime = seg.start
+  el.play()
+  const onTimeUpdate = () => {
+    if (el.currentTime >= seg.end) {
+      el.pause()
+      el.removeEventListener('timeupdate', onTimeUpdate)
+    }
+  }
+  el.addEventListener('timeupdate', onTimeUpdate)
+}
+
+const resetListeningConfig = () => {
+  Object.assign(listeningConfig, {
+    title: '', inputMode: 'paste', articleText: '', translation: [],
+    translating: false, ocrUploading: false, audioUploading: false,
+    tempAudioId: '', audioOriginalFilename: '', audioMimetype: '',
+    audioDuration: 0, aligning: false, alignmentPreview: [],
+    alignmentConfirmed: false, savedArticleId: null,
+  })
 }
 
 const loadLearnedWordsForReading = async () => {
@@ -2128,6 +2440,7 @@ const showAddScheduleDialog = () => {
     classType: 'big'
   })
   resetReadingConfig()
+  resetListeningConfig()
   addScheduleDialogVisible.value = true
 }
 
@@ -2140,9 +2453,26 @@ const updateScheduleDuration = () => {
 }
 
 const submitAddSchedule = async () => {
-  if (!scheduleForm.studentId || !scheduleForm.wordSet || !scheduleForm.date || !scheduleForm.time) {
+  const isListening = scheduleForm.type === 'listening'
+
+  if (!scheduleForm.studentId || (!isListening && !scheduleForm.wordSet) || !scheduleForm.date || !scheduleForm.time) {
     ElMessage.error('请填写完整的课程信息')
     return
+  }
+
+  if (isListening) {
+    if (!listeningConfig.articleText.trim()) {
+      ElMessage.error('请录入听力材料原文')
+      return
+    }
+    if (!listeningConfig.tempAudioId) {
+      ElMessage.error('请上传听力材料音频')
+      return
+    }
+    if (listeningConfig.alignmentPreview.length > 0 && !listeningConfig.alignmentConfirmed) {
+      ElMessage.error('请先核对并确认自动对齐的时间戳')
+      return
+    }
   }
 
   try {
@@ -2163,7 +2493,7 @@ const submitAddSchedule = async () => {
       student_id: parseInt(scheduleForm.studentId),
       date: dateStr,
       time: scheduleForm.time,
-      word_set_name: scheduleForm.wordSet,
+      word_set_name: isListening ? (listeningConfig.title || '听力课') : scheduleForm.wordSet,
       course_type: scheduleForm.type,
       duration: scheduleForm.duration,
       class_type: 'big',
@@ -2195,6 +2525,36 @@ const submitAddSchedule = async () => {
           console.error('保存文章失败:', e)
         }
       }
+
+      // 听力课：保存文章并绑定课程
+      if (isListening) {
+        try {
+          let articleId = listeningConfig.savedArticleId
+          if (!articleId) {
+            const saved = await listeningStore.saveArticle({
+              title: listeningConfig.title || undefined,
+              articleContent: listeningConfig.articleText,
+              translation: listeningConfig.translation,
+              paragraphTimestamps: listeningConfig.alignmentPreview.map(p => ({
+                index: p.index, start: p.start, end: p.end, match_score: p.match_score
+              })),
+              tempAudioId: listeningConfig.tempAudioId,
+              audioOriginalFilename: listeningConfig.audioOriginalFilename,
+              audioMimetype: listeningConfig.audioMimetype,
+              audioDurationSeconds: listeningConfig.audioDuration,
+            })
+            articleId = saved.id
+          }
+          const scheduleStore2 = useScheduleStore()
+          const newSchedule = scheduleStore2.schedules[scheduleStore2.schedules.length - 1]
+          if (newSchedule?.id) {
+            await listeningStore.bindArticleToSchedule(articleId, newSchedule.id)
+          }
+        } catch (e) {
+          console.error('保存听力材料失败:', e)
+        }
+      }
+
       ElMessage.success(result.message)
       addScheduleDialogVisible.value = false
       await loadTeacherData()
@@ -2877,5 +3237,77 @@ onMounted(() => {
   border-color: #b7d9a8;
   line-height: 1.7;
   resize: none;
+}
+
+/* 听力课：拖拽上传区域 */
+.upload-drag-area :deep(.el-upload) {
+  width: 100%;
+}
+
+.upload-drag-area :deep(.el-upload-dragger) {
+  width: 100%;
+  height: 110px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-drag-icon {
+  font-size: 28px;
+  color: #909399;
+  margin-bottom: 6px;
+}
+
+.upload-drag-icon.is-loading {
+  animation: rotating 1.2s linear infinite;
+  color: #409eff;
+}
+
+@keyframes rotating {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.upload-drag-area :deep(.el-upload__text) {
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.4;
+}
+
+.upload-drag-area :deep(.el-upload__tip) {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #909399;
+}
+
+/* 听力课：段落翻译可滚动长框 */
+.translation-scroll-box {
+  margin-top: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fff;
+}
+
+.translation-para-item {
+  padding: 8px;
+  margin-bottom: 8px;
+  background: #fafafa;
+  border-radius: 4px;
+}
+
+.translation-para-item:last-child {
+  margin-bottom: 0;
+}
+
+.translation-para-en {
+  font-size: 13px;
+  color: #303133;
+  margin-bottom: 4px;
+  line-height: 1.5;
 }
 </style>

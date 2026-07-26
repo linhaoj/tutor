@@ -250,7 +250,8 @@ watch(() => route.path, (newPath) => {
     '/post-test/',
     '/anti-forget/',
     '/word-filter/',
-    '/reading-lesson/'
+    '/reading-lesson/',
+    '/listening-lesson/'
   ]
 
   // 检查当前路径是否为学习相关页面

@@ -105,10 +105,10 @@
                       <div class="schedule-student">{{ schedule.student_name }}</div>
                       <div class="schedule-type">
                         <el-tag
-                          :type="schedule.course_type === 'review' ? 'warning' : schedule.course_type === 'reading' ? 'primary' : 'success'"
+                          :type="courseTypeTagType(schedule.course_type)"
                           size="small"
                         >
-                          {{ schedule.course_type === 'review' ? '抗遗忘' : schedule.course_type === 'reading' ? '阅读课' : '单词学习' }}
+                          {{ courseTypeLabel(schedule.course_type) }}
                         </el-tag>
                       </div>
                     </div>
@@ -208,6 +208,27 @@ const authStore = useAuthStore()
 const studentsStore = useStudentsStore()
 const wordsStore = useWordsStore()
 const scheduleStore = useScheduleStore()
+
+// 课程类型 -> 标签文字/颜色映射，避免堆嵌套三元表达式
+const courseTypeLabel = (type: string): string => {
+  const map: Record<string, string> = {
+    review: '抗遗忘',
+    reading: '阅读课',
+    listening: '听力课',
+    learning: '单词学习'
+  }
+  return map[type] || '单词学习'
+}
+
+const courseTypeTagType = (type: string): string => {
+  const map: Record<string, string> = {
+    review: 'warning',
+    reading: 'primary',
+    listening: 'info',
+    learning: 'success'
+  }
+  return map[type] || 'success'
+}
 
 // 教师数据
 const teacherStudents = ref<Student[]>([])
@@ -337,6 +358,14 @@ const startLearning = (schedule: Schedule) => {
       query: {
         scheduleId: schedule.id.toString(),
         wordSet: schedule.word_set_name
+      }
+    })
+  } else if (schedule.course_type === 'listening') {
+    router.push({
+      name: 'ListeningLesson',
+      params: { studentId: schedule.student_id.toString() },
+      query: {
+        scheduleId: schedule.id.toString()
       }
     })
   } else {

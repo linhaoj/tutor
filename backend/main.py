@@ -7,9 +7,9 @@ from app.database import get_db, create_tables
 from app.models import (
     User, Student, WordSet, Word, StudentWord,
     Schedule, LearningSession, LearningRecord,
-    LearningProgress, AntiForgetSession, StudentReview, ReadingArticle
+    LearningProgress, AntiForgetSession, StudentReview, ReadingArticle, ListeningArticle
 )
-from app.routes import auth, students_api, words_api, schedule_api, progress_api, anti_forget_api, student_reviews_api, reading_api
+from app.routes import auth, students_api, words_api, schedule_api, progress_api, anti_forget_api, student_reviews_api, reading_api, listening_api
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -57,10 +57,16 @@ app.include_router(progress_api.router)
 app.include_router(anti_forget_api.router)
 app.include_router(student_reviews_api.router)
 app.include_router(reading_api.router)
+app.include_router(listening_api.router)
 
 @app.get("/")
 async def root():
     return {"message": "英语陪练系统 API 服务已启动"}
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(
+        "main:app", host="0.0.0.0", port=8000, reload=True,
+        # 排除 venv（几千个包文件）和 uploads（音频文件）目录，
+        # 避免文件监听器持续扫描这些大目录，拖慢后台线程池任务（如腾讯云ASR轮询）
+        reload_excludes=["venv/*", "uploads/*"],
+    )

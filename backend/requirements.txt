@@ -10,3 +10,5 @@ passlib[bcrypt]==1.7.4
 bcrypt==4.1.2
 python-dotenv==1.0.0
 alembic==1.13.0
+mutagen==1.47.0
+tencentcloud-sdk-python-asr==3.0.1174

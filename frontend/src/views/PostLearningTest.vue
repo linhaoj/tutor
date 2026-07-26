@@ -114,6 +114,7 @@
     <div class="action-buttons">
       <div class="main-actions">
         <el-button
+          v-if="!isTempWordsMode"
           type="primary"
           @click="continuePractice"
           size="large"
@@ -1285,11 +1286,15 @@ const initializeWords = async () => {
   }
 
   // 转换为训后检测用的单词格式
+  // 临时抗遗忘词模式（阅读课/听力课）：老师在结课审查弹窗里已经确认过最终名单，
+  // 这里不再需要逐个重新判定通过/不通过，默认全部标记为已通过
+  const defaultStatus = isTempWordsMode.value ? 'passed' : 'unchecked'
+
   allWords.value = sourceWords.map((word, index) => {
     // 优先使用从sessionStorage传来的originalIndex
     // 如果没有（旧数据或备用逻辑），则使用startIndex + index计算
     const originalIndex = word.originalIndex !== undefined ? word.originalIndex : (startIndex + index)
-    const savedWordStatus = savedStatus[originalIndex] || 'unchecked'
+    const savedWordStatus = savedStatus[originalIndex] || defaultStatus
 
     return {
       id: word.id,

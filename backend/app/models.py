@@ -244,6 +244,36 @@ class ReadingArticle(Base):
     creator = relationship("User", foreign_keys=[created_by])
 
 
+class ListeningArticle(Base):
+    """听力课文章表 - 排课时录入原文+音频，与课程绑定"""
+    __tablename__ = "listening_articles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    schedule_id = Column(Integer, ForeignKey("schedules.id"), nullable=True)
+
+    title = Column(String(200), nullable=True)
+    article_content = Column(Text, nullable=False)  # 英文原文，老师人工按\n\n分段
+    translation = Column(JSON, nullable=True)        # 按段落的中文翻译 ["段落1译文", ...]
+
+    # 段落时间戳: [{"index":0,"start":0.0,"end":12.5,"match_score":0.92}, ...]
+    paragraph_timestamps = Column(JSON, nullable=True)
+
+    audio_file_path = Column(String(500), nullable=True)  # 相对存储根目录的路径，如 "2026/07/uuid.mp3"
+    audio_original_filename = Column(String(255), nullable=True)
+    audio_mimetype = Column(String(100), nullable=True)
+    audio_duration_seconds = Column(Float, nullable=True)
+
+    asr_raw_result = Column(JSON, nullable=True)  # 腾讯云ASR原始返回，供重新对齐复用，避免重复付费调用
+    alignment_status = Column(String(20), default="pending")  # pending / auto_aligned / confirmed
+
+    created_by = Column(String(50), ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # 关系
+    creator = relationship("User", foreign_keys=[created_by])
+
+
 # 用于Excel导入的临时表
 class WordImport(Base):
     __tablename__ = "word_imports"
