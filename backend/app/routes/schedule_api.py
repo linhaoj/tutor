@@ -216,10 +216,15 @@ async def complete_schedule(
         logger.warning(f"完成课程失败: 学生不存在 - ID={schedule.student_id}")
         raise HTTPException(status_code=404, detail="学生不存在")
 
-    # 根据课程类型扣除课时（仅learning类型扣课时）
-    if schedule.course_type == 'learning':
-        # 计算需要扣除的课时
-        hours_to_deduct = 1.0
+    # 根据课程类型扣除课时（正课类型都要扣课时：单词课/阅读课/听力课；抗遗忘复习review不扣）
+    DEDUCTABLE_COURSE_TYPES = ('learning', 'reading', 'listening')
+    if schedule.course_type in DEDUCTABLE_COURSE_TYPES:
+        # 计算需要扣除的课时：大课1.0h，小课0.5h
+        # 阅读课/听力课排课时没有大小课选项，固定按大课1.0h扣
+        if schedule.course_type == 'learning':
+            hours_to_deduct = 1.0 if schedule.class_type == 'big' else 0.5
+        else:
+            hours_to_deduct = 1.0
 
         # 检查课时是否充足
         if student.remaining_hours < hours_to_deduct:
@@ -229,14 +234,14 @@ async def complete_schedule(
         # 扣除课时
         old_hours = student.remaining_hours
         student.remaining_hours -= hours_to_deduct
-        logger.info(f"扣除课时: 学生={schedule.student_name}, 课程类型={schedule.class_type}, 扣除={hours_to_deduct}h, 原有={old_hours}h, 剩余={student.remaining_hours}h")
+        logger.info(f"扣除课时: 学生={schedule.student_name}, 课程类型={schedule.course_type}, 班型={schedule.class_type}, 扣除={hours_to_deduct}h, 原有={old_hours}h, 剩余={student.remaining_hours}h")
 
     # 标记课程完成
     schedule.completed = True
     db.commit()
 
     logger.info(f"课程标记完成: 学生={schedule.student_name}, 日期={schedule.date}, 类型={schedule.course_type}, 操作人={current_user.username}")
-    return {"message": "课程已标记为完成，课时已扣除" if schedule.course_type == 'learning' else "课程已标记为完成"}
+    return {"message": "课程已标记为完成，课时已扣除" if schedule.course_type in DEDUCTABLE_COURSE_TYPES else "课程已标记为完成"}
 
 
 @router.delete("/{schedule_id}")
