@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/listening", tags=["听力课"])
 
 # 音频本地存储根目录（相对于backend目录），数据库只存相对路径
 LISTENING_AUDIO_STORAGE_DIR = os.getenv("LISTENING_AUDIO_STORAGE_DIR", "uploads/audio")
-ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".ogg"}
+ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".ogg", ".m4a"}
 MAX_AUDIO_SIZE_BYTES = 100 * 1024 * 1024  # 100MB
 
 

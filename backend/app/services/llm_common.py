@@ -1,7 +1,16 @@
-"""GitHub Models LLM 调用公共逻辑 - 供阅读课、听力课等功能共用"""
+"""LLM 调用公共逻辑 - 供阅读课、听力课等功能共用
+
+原用 GitHub Models（models.github.ai），该服务已进入官方"retirement brownout"下线阶段
+（错误码 github_models_retirement_brownout），改用智谱AI GLM（open.bigmodel.cn）：
+永久免费、国内直连稳定、同时支持文本(GLM-4.7-Flash)和视觉(GLM-4.6V-Flash)。
+
+注意：免费额度并发限制较低，容易触发429限流，call_llm/call_vision_llm内置了
+简单的429自动重试（指数退避），调用方不需要自己处理限流重试。
+"""
 import os
 import re
 import json
+import time
 import base64
 import urllib.request
 import urllib.error
@@ -9,59 +18,80 @@ from typing import List, Optional
 from fastapi import HTTPException
 
 # ── LLM 配置 ─────────────────────────────────────────────────
-# GITHUB_TOKEN 从环境变量读取，配置在 backend/.env.local（不进git，需在本地和服务器上各自创建）
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
-GITHUB_MODEL = "meta/llama-3.3-70b-instruct"
-GITHUB_VISION_MODEL = os.getenv("GITHUB_VISION_MODEL", "meta/llama-4-scout-17b-16e-instruct")
-GITHUB_API_URL = "https://models.github.ai/inference/chat/completions"
+# ZHIPU_API_KEY 从环境变量读取，配置在 backend/.env.local（不进git，需在本地和服务器上各自创建）
+ZHIPU_API_KEY = os.getenv("ZHIPU_API_KEY", "")
+ZHIPU_MODEL = os.getenv("ZHIPU_MODEL", "glm-4.7-flash")
+ZHIPU_VISION_MODEL = os.getenv("ZHIPU_VISION_MODEL", "glm-4.6v-flash")
+ZHIPU_API_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+
+# 429限流重试设置：免费额度并发数很低，简单退避重试几次即可缓解
+RATE_LIMIT_MAX_RETRIES = 3
+RATE_LIMIT_BACKOFF_SECONDS = 3
 
 
 def count_words(text: str) -> int:
     return len(re.findall(r"\b[a-zA-Z']+\b", text))
 
 
-def call_llm(prompt: str, max_tokens: int = 1024, model: Optional[str] = None) -> str:
-    """调用 GitHub Models（同步，供 executor 使用）"""
-    if not GITHUB_TOKEN:
-        raise HTTPException(status_code=500, detail="GITHUB_TOKEN 未配置，请在 backend/.env.local 中设置")
-
-    payload = json.dumps({
-        "model": model or GITHUB_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.7,
-        "max_tokens": max_tokens,
-    }).encode("utf-8")
-
+def _call_zhipu_api(payload: dict, timeout: int, error_prefix: str) -> str:
+    """向智谱GLM发起请求，内置429限流自动重试（指数退避）"""
+    data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
-        GITHUB_API_URL,
-        data=payload,
+        ZHIPU_API_URL,
+        data=data,
         headers={
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {GITHUB_TOKEN}",
+            "Authorization": f"Bearer {ZHIPU_API_KEY}",
         },
         method="POST"
     )
 
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-            return result["choices"][0]["message"]["content"]
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8")
-        raise HTTPException(status_code=502, detail=f"LLM API 错误: {e.code} {body}")
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"调用 LLM 失败: {str(e)}")
+    last_error_detail = ""
+    for attempt in range(RATE_LIMIT_MAX_RETRIES + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+                return result["choices"][0]["message"]["content"]
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8")
+            if e.code == 429 and attempt < RATE_LIMIT_MAX_RETRIES:
+                time.sleep(RATE_LIMIT_BACKOFF_SECONDS * (attempt + 1))
+                continue
+            raise HTTPException(status_code=502, detail=f"{error_prefix}: {e.code} {body}")
+        except Exception as e:
+            last_error_detail = str(e)
+            break
+
+    raise HTTPException(status_code=502, detail=f"{error_prefix}: {last_error_detail}")
+
+
+def call_llm(prompt: str, max_tokens: int = 1024, model: Optional[str] = None) -> str:
+    """调用智谱GLM文本模型（同步，供 executor 使用）"""
+    if not ZHIPU_API_KEY:
+        raise HTTPException(status_code=500, detail="ZHIPU_API_KEY 未配置，请在 backend/.env.local 中设置")
+
+    payload = {
+        "model": model or ZHIPU_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.7,
+        "max_tokens": max_tokens,
+        "stream": False,
+        # GLM-4.7系列是推理模型，默认会把大量token耗在思考过程(reasoning_content)上，
+        # 关掉思考模式：既省token，也保证max_tokens都用在真正需要的输出内容上
+        "thinking": {"type": "disabled"},
+    }
+    return _call_zhipu_api(payload, timeout=60, error_prefix="LLM API 错误")
 
 
 def call_vision_llm(prompt: str, image_bytes: bytes, mimetype: str, max_tokens: int = 2048) -> str:
-    """调用支持视觉的 GitHub Models（同步，用于 OCR 图片识别）"""
-    if not GITHUB_TOKEN:
-        raise HTTPException(status_code=500, detail="GITHUB_TOKEN 未配置，请在 backend/.env.local 中设置")
+    """调用智谱GLM视觉模型（同步，用于 OCR 图片识别）"""
+    if not ZHIPU_API_KEY:
+        raise HTTPException(status_code=500, detail="ZHIPU_API_KEY 未配置，请在 backend/.env.local 中设置")
 
     image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    payload = json.dumps({
-        "model": GITHUB_VISION_MODEL,
+    payload = {
+        "model": ZHIPU_VISION_MODEL,
         "messages": [{
             "role": "user",
             "content": [
@@ -71,27 +101,11 @@ def call_vision_llm(prompt: str, image_bytes: bytes, mimetype: str, max_tokens: 
         }],
         "temperature": 0.2,
         "max_tokens": max_tokens,
-    }).encode("utf-8")
-
-    req = urllib.request.Request(
-        GITHUB_API_URL,
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {GITHUB_TOKEN}",
-        },
-        method="POST"
-    )
-
-    try:
-        with urllib.request.urlopen(req, timeout=90) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-            return result["choices"][0]["message"]["content"]
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8")
-        raise HTTPException(status_code=502, detail=f"视觉模型 API 错误: {e.code} {body}")
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"调用视觉模型失败: {str(e)}")
+        "stream": False,
+        # GLM-4.6V系列也是推理模型，关掉思考模式避免max_tokens被推理过程占满导致OCR结果被截断
+        "thinking": {"type": "disabled"},
+    }
+    return _call_zhipu_api(payload, timeout=90, error_prefix="视觉模型 API 错误")
 
 
 def build_translation_prompt(article: str) -> str:

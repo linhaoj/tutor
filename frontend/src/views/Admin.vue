@@ -857,7 +857,7 @@
                 drag
                 :auto-upload="false"
                 :show-file-list="false"
-                accept="audio/mp3,audio/wav,audio/ogg,.mp3,.wav,.ogg"
+                accept="audio/mp3,audio/wav,audio/ogg,audio/mp4,audio/x-m4a,.mp3,.wav,.ogg,.m4a"
                 :on-change="handleAudioFileChange"
                 class="upload-drag-area"
               >
@@ -866,7 +866,7 @@
                 <div class="el-upload__text">
                   {{ listeningConfig.audioUploading ? '上传中...' : '将音频文件拖到此处，或点击上传' }}
                 </div>
-                <div class="el-upload__tip">支持 mp3 / wav / ogg 格式</div>
+                <div class="el-upload__tip">支持 mp3 / wav / ogg / m4a 格式</div>
               </el-upload>
               <span v-if="listeningConfig.tempAudioId" style="color: #67c23a; font-size: 13px">
                 ✓ 已上传（{{ listeningConfig.audioDuration.toFixed(1) }}秒）

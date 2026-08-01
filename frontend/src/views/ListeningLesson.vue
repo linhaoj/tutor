@@ -49,35 +49,48 @@
             class="paragraph-block"
             :class="{ active: currentParagraphIndex === pIdx }"
           >
-            <p
-              v-if="englishVisible[pIdx]"
-              class="para-en"
-              v-html="renderParagraph(paragraph)"
-              @mouseup="handleWordSelect($event)"
-              @click="onEnglishTextClick($event, pIdx)"
-            />
-            <p
-              v-else
-              class="para-en para-hidden"
-              @click="toggleEnglish(pIdx)"
-            >
-              [ 点击显示英文 ]
-            </p>
+            <div class="para-en-row">
+              <el-button
+                circle
+                size="small"
+                :icon="VideoPlay"
+                class="para-play-btn"
+                @click.stop="seekToParagraph(pIdx)"
+                title="播放这一句"
+              />
+              <p
+                v-if="englishVisible[pIdx]"
+                class="para-en"
+                v-html="renderParagraph(paragraph)"
+                @mouseup="handleWordSelect($event)"
+                @click="onEnglishTextClick($event, pIdx)"
+              />
+              <p
+                v-else
+                class="para-en para-hidden"
+                @click="toggleEnglish(pIdx)"
+              >
+                [ 点击显示英文 ]
+              </p>
+            </div>
 
-            <p
-              v-if="chineseVisible[pIdx]"
-              class="para-zh"
-              @click="toggleChinese(pIdx)"
-            >
-              {{ article.translation?.[pIdx] || '' }}
-            </p>
-            <p
-              v-else
-              class="para-zh para-hidden"
-              @click="toggleChinese(pIdx)"
-            >
-              [ 点击显示中文 ]
-            </p>
+            <div class="para-zh-row">
+              <div class="para-play-btn-placeholder" />
+              <p
+                v-if="chineseVisible[pIdx]"
+                class="para-zh"
+                @click="toggleChinese(pIdx)"
+              >
+                {{ article.translation?.[pIdx] || '' }}
+              </p>
+              <p
+                v-else
+                class="para-zh para-hidden"
+                @click="toggleChinese(pIdx)"
+              >
+                [ 点击显示中文 ]
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -228,7 +241,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, ArrowRight, Loading } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, Loading, VideoPlay } from '@element-plus/icons-vue'
 import { useListeningStore } from '@/stores/listening'
 import { useStudentsStore } from '@/stores/students'
 import { useScheduleStore } from '@/stores/schedule'
@@ -798,7 +811,32 @@ onBeforeUnmount(() => {
   box-shadow: inset 3px 0 0 #409eff;
 }
 
+.para-en-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.para-zh-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.para-play-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-top: 2px;
+}
+
+.para-play-btn-placeholder {
+  flex-shrink: 0;
+  width: 24px;
+}
+
 .para-en {
+  flex: 1;
   font-size: 17px;
   line-height: 1.9;
   color: #303133;
@@ -807,6 +845,7 @@ onBeforeUnmount(() => {
 }
 
 .para-zh {
+  flex: 1;
   font-size: 15px;
   line-height: 1.8;
   color: #67c23a;
