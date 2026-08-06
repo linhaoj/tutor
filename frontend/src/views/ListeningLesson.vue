@@ -55,7 +55,7 @@
                 size="small"
                 :icon="VideoPlay"
                 class="para-play-btn"
-                @click.stop="seekToParagraph(pIdx)"
+                @click.stop="playSingleSentence(pIdx)"
                 title="播放这一句"
               />
               <p
@@ -366,12 +366,20 @@ const onEnglishTextClick = (event: MouseEvent, pIdx: number) => {
   toggleEnglish(pIdx)
 }
 
-// 跳转音频到指定段落的时间戳播放（供"上一句/下一句"按钮调用）
+// 跳转音频到指定段落的时间戳播放，继续往下正常播放（供"上一句/下一句"按钮调用）
 const seekToParagraph = (pIdx: number) => {
   const ts = article.value?.paragraph_timestamps?.[pIdx]
   if (!ts || !playerBar.value) return
   currentParagraphIndex.value = pIdx
   playerBar.value.seekTo(ts.start)
+}
+
+// 只播放这一句，放完自动暂停（供每句左侧的播放按钮调用）
+const playSingleSentence = (pIdx: number) => {
+  const ts = article.value?.paragraph_timestamps?.[pIdx]
+  if (!ts || !playerBar.value) return
+  currentParagraphIndex.value = pIdx
+  playerBar.value.playSegment(ts.start, ts.end)
 }
 
 const goToPrevSentence = () => {
