@@ -1,13 +1,14 @@
 """听力课 API"""
 import os
+import re
 import uuid
 import shutil
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, date, timedelta
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -371,12 +372,37 @@ async def get_article_by_schedule(
     )
 
 
+RANGE_CHUNK_SIZE = 1024 * 1024  # 1MB，Range响应分块读取，避免大文件一次性读入内存
+
+
+def _iter_file_range(path: str, start: int, end: int):
+    """按字节范围分块读取文件，供 StreamingResponse 使用"""
+    with open(path, "rb") as f:
+        f.seek(start)
+        remaining = end - start + 1
+        while remaining > 0:
+            chunk_size = min(RANGE_CHUNK_SIZE, remaining)
+            data = f.read(chunk_size)
+            if not data:
+                break
+            remaining -= len(data)
+            yield data
+
+
 @router.get("/audio/{article_id}")
 async def stream_audio(
     article_id: int,
+    request: Request,
     db: Session = Depends(get_db)
 ):
-    """流式提供音频文件（不鉴权：<audio>标签原生请求不带Authorization头）"""
+    """流式提供音频文件，手动支持HTTP Range请求（不鉴权：<audio>标签原生请求不带Authorization头）
+
+    项目固定的 starlette==0.27.0 版本的 FileResponse 不支持 Range 请求
+    （旧版本 Starlette 的已知限制，升级会影响全站所有接口，风险较大，
+    所以在这个音频接口单独手动实现，不改动全局依赖版本）。
+    没有 Range 支持，<audio> 标签的 seek/跳转播放会在网络较慢或音频文件
+    较大时失效，表现为"怎么点都从头播放"。
+    """
     article = db.query(ListeningArticle).filter(ListeningArticle.id == article_id).first()
     if not article or not article.audio_file_path:
         raise HTTPException(status_code=404, detail="音频不存在")
@@ -385,7 +411,42 @@ async def stream_audio(
     if not os.path.exists(abs_path):
         raise HTTPException(status_code=404, detail="音频文件不存在")
 
-    return FileResponse(abs_path, media_type=article.audio_mimetype or "audio/mpeg")
+    media_type = article.audio_mimetype or "audio/mpeg"
+    file_size = os.path.getsize(abs_path)
+    range_header = request.headers.get("range")
+
+    if range_header:
+        match = re.match(r"bytes=(\d+)-(\d*)", range_header)
+        if match:
+            start = int(match.group(1))
+            end = int(match.group(2)) if match.group(2) else file_size - 1
+            end = min(end, file_size - 1)
+
+            if start >= file_size or start > end:
+                # 请求范围不合法，返回416并附带真实文件大小供客户端重新请求
+                raise HTTPException(
+                    status_code=416,
+                    headers={"Content-Range": f"bytes */{file_size}"},
+                )
+
+            headers = {
+                "Content-Range": f"bytes {start}-{end}/{file_size}",
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(end - start + 1),
+            }
+            return StreamingResponse(
+                _iter_file_range(abs_path, start, end),
+                status_code=206,
+                media_type=media_type,
+                headers=headers,
+            )
+
+    # 没有 Range 请求头：返回整个文件，同时声明支持 Range（供浏览器后续按需请求）
+    return FileResponse(
+        abs_path,
+        media_type=media_type,
+        headers={"Accept-Ranges": "bytes"},
+    )
 
 
 @router.post("/lookup-word", response_model=LookupWordResponse)
