@@ -25,8 +25,15 @@ ZHIPU_VISION_MODEL = os.getenv("ZHIPU_VISION_MODEL", "glm-4.6v-flash")
 ZHIPU_API_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
 
 # 429限流重试设置：免费额度并发数很低，简单退避重试几次即可缓解
-RATE_LIMIT_MAX_RETRIES = 3
-RATE_LIMIT_BACKOFF_SECONDS = 3
+RATE_LIMIT_MAX_RETRIES = 5
+RATE_LIMIT_BACKOFF_SECONDS = 4
+
+# 翻译分批设置：长文章（听力对话常有20-30轮）一次性请求容易导致：
+# 1) 输出JSON被max_tokens截断，越到后面的段落越容易丢失或对不齐
+# 2) 单次请求体积大、耗时长，更容易撞上免费额度的限流
+# 因此按小批次分别翻译，每批独立校验+重试，互不影响
+TRANSLATION_BATCH_SIZE = 8
+TRANSLATION_BATCH_DELAY_SECONDS = 1.5
 
 
 def count_words(text: str) -> int:
@@ -108,8 +115,18 @@ def call_vision_llm(prompt: str, image_bytes: bytes, mimetype: str, max_tokens: 
     return _call_zhipu_api(payload, timeout=90, error_prefix="视觉模型 API 错误")
 
 
-def build_translation_prompt(article: str) -> str:
+def build_translation_prompt(article: str, expected_count: Optional[int] = None) -> str:
     """article 内部段落必须用空行(\\n\\n)分隔，供 LLM 识别段落边界"""
+    count_rule = ""
+    if expected_count:
+        count_rule = f"""
+CRITICAL - paragraph count: the passage above has EXACTLY {expected_count} paragraphs (separated by blank lines).
+Your output JSON array MUST contain EXACTLY {expected_count} strings, one per paragraph, in the same order.
+This applies even to short paragraphs that are just a label, heading, or speaker tag (e.g. "Text 1", "Part A", "M:")
+— NEVER skip, merge, or omit any paragraph from the output, even if it looks untranslatable. If a paragraph is
+not a real sentence, just output a reasonable Chinese equivalent (or keep it as-is) as its own array item —
+do NOT drop it, since that would shift every following translation out of alignment with its paragraph.
+"""
     return f"""You are a professional translator. Translate the following English passage into Simplified Chinese (简体中文).
 
 Rules:
@@ -119,6 +136,7 @@ Rules:
 4. CRITICAL: Every single English word must be translated into Chinese. Do NOT leave any English words, phrases, or terms in the output. Not even technical terms, proper nouns, or difficult words — find a Chinese equivalent for everything.
 5. Output ONLY a JSON array of strings, one string per paragraph, in the same order.
 6. No extra explanation, no markdown formatting, just the raw JSON array.
+{count_rule}
 
 Example output format: ["第一段完整翻译", "第二段完整翻译"]
 
@@ -155,35 +173,16 @@ Article:
 """
 
 
-def generate_translation_sync(article: str, paragraphs: Optional[List[str]] = None) -> List[str]:
-    """同步生成按段落翻译（在 executor 中运行）
-
-    paragraphs: 调用方已经按自己的规则分好的段落列表（可选）。
-    - 阅读课不传，沿用原有按空行(\\n\\n)分段的行为，不受影响。
-    - 听力课传入按单换行分好的段落，避免与阅读课的双换行规则冲突。
-    传入时会用这份段落列表重新拼出以空行分隔的文本喂给 LLM（保证 LLM 稳定识别段落边界），
-    而不依赖原始文本本身的换行风格。
+def _parse_translation_response(result: str, expected_count: int) -> Optional[List[str]]:
+    """解析LLM返回的翻译JSON数组，只有条数与expected_count完全一致才算解析成功。
+    返回None表示解析失败或条数不对，调用方应据此重试或走兜底。
     """
-    if paragraphs is not None:
-        en_paragraphs = [p.strip() for p in paragraphs if p.strip()]
-        article_for_prompt = "\n\n".join(en_paragraphs)
-    else:
-        en_paragraphs = [p.strip() for p in re.split(r'\n{2,}', article) if p.strip()]
-        article_for_prompt = article
-
-    expected_count = len(en_paragraphs)
-
-    prompt = build_translation_prompt(article_for_prompt)
-    # 翻译用最大输出 token，防止长文章被截断（API 上限 4096）
-    result = call_llm(prompt, max_tokens=4096).strip()
-
-    # 尝试多种方式解析 JSON 数组
     cleaned = re.sub(r"```json\s*|\s*```", "", result).strip()
 
     # 方法1：直接 JSON 解析
     try:
         translations = json.loads(cleaned)
-        if isinstance(translations, list) and len(translations) > 0:
+        if isinstance(translations, list) and len(translations) == expected_count:
             return [str(t) for t in translations]
     except Exception:
         pass
@@ -193,10 +192,50 @@ def generate_translation_sync(article: str, paragraphs: Optional[List[str]] = No
         start = cleaned.index('[')
         end = cleaned.rindex(']') + 1
         translations = json.loads(cleaned[start:end])
-        if isinstance(translations, list) and len(translations) > 0:
+        if isinstance(translations, list) and len(translations) == expected_count:
             return [str(t) for t in translations]
     except Exception:
         pass
+
+    return None
+
+
+def _translate_paragraph_batch(en_paragraphs: List[str]) -> List[str]:
+    """翻译一小批段落（数量已经保证足够小，不会撞到输出token上限）。
+    内部逻辑与之前单次整篇翻译时完全一样：严格校验条数，不对就带着错误反馈重试，
+    重试后仍不对再走安全兜底——只是现在作用范围缩小到一个小批次，不会因为一批出问题
+    就连累已经翻译对的其他批次。
+    """
+    expected_count = len(en_paragraphs)
+    article_for_prompt = "\n\n".join(en_paragraphs)
+
+    max_retries = 2
+    result = ""
+    result_count_hint = "未知数量"
+    for attempt in range(max_retries):
+        prompt = build_translation_prompt(article_for_prompt, expected_count)
+        if attempt > 0:
+            prompt += (
+                f"\n\nIMPORTANT - your previous attempt returned the wrong number of array items "
+                f"(got {result_count_hint}, but the passage has exactly {expected_count} paragraphs). "
+                f"Count the paragraphs again carefully and make sure your output array has EXACTLY "
+                f"{expected_count} items, including any short label/heading paragraphs."
+            )
+
+        result = call_llm(prompt, max_tokens=4096).strip()
+
+        translations = _parse_translation_response(result, expected_count)
+        if translations is not None:
+            return translations
+
+        cleaned = re.sub(r"```json\s*|\s*```", "", result).strip()
+        try:
+            result_count_hint = len(json.loads(cleaned))
+        except Exception:
+            result_count_hint = "未知数量"
+
+    # 重试后仍未拿到条数正确的JSON数组，走安全兜底解析（不保证完美对齐，但保证不崩溃、不隐瞒问题）
+    cleaned = re.sub(r"```json\s*|\s*```", "", result).strip()
 
     # 方法3：用正则提取 JSON 字符串数组中的各项（处理截断情况）
     try:
@@ -225,3 +264,34 @@ def generate_translation_sync(article: str, paragraphs: Optional[List[str]] = No
     while len(lines) < expected_count:
         lines.append("")
     return lines[:expected_count]
+
+
+def generate_translation_sync(article: str, paragraphs: Optional[List[str]] = None) -> List[str]:
+    """同步生成按段落翻译（在 executor 中运行）
+
+    paragraphs: 调用方已经按自己的规则分好的段落列表（可选）。
+    - 阅读课不传，沿用原有按空行(\\n\\n)分段的行为，不受影响。
+    - 听力课传入按单换行分好的段落，避免与阅读课的双换行规则冲突。
+
+    长文章（尤其听力对话，常有20-30轮问答）如果一次性整篇发给LLM翻译，输出JSON容易
+    超出单次请求的max_tokens被截断——越靠后的段落越容易丢失或对不齐，且体积大的请求
+    也更容易撞上免费额度的限流。这里改为按小批次（TRANSLATION_BATCH_SIZE段/批）分别
+    翻译并拼接结果，每批独立校验条数、重试、兜底，互不影响。
+    """
+    if paragraphs is not None:
+        en_paragraphs = [p.strip() for p in paragraphs if p.strip()]
+    else:
+        en_paragraphs = [p.strip() for p in re.split(r'\n{2,}', article) if p.strip()]
+
+    if not en_paragraphs:
+        return []
+
+    all_translations: List[str] = []
+    for i in range(0, len(en_paragraphs), TRANSLATION_BATCH_SIZE):
+        batch = en_paragraphs[i:i + TRANSLATION_BATCH_SIZE]
+        all_translations.extend(_translate_paragraph_batch(batch))
+        # 批次之间稍作停顿，避免连续请求密度过高触发免费额度限流
+        if i + TRANSLATION_BATCH_SIZE < len(en_paragraphs):
+            time.sleep(TRANSLATION_BATCH_DELAY_SECONDS)
+
+    return all_translations

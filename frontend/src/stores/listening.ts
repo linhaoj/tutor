@@ -52,7 +52,7 @@ export const useListeningStore = defineStore('listening', () => {
   async function translateArticle(articleContent: string) {
     const res = await api.post('/api/listening/translate', {
       article_content: articleContent
-    })
+    }, { timeout: 180000 }) // 长文章翻译现在分批请求，间歇性限流时多批累加耗时可能逼近120秒，留足余量
     return res.data as { translation: string[] }
   }
 

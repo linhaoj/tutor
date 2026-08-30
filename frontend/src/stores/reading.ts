@@ -34,7 +34,7 @@ export const useReadingStore = defineStore('reading', () => {
       const res = await api.post('/api/reading/generate', {
         word_set_name: wordSetName,
         words
-      })
+      }, { timeout: 180000 }) // 长文章翻译现在分批请求，间歇性限流时多批累加耗时可能逼近120秒，留足余量
       return res.data as { article: string; translation: string[]; word_count: number; words_used: WordItem[] }
     } finally {
       loading.value = false

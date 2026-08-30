@@ -1690,6 +1690,18 @@ const onCourseTypeChange = async () => {
 }
 
 // ── 听力课方法 ────────────────────────────────────────
+
+// AI接口（翻译/OCR）背后是智谱免费额度，并发限制较低，偶尔仍会限流失败。
+// 后端把限流原始报错（如 "LLM API 错误: 429 {"error":{"code":"1302",...}}"）透传在detail里，
+// 直接显示给老师看很不友好，这里识别出限流类错误统一换成人话提示；其他类型错误仍保留原始detail方便排查。
+const formatAiErrorMessage = (e: any, fallback: string): string => {
+  const detail = e?.response?.data?.detail || ''
+  if (/429|1302|1305|速率限制|访问量过大|rate.?limit/i.test(detail)) {
+    return 'AI服务当前请求较多，这是智谱免费额度的限流保护，稍等30秒到1分钟后重试即可'
+  }
+  return detail || fallback
+}
+
 const handleOcrImageChange = async (file: any) => {
   if (!file.raw) return
   listeningConfig.ocrUploading = true
@@ -1705,7 +1717,7 @@ const handleOcrImageChange = async (file: any) => {
       ElMessage.warning('未识别到文字')
     }
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || '识别失败，请重试')
+    ElMessage.error(formatAiErrorMessage(e, '识别失败，请重试'))
   } finally {
     listeningConfig.ocrUploading = false
   }
@@ -1719,7 +1731,7 @@ const translateListeningArticle = async () => {
     listeningConfig.translation = result.translation
     ElMessage.success('翻译完成')
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || '翻译失败，请重试')
+    ElMessage.error(formatAiErrorMessage(e, '翻译失败，请重试'))
   } finally {
     listeningConfig.translating = false
   }
@@ -1886,7 +1898,7 @@ const generateArticle = async () => {
     if (readingConfig.wordSelectMode === 'random') readingConfig.selectedWords = wordsToUse
     ElMessage.success(`文章生成成功（${result.word_count} 词，${readingConfig.translation.length} 段翻译）`)
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || '生成文章失败，请重试')
+    ElMessage.error(formatAiErrorMessage(e, '生成文章失败，请重试'))
   } finally {
     readingConfig.generating = false
   }
