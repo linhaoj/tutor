@@ -69,13 +69,19 @@ export const useListeningStore = defineStore('listening', () => {
   }
 
   /**
-   * 自动对齐时间戳（调用腾讯云ASR + 文本相似度匹配）
+   * 自动对齐时间戳（调用通义千问ASR + 文本相似度匹配）
+   *
+   * 后端是异步任务轮询模式（提交任务→轮询→取结果），最多给到5分钟处理预算
+   * （见 qwen_asr_client.py 的 MAX_POLL_ATTEMPTS/POLL_INTERVAL_SECONDS），
+   * 真实的几分钟音频经常超过全局默认的30秒超时——之前就是卡在这里：
+   * 后端其实还在正常处理，但前端提前放弃导致显示"失败"。这里单独给
+   * 这一个请求设置更长的超时，比后端自己的处理上限（5分钟）留一点余量。
    */
   async function alignTimestamps(tempAudioId: string, articleContent: string) {
     const res = await api.post('/api/listening/align-timestamps', {
       temp_audio_id: tempAudioId,
       article_content: articleContent
-    })
+    }, { timeout: 360000 })
     return res.data as { paragraphs: ParagraphTimestamp[]; audio_duration_seconds: number }
   }
 
