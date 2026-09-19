@@ -135,6 +135,7 @@ import { useStudentsStore } from '@/stores/students'
 import { useWordsStore } from '@/stores/words'
 import { useLearningProgressStore } from '@/stores/learningProgress'
 import { useUIStore } from '@/stores/ui'
+import { useScheduleStore } from '@/stores/schedule'
 import CourseTimer from '@/components/CourseTimer.vue'
 
 const route = useRoute()
@@ -143,6 +144,7 @@ const studentsStore = useStudentsStore()
 const wordsStore = useWordsStore()
 const progressStore = useLearningProgressStore()
 const uiStore = useUIStore()
+const scheduleStore = useScheduleStore()
 
 // Props
 const studentId = ref<number>(parseInt(route.params.studentId as string))
@@ -311,6 +313,10 @@ const initializeCourseMode = () => {
   if (!sessionStorage.getItem('courseStartTime')) {
     sessionStorage.setItem('courseStartTime', Date.now().toString())
     console.log('设置课程开始时间:', new Date().toLocaleTimeString())
+    const scheduleId = route.query.scheduleId as string
+    if (scheduleId) {
+      scheduleStore.startSchedule(parseInt(scheduleId)).catch(e => console.error('记录实际开始时间失败:', e))
+    }
   } else {
     console.log('课程已在进行中，继续计时')
   }

@@ -47,6 +47,32 @@ class ScheduleResponse(BaseModel):
     session_id: Optional[str] = None  # 抗遗忘会话ID（仅review类型课程）
     timer_version: int  # 计时器版本号
     completed: bool
+    # 实际上课时间（区别于scheduled_at这个"预约"时间），没有记录时为None
+    actual_started_at: Optional[str] = None
+    actual_ended_at: Optional[str] = None
+    actual_duration_minutes: Optional[int] = None
+
+
+def _build_schedule_response(s: Schedule) -> ScheduleResponse:
+    """把Schedule行组装成ScheduleResponse，供create/list/history三处共用，避免重复"""
+    return ScheduleResponse(
+        id=s.id,
+        student_id=s.student_id,
+        student_name=s.student_name,
+        scheduled_at=s.scheduled_at.isoformat() + 'Z',
+        date=s.date.isoformat() if s.date else '',
+        time=s.time if s.time else '',
+        word_set_name=s.word_set_name,
+        course_type=s.course_type,
+        duration=s.duration,
+        class_type=s.class_type,
+        session_id=s.session_id,
+        timer_version=s.timer_version or 0,
+        completed=s.completed,
+        actual_started_at=(s.actual_started_at.isoformat() + 'Z') if s.actual_started_at else None,
+        actual_ended_at=(s.actual_ended_at.isoformat() + 'Z') if s.actual_ended_at else None,
+        actual_duration_minutes=s.actual_duration_minutes,
+    )
 
 
 @router.post("", response_model=ScheduleResponse)
@@ -127,21 +153,7 @@ async def create_schedule(
 
     logger.info(f"课程创建成功: 教师ID={teacher_id}, 学生={student.name}, 时间={scheduled_at.isoformat()}Z (UTC), 类型={schedule_data.course_type}, 时长={schedule_data.duration}分钟")
 
-    return ScheduleResponse(
-        id=schedule.id,
-        student_id=schedule.student_id,
-        student_name=schedule.student_name,
-        scheduled_at=schedule.scheduled_at.isoformat() + 'Z',  # 新字段：返回UTC时间
-        date=schedule.date.isoformat(),  # 旧字段：向后兼容
-        time=schedule.time,  # 旧字段：向后兼容
-        word_set_name=schedule.word_set_name,
-        course_type=schedule.course_type,
-        duration=schedule.duration,
-        class_type=schedule.class_type,
-        session_id=schedule.session_id,  # 抗遗忘会话ID
-        timer_version=schedule.timer_version or 0,  # 计时器版本号
-        completed=schedule.completed
-    )
+    return _build_schedule_response(schedule)
 
 
 @router.get("", response_model=List[ScheduleResponse])
@@ -166,24 +178,59 @@ async def get_schedules(
         query_teacher_id = current_user.id
 
     schedules = db.query(Schedule).filter(Schedule.teacher_id == query_teacher_id).all()
-    return [
-        ScheduleResponse(
-            id=s.id,
-            student_id=s.student_id,
-            student_name=s.student_name,
-            scheduled_at=s.scheduled_at.isoformat() + 'Z',  # UTC时间
-            date=s.date.isoformat() if s.date else '',  # 向后兼容
-            time=s.time if s.time else '',  # 向后兼容
-            word_set_name=s.word_set_name,
-            course_type=s.course_type,
-            duration=s.duration,
-            class_type=s.class_type,
-            session_id=s.session_id,  # 抗遗忘会话ID
-            timer_version=s.timer_version or 0,  # 计时器版本号
-            completed=s.completed
-        )
-        for s in schedules
-    ]
+    return [_build_schedule_response(s) for s in schedules]
+
+
+@router.get("/history/{student_id}", response_model=List[ScheduleResponse])
+async def get_schedule_history(
+    student_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取某个学生的历史上课记录（仅已完成课程，按日期倒序）
+
+    - 教师：只能查自己名下学生的记录
+    - 管理员：不受限制
+    """
+    query = db.query(Schedule).filter(
+        Schedule.student_id == student_id,
+        Schedule.completed == True
+    )
+    if current_user.role != "admin":
+        query = query.filter(Schedule.teacher_id == current_user.id)
+
+    schedules = query.order_by(Schedule.date.desc(), Schedule.time.desc()).all()
+    return [_build_schedule_response(s) for s in schedules]
+
+
+@router.put("/{schedule_id}/start")
+async def start_schedule(
+    schedule_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """记录课程实际开始时间（幂等：只在首次进入时设置，避免学生中途重进覆盖真实开始时间）
+
+    - 教师：只能操作自己名下的课程
+    - 管理员：不受限制
+    """
+    if current_user.role == "admin":
+        schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+    else:
+        schedule = db.query(Schedule).filter(
+            Schedule.id == schedule_id,
+            Schedule.teacher_id == current_user.id
+        ).first()
+
+    if not schedule:
+        raise HTTPException(status_code=404, detail="课程不存在或无权限")
+
+    if schedule.actual_started_at is None:
+        schedule.actual_started_at = datetime.utcnow()
+        db.commit()
+        logger.info(f"记录课程实际开始时间: ID={schedule_id}, 学生={schedule.student_name}, 时间={schedule.actual_started_at.isoformat()}Z")
+
+    return {"message": "已记录开始时间", "actual_started_at": schedule.actual_started_at.isoformat() + 'Z'}
 
 
 @router.put("/{schedule_id}/complete")
@@ -235,6 +282,12 @@ async def complete_schedule(
         old_hours = student.remaining_hours
         student.remaining_hours -= hours_to_deduct
         logger.info(f"扣除课时: 学生={schedule.student_name}, 课程类型={schedule.course_type}, 班型={schedule.class_type}, 扣除={hours_to_deduct}h, 原有={old_hours}h, 剩余={student.remaining_hours}h")
+
+    # 记录实际结束时间和实际时长（如果之前没调用过/start，actual_started_at为空，时长保持None，不报错）
+    schedule.actual_ended_at = datetime.utcnow()
+    if schedule.actual_started_at is not None:
+        elapsed_seconds = (schedule.actual_ended_at - schedule.actual_started_at).total_seconds()
+        schedule.actual_duration_minutes = round(elapsed_seconds / 60)
 
     # 标记课程完成
     schedule.completed = True

@@ -495,6 +495,7 @@ const startStudy = async (schedule: any) => {
     const startTime = Date.now()
     sessionStorage.setItem('courseStartTime', startTime.toString())
     console.log('设置课程开始时间:', new Date().toLocaleTimeString())
+    scheduleStore.startSchedule(schedule.id).catch(e => console.error('记录实际开始时间失败:', e))
   } else {
     console.log('课程已在进行中，继续计时')
   }

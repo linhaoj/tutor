@@ -18,6 +18,10 @@ export interface Schedule {
   session_id?: string  // 抗遗忘会话ID（可选）
   timer_version: number  // 计时器版本号
   completed: boolean
+  // 实际上课时间（区别于预约的date+time），没有记录时为null
+  actual_started_at?: string | null
+  actual_ended_at?: string | null
+  actual_duration_minutes?: number | null
 }
 
 export interface DateGroup {
@@ -91,6 +95,34 @@ export const useScheduleStore = defineStore('schedule', () => {
         success: false,
         message: error.response?.data?.detail || '标记失败'
       }
+    }
+  }
+
+  /**
+   * 记录课程实际开始时间（幂等，服务端只在首次调用时生效）
+   */
+  const startSchedule = async (id: number): Promise<{ success: boolean, message: string }> => {
+    try {
+      await api.put(`/api/schedules/${id}/start`)
+      return { success: true, message: '已记录开始时间' }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '记录开始时间失败'
+      }
+    }
+  }
+
+  /**
+   * 获取某个学生的历史上课记录（已完成课程，按日期倒序）
+   */
+  const fetchScheduleHistory = async (studentId: number): Promise<Schedule[]> => {
+    try {
+      const response = await api.get(`/api/schedules/history/${studentId}`)
+      return response.data
+    } catch (error) {
+      console.error('Fetch schedule history error:', error)
+      return []
     }
   }
 
@@ -256,6 +288,8 @@ export const useScheduleStore = defineStore('schedule', () => {
     updateSchedule,
     deleteSchedule,
     completeSchedule,
+    startSchedule,
+    fetchScheduleHistory,
     resetTimer,
     getSchedulesByDate,
     getSchedulesByStudent,

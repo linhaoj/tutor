@@ -132,6 +132,11 @@ class Schedule(Base):
     timer_version = Column(Integer, default=0)  # 计时器版本号，重置时递增
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # 实际上课时间记录（区别于 scheduled_at 这个"预约"时间）
+    actual_started_at = Column(DateTime, nullable=True)  # 学生/教师首次进入课程时记录
+    actual_ended_at = Column(DateTime, nullable=True)  # 课程标记完成时记录
+    actual_duration_minutes = Column(Integer, nullable=True)  # = (ended - started)，四舍五入到分钟
+
     # 关系
     teacher = relationship("User", back_populates="schedules")
     student = relationship("Student", back_populates="schedules")
