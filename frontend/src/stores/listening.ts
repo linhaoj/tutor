@@ -36,12 +36,16 @@ export const useListeningStore = defineStore('listening', () => {
 
   /**
    * 截图识别文字（OCR）
+   *
+   * 后端视觉模型调用本身就给了90秒处理预算（call_vision_llm），加上图片上传
+   * 传输时间，容易超过全局默认30秒超时，单独放宽
    */
   async function ocrImage(imageFile: File) {
     const formData = new FormData()
     formData.append('image', imageFile)
     const res = await api.post('/api/listening/ocr', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
     })
     return res.data as { recognized_text: string }
   }
@@ -58,12 +62,17 @@ export const useListeningStore = defineStore('listening', () => {
 
   /**
    * 上传音频文件
+   *
+   * 音频最大支持100MB，如果上传带宽不快，光是把文件传到服务器就可能超过
+   * 全局默认的30秒超时（这不是服务器处理慢，是数据还没传完前端就放弃了），
+   * 单独放宽这一个请求的超时时间
    */
   async function uploadAudio(audioFile: File) {
     const formData = new FormData()
     formData.append('audio', audioFile)
     const res = await api.post('/api/listening/upload-audio', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
     })
     return res.data as { temp_audio_id: string; duration_seconds: number; original_filename: string }
   }
