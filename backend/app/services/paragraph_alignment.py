@@ -16,6 +16,37 @@ def _normalize_words(text: str) -> List[str]:
     return [w for w in text.split() if w]
 
 
+# 合并匹配块时允许的最大间隔（按ASR词序列的索引数计，不是秒数）。
+# 段落内部因为标点/缩写等细微差异被拆成几个相邻小块是正常的，间隔应该很小；
+# 真正不相关、偶然撞上同一个常见词的"离群"匹配块，通常隔着几十甚至上百个词，
+# 用这个阈值就能把它们排除在外，不让它们把段落的起止时间拉到音频里完全不对的位置
+MAX_BLOCK_GAP = 15
+
+
+def _select_core_blocks(blocks: list) -> list:
+    """blocks 已按ASR词序列位置(a)从小到大排序（SequenceMatcher的返回保证这一点）。
+    以最大的匹配块为锚点（最可信，大概率是这句话真正所在的位置），向两侧合并
+    相邻(间隔在MAX_BLOCK_GAP以内)的块，排除掉真正远离锚点、大概率只是偶然撞上
+    同一个常见词/短语的离群匹配块——避免整段的起止时间被这种孤立匹配拉歪。
+    """
+    if not blocks:
+        return []
+    anchor_idx = max(range(len(blocks)), key=lambda i: blocks[i].size)
+
+    core = [blocks[anchor_idx]]
+    for b in blocks[anchor_idx + 1:]:
+        prev_end = core[-1].a + core[-1].size
+        if b.a - prev_end > MAX_BLOCK_GAP:
+            break
+        core.append(b)
+    for b in reversed(blocks[:anchor_idx]):
+        next_start = core[0].a
+        if next_start - (b.a + b.size) > MAX_BLOCK_GAP:
+            break
+        core.insert(0, b)
+    return core
+
+
 def align_paragraphs_to_asr(paragraphs: List[str], asr_words: List[Dict]) -> List[Dict]:
     """
     paragraphs: 老师人工分好的段落文本列表
@@ -51,16 +82,19 @@ def align_paragraphs_to_asr(paragraphs: List[str], asr_words: List[Dict]) -> Lis
             })
             continue
 
-        # 匹配块在asr_norm_words里的位置范围，取第一个块的起点、最后一个块的终点
-        first_block = blocks[0]
-        last_block = blocks[-1]
+        # 只用"核心"匹配块（离最大匹配块不远的那些）算时间范围，排除偶然撞上
+        # 常见词导致的离群匹配，否则句子起止时间会被错误地拉到音频里很远的位置
+        core_blocks = _select_core_blocks(blocks)
+        first_block = core_blocks[0]
+        last_block = core_blocks[-1]
         start_asr_idx = first_block.a
         end_asr_idx = last_block.a + last_block.size - 1
 
         start_ms = asr_word_refs[start_asr_idx]["start_ms"]
         end_ms = asr_word_refs[end_asr_idx]["end_ms"]
 
-        matched_word_count = sum(b.size for b in blocks)
+        # 匹配度也用核心块统计，不被离群匹配虚高
+        matched_word_count = sum(b.size for b in core_blocks)
         match_score = round(matched_word_count / len(para_norm_words), 2)
 
         results.append({
