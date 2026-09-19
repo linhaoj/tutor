@@ -18,7 +18,7 @@ from app.routes.auth import get_current_user
 from app.services.llm_common import (
     call_llm, call_vision_llm, build_lookup_prompt, generate_translation_sync,
 )
-from app.services.tencent_asr_client import call_tencent_asr
+from app.services.qwen_asr_client import call_qwen_asr
 from app.services.paragraph_alignment import align_paragraphs_to_asr
 
 router = APIRouter(prefix="/api/listening", tags=["听力课"])
@@ -28,8 +28,8 @@ LISTENING_AUDIO_STORAGE_DIR = os.getenv("LISTENING_AUDIO_STORAGE_DIR", "uploads/
 ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".ogg", ".m4a"}
 MAX_AUDIO_SIZE_BYTES = 100 * 1024 * 1024  # 100MB
 
-# 腾讯云ASR识别超过5MB的音频时需要改用"URL提交"模式（见 tencent_asr_client.py），
-# 这个URL必须是腾讯云服务器能从公网访问到的地址——即用户浏览器访问网站时用的那个地址
+# 通义千问ASR的录音文件转写只接受URL提交，不支持直接传字节数据（见 qwen_asr_client.py），
+# 这个URL必须是阿里云服务器能从公网访问到的地址——即用户浏览器访问网站时用的那个地址
 # （跟 /api/listening/audio/{id} 是同一个对外入口，不是后端进程自己监听的内部端口）。
 # 每台服务器的公网地址不一样，需要在 .env.local 里配置，例如：
 #   PUBLIC_BASE_URL=http://120.77.200.203:5173
@@ -268,7 +268,7 @@ async def align_timestamps(
     req: AlignTimestampsRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """调用腾讯云ASR + 文本相似度匹配，返回段落级时间戳预览（不写数据库）"""
+    """调用通义千问ASR + 文本相似度匹配，返回段落级时间戳预览（不写数据库）"""
     # 按单个换行分段（老师手动换行决定分段，不是空行/双换行）
     paragraphs = [p.strip() for p in req.article_content.split("\n") if p.strip()]
     if not paragraphs:
@@ -278,17 +278,20 @@ async def align_timestamps(
     if not os.path.exists(abs_path):
         raise HTTPException(status_code=404, detail="音频文件不存在，请重新上传")
 
-    # 音频超过5MB时，腾讯云ASR要求改用URL提交模式（见call_tencent_asr内部逻辑），
-    # 需要拼一个腾讯云服务器能从公网访问到的临时音频地址
-    audio_url = None
-    if PUBLIC_BASE_URL:
-        audio_url = f"{PUBLIC_BASE_URL}/api/listening/temp-audio/{req.temp_audio_id}"
+    # 通义千问的录音文件转写只接受URL提交，不像腾讯云那样支持直接传字节数据，
+    # 所以这里PUBLIC_BASE_URL是必需项，不再是"文件超过5MB才需要"的可选项
+    if not PUBLIC_BASE_URL:
+        raise HTTPException(
+            status_code=500,
+            detail="需要配置 PUBLIC_BASE_URL（服务器的公网访问地址）才能使用语音识别，请联系管理员在 .env.local 中设置"
+        )
+    audio_url = f"{PUBLIC_BASE_URL}/api/listening/temp-audio/{req.temp_audio_id}"
 
-    # call_tencent_asr 内部用同步轮询（time.sleep），必须放到线程池跑，
+    # call_qwen_asr 内部用同步轮询（time.sleep），必须放到线程池跑，
     # 否则会阻塞整个事件循环，导致服务器在识别期间无法处理任何其他请求
     loop = asyncio.get_event_loop()
     with ThreadPoolExecutor() as executor:
-        asr_words = await loop.run_in_executor(executor, call_tencent_asr, abs_path, audio_url)
+        asr_words = await loop.run_in_executor(executor, call_qwen_asr, audio_url)
 
     aligned = align_paragraphs_to_asr(paragraphs, asr_words)
     duration = _get_audio_duration_seconds(abs_path)
