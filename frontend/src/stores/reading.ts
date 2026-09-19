@@ -42,6 +42,16 @@ export const useReadingStore = defineStore('reading', () => {
   }
 
   /**
+   * 按段落翻译（老师自己上传的文章没有AI翻译，点击按钮补上）
+   */
+  async function translateArticle(articleContent: string) {
+    const res = await api.post('/api/reading/translate', {
+      article_content: articleContent
+    }, { timeout: 180000 }) // 长文章翻译分批请求，间歇性限流时多批累加耗时可能逼近120秒，留足余量
+    return res.data as { translation: string[] }
+  }
+
+  /**
    * 双击单词，AI 给出上下文中的中文释义
    */
   async function lookupWord(word: string, articleContext: string) {
@@ -140,6 +150,7 @@ export const useReadingStore = defineStore('reading', () => {
   return {
     loading,
     generateArticle,
+    translateArticle,
     lookupWord,
     saveArticle,
     updateArticle,

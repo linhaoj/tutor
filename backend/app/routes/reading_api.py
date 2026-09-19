@@ -50,13 +50,19 @@ class SaveArticleRequest(BaseModel):
     word_set_name: str
     words_used: List[WordItem]
     article_content: str
-    translation: List[str]
+    translation: List[str] = []  # 自建文章没有AI翻译，默认空列表
     word_count: int
 
 class SaveArticleResponse(BaseModel):
     id: int
     word_count: int
     created_at: str
+
+class TranslateRequest(BaseModel):
+    article_content: str
+
+class TranslateResponse(BaseModel):
+    translation: List[str]
 
 class UpdateArticleRequest(BaseModel):
     article_content: str
@@ -193,6 +199,27 @@ async def generate_article(
         word_count=wc,
         words_used=req.words
     )
+
+
+@router.post("/translate", response_model=TranslateResponse)
+async def translate_article(
+    req: TranslateRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """按段落翻译（老师自己上传的文章没有AI翻译，点击按钮补上）
+
+    跟 /generate 内部用的是同一套 generate_translation_sync，按空行(\\n\\n)分段——
+    跟前端 articleParagraphs 的分段规则(split(/\\n\\n+/))保持一致。
+    """
+    if not req.article_content.strip():
+        raise HTTPException(status_code=400, detail="文章内容不能为空")
+
+    loop = asyncio.get_event_loop()
+    with ThreadPoolExecutor() as executor:
+        translation = await loop.run_in_executor(
+            executor, generate_translation_sync, req.article_content
+        )
+    return TranslateResponse(translation=translation)
 
 
 @router.post("/lookup-word", response_model=LookupWordResponse)
