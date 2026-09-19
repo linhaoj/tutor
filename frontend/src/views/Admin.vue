@@ -273,6 +273,52 @@
                     </div>
                   </div>
                 </el-tab-pane>
+
+                <el-tab-pane label="学生上课记录" name="attendance">
+                  <div class="data-section">
+                    <div class="section-header">
+                      <span>{{ getSelectedTeacherName() }} - 学生上课记录</span>
+                    </div>
+                    <el-select
+                      v-model="attendanceStudentId"
+                      placeholder="选择学生"
+                      style="width: 240px; margin-bottom: 16px"
+                      @change="loadAttendanceHistory"
+                    >
+                      <el-option
+                        v-for="student in teacherStudents"
+                        :key="student.id"
+                        :label="student.name"
+                        :value="student.id"
+                      />
+                    </el-select>
+
+                    <el-table :data="attendanceHistory" v-loading="attendanceLoading" style="width: 100%">
+                      <el-table-column prop="date" label="日期" width="120" />
+                      <el-table-column label="实际开始" width="100">
+                        <template #default="scope">{{ formatAttendanceTime(scope.row.actual_started_at) }}</template>
+                      </el-table-column>
+                      <el-table-column label="实际结束" width="100">
+                        <template #default="scope">{{ formatAttendanceTime(scope.row.actual_ended_at) }}</template>
+                      </el-table-column>
+                      <el-table-column label="实际时长" width="120">
+                        <template #default="scope">{{ formatAttendanceDuration(scope.row.actual_duration_minutes) }}</template>
+                      </el-table-column>
+                      <el-table-column label="课程类型" width="120">
+                        <template #default="scope">
+                          <el-tag :type="courseTypeTagType(scope.row.course_type)" size="small">
+                            {{ courseTypeLabel(scope.row.course_type) }}
+                          </el-tag>
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="word_set_name" label="单词库/文章" />
+                    </el-table>
+                    <el-empty
+                      v-if="attendanceStudentId && attendanceHistory.length === 0 && !attendanceLoading"
+                      description="暂无上课记录"
+                    />
+                  </div>
+                </el-tab-pane>
               </el-tabs>
             </div>
 
@@ -607,7 +653,11 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item v-if="scheduleForm.type !== 'listening'" label="选择单词集" required>
+        <el-form-item
+          v-if="scheduleForm.type !== 'listening' && !(scheduleForm.type === 'reading' && readingConfig.sourceMode === 'upload')"
+          label="选择单词集"
+          required
+        >
           <el-select v-model="scheduleForm.wordSet" placeholder="请选择单词集" style="width: 100%">
             <el-option
               v-for="set in teacherWordSets"
@@ -629,6 +679,45 @@
 
         <!-- ── 阅读课专属配置 ────────────────────── -->
         <template v-if="scheduleForm.type === 'reading'">
+          <el-form-item label="文章来源" required>
+            <el-radio-group v-model="readingConfig.sourceMode">
+              <el-radio value="generate">用单词库生成</el-radio>
+              <el-radio value="upload">手动上传</el-radio>
+            </el-radio-group>
+          </el-form-item>
+
+          <!-- 手动上传：不关联单词库，不影响任何单词的学习进度格子。
+               抗遗忘/三阶段学习任务的生词跟AI生成文章一样，来自正式上课时老师现场点选。 -->
+          <template v-if="readingConfig.sourceMode === 'upload'">
+            <el-form-item label="文章内容" required>
+              <div style="width: 100%">
+                <el-input
+                  v-model="readingConfig.manualArticleText"
+                  type="textarea"
+                  :rows="10"
+                  placeholder="粘贴英文文章内容，用空行分隔段落"
+                  style="width: 100%"
+                />
+                <span style="color: #909399; font-size: 12px">字数：{{ manualWordCount }}</span>
+              </div>
+            </el-form-item>
+
+            <el-form-item label=" ">
+              <el-button
+                type="primary"
+                :loading="readingConfig.generating"
+                :disabled="!readingConfig.manualArticleText.trim()"
+                @click="translateManualArticle"
+              >
+                {{ readingConfig.generating ? '翻译中...' : 'AI翻译' }}
+              </el-button>
+              <span v-if="readingConfig.article && readingConfig.sourceMode === 'upload'" style="color: #67c23a; margin-left: 12px; font-size: 13px">
+                ✓ 已翻译（{{ manualWordCount }} 词）
+              </span>
+            </el-form-item>
+          </template>
+
+          <template v-if="readingConfig.sourceMode === 'generate'">
           <el-form-item label="选词数量" required>
             <el-select v-model="readingConfig.wordsCount" style="width: 160px" @change="onWordsCountChange">
               <el-option label="5个单词" :value="5" />
@@ -723,7 +812,9 @@
               <el-button link type="primary" @click="regenerateArticle" style="margin-left: 8px">重新生成</el-button>
             </span>
           </el-form-item>
+          </template>
 
+          <!-- 文章预览：手动上传/AI生成两种模式共用，只要readingConfig.article有内容就显示 -->
           <el-form-item v-if="readingConfig.article" label="文章预览">
             <div style="width: 100%">
 
@@ -770,7 +861,7 @@
                   {{ readingConfig.editing ? '完成编辑' : '编辑英文' }}
                 </el-button>
                 <span style="color: #909399; font-size: 12px">Word count: {{ readingConfig.wordCount }}</span>
-                <span v-if="!isWordCountInRange" style="color: #f56c6c; font-size: 12px">
+                <span v-if="readingConfig.sourceMode === 'generate' && !isWordCountInRange" style="color: #f56c6c; font-size: 12px">
                   ⚠ 建议范围：{{ wordCountRange[0] }}-{{ wordCountRange[1] }} 词
                 </span>
               </div>
@@ -1103,6 +1194,38 @@ const selectedWordSet = ref('')
 const teacherStudents = ref<Student[]>([])
 const teacherWordSets = ref<WordSet[]>([])
 const teacherSchedules = ref<Schedule[]>([])
+
+// 学生上课记录（"学生上课记录"标签页）
+const attendanceStudentId = ref<number | ''>('')
+const attendanceHistory = ref<Schedule[]>([])
+const attendanceLoading = ref(false)
+
+const loadAttendanceHistory = async () => {
+  if (!attendanceStudentId.value) {
+    attendanceHistory.value = []
+    return
+  }
+  attendanceLoading.value = true
+  try {
+    attendanceHistory.value = await scheduleStore.fetchScheduleHistory(Number(attendanceStudentId.value))
+  } finally {
+    attendanceLoading.value = false
+  }
+}
+
+const formatAttendanceTime = (iso: string | null | undefined): string => {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+const formatAttendanceDuration = (minutes: number | null | undefined): string => {
+  if (minutes === null || minutes === undefined) return '—'
+  if (minutes < 60) return `${minutes}分钟`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m === 0 ? `${h}小时` : `${h}小时${m}分钟`
+}
 
 // 计算属性
 const teachers = computed(() => {
@@ -1453,6 +1576,8 @@ const clearTeacherData = () => {
   teacherWordSets.value = []
   teacherSchedules.value = []
   selectedWordSet.value = ''
+  attendanceStudentId.value = ''
+  attendanceHistory.value = []
 }
 
 const getSelectedTeacherName = () => {
@@ -1546,6 +1671,9 @@ const scheduleForm = reactive({
 
 // ── 阅读课专属状态 ────────────────────────────────────────
 const readingConfig = reactive({
+  // 文章来源：generate=用单词库AI生成（原有流程），upload=老师自己粘贴文章（不关联单词库）
+  sourceMode: 'generate' as 'generate' | 'upload',
+  manualArticleText: '',
   wordsCount: 10,
   customCount: 10,
   wordSelectMode: 'random' as 'random' | 'search' | 'manual',
@@ -1559,6 +1687,11 @@ const readingConfig = reactive({
   wordCount: 0,
   editing: false,
   savedArticleId: null as number | null,
+})
+
+// 自建文章的字数统计（跟onParagraphEdit里统计英文单词数的正则保持一致）
+const manualWordCount = computed(() => {
+  return (readingConfig.manualArticleText.match(/\b[a-zA-Z']+\b/g) || []).length
 })
 
 // ── 听力课专属状态 ────────────────────────────────────────
@@ -1906,6 +2039,28 @@ const generateArticle = async () => {
 
 const regenerateArticle = async () => { readingConfig.savedArticleId = null; await generateArticle() }
 
+// 手动上传文章的AI翻译：按空行分段（跟articleParagraphs的分段规则一致），翻译完成后
+// 把manualArticleText同步进readingConfig.article，这样AI生成模式复用的"文章预览"区块
+// 也能正常显示手动上传的内容（分段/高亮/编辑逻辑完全共用，不用另外写一套）
+const translateManualArticle = async () => {
+  if (!readingConfig.manualArticleText.trim()) return
+  readingConfig.generating = true
+  readingConfig.savedArticleId = null
+  try {
+    const result = await readingStore.translateArticle(readingConfig.manualArticleText)
+    readingConfig.article = readingConfig.manualArticleText
+    readingConfig.translation = result.translation || []
+    readingConfig.wordCount = manualWordCount.value
+    readingConfig.selectedWords = []
+    editableParagraphs.value = articleParagraphs.value.slice()
+    ElMessage.success(`翻译完成（${readingConfig.translation.length} 段）`)
+  } catch (e: any) {
+    ElMessage.error(formatAiErrorMessage(e, '翻译失败，请重试'))
+  } finally {
+    readingConfig.generating = false
+  }
+}
+
 const onArticleEdit = () => {
   const words = readingConfig.article.match(/\b[a-zA-Z']+\b/g) || []
   readingConfig.wordCount = words.length
@@ -1913,6 +2068,7 @@ const onArticleEdit = () => {
 
 const resetReadingConfig = () => {
   Object.assign(readingConfig, {
+    sourceMode: 'generate', manualArticleText: '',
     wordsCount: 10, customCount: 10, wordSelectMode: 'random',
     learnedWords: [], searchKeyword: '', selectedWords: [],
     manualInput: { english: '', chinese: '' },
@@ -2466,9 +2622,15 @@ const updateScheduleDuration = () => {
 
 const submitAddSchedule = async () => {
   const isListening = scheduleForm.type === 'listening'
+  const isManualReading = scheduleForm.type === 'reading' && readingConfig.sourceMode === 'upload'
 
-  if (!scheduleForm.studentId || (!isListening && !scheduleForm.wordSet) || !scheduleForm.date || !scheduleForm.time) {
+  if (!scheduleForm.studentId || (!isListening && !isManualReading && !scheduleForm.wordSet) || !scheduleForm.date || !scheduleForm.time) {
     ElMessage.error('请填写完整的课程信息')
+    return
+  }
+
+  if (isManualReading && !readingConfig.manualArticleText.trim()) {
+    ElMessage.error('请粘贴文章内容')
     return
   }
 
@@ -2505,7 +2667,7 @@ const submitAddSchedule = async () => {
       student_id: parseInt(scheduleForm.studentId),
       date: dateStr,
       time: scheduleForm.time,
-      word_set_name: isListening ? (listeningConfig.title || '听力课') : scheduleForm.wordSet,
+      word_set_name: isListening ? (listeningConfig.title || '听力课') : isManualReading ? '自建文章' : scheduleForm.wordSet,
       course_type: scheduleForm.type,
       duration: scheduleForm.duration,
       class_type: 'big',
@@ -2513,8 +2675,8 @@ const submitAddSchedule = async () => {
     })
 
     if (result.success) {
-      // 阅读课：保存文章并绑定课程
-      if (scheduleForm.type === 'reading' && readingConfig.article) {
+      // 阅读课（AI生成）：保存文章并绑定课程
+      if (scheduleForm.type === 'reading' && readingConfig.sourceMode === 'generate' && readingConfig.article) {
         try {
           let articleId = readingConfig.savedArticleId
           if (!articleId) {
@@ -2535,6 +2697,27 @@ const submitAddSchedule = async () => {
           }
         } catch (e) {
           console.error('保存文章失败:', e)
+        }
+      }
+
+      // 阅读课（手动上传）：不关联单词库，AI翻译是可选的（点了"AI翻译"就带上，没点就是空数组，
+      // 用article兜底manualArticleText是因为翻译成功后内容会同步进article，之后"编辑英文"改的也是article
+      if (isManualReading && (readingConfig.article || readingConfig.manualArticleText).trim()) {
+        try {
+          const saved = await readingStore.saveArticle(
+            '自建文章',
+            [],
+            readingConfig.article || readingConfig.manualArticleText,
+            readingConfig.translation,
+            readingConfig.wordCount || manualWordCount.value
+          )
+          const scheduleStore2 = useScheduleStore()
+          const newSchedule = scheduleStore2.schedules[scheduleStore2.schedules.length - 1]
+          if (newSchedule?.id) {
+            await readingStore.bindArticleToSchedule(saved.id, newSchedule.id)
+          }
+        } catch (e) {
+          console.error('保存自建文章失败:', e)
         }
       }
 
