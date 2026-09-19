@@ -28,6 +28,13 @@ LISTENING_AUDIO_STORAGE_DIR = os.getenv("LISTENING_AUDIO_STORAGE_DIR", "uploads/
 ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".ogg", ".m4a"}
 MAX_AUDIO_SIZE_BYTES = 100 * 1024 * 1024  # 100MB
 
+# 腾讯云ASR识别超过5MB的音频时需要改用"URL提交"模式（见 tencent_asr_client.py），
+# 这个URL必须是腾讯云服务器能从公网访问到的地址——即用户浏览器访问网站时用的那个地址
+# （跟 /api/listening/audio/{id} 是同一个对外入口，不是后端进程自己监听的内部端口）。
+# 每台服务器的公网地址不一样，需要在 .env.local 里配置，例如：
+#   PUBLIC_BASE_URL=http://120.77.200.203:5173
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+
 
 def _audio_storage_root() -> str:
     root = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), LISTENING_AUDIO_STORAGE_DIR)
@@ -239,6 +246,23 @@ async def upload_audio(
     )
 
 
+@router.get("/temp-audio/{temp_audio_id:path}")
+async def get_temp_audio(temp_audio_id: str):
+    """给腾讯云ASR"URL提交"模式用的临时音频公开访问接口（不鉴权：腾讯云服务器不会带登录token）。
+
+    此时音频还没有正式的article_id（老师还在"自动对齐时间戳"这一步，文章尚未保存），
+    只能按上传时生成的temp_audio_id（服务器端UUID文件名，不是用户可控输入）来定位文件。
+    """
+    root = _audio_storage_root()
+    abs_path = os.path.normpath(os.path.join(root, temp_audio_id))
+    # 防止路径穿越：确保最终路径仍然落在音频存储目录内
+    if not abs_path.startswith(os.path.normpath(root) + os.sep):
+        raise HTTPException(status_code=404, detail="音频不存在")
+    if not os.path.exists(abs_path):
+        raise HTTPException(status_code=404, detail="音频不存在")
+    return FileResponse(abs_path)
+
+
 @router.post("/align-timestamps", response_model=AlignTimestampsResponse)
 async def align_timestamps(
     req: AlignTimestampsRequest,
@@ -254,11 +278,17 @@ async def align_timestamps(
     if not os.path.exists(abs_path):
         raise HTTPException(status_code=404, detail="音频文件不存在，请重新上传")
 
+    # 音频超过5MB时，腾讯云ASR要求改用URL提交模式（见call_tencent_asr内部逻辑），
+    # 需要拼一个腾讯云服务器能从公网访问到的临时音频地址
+    audio_url = None
+    if PUBLIC_BASE_URL:
+        audio_url = f"{PUBLIC_BASE_URL}/api/listening/temp-audio/{req.temp_audio_id}"
+
     # call_tencent_asr 内部用同步轮询（time.sleep），必须放到线程池跑，
     # 否则会阻塞整个事件循环，导致服务器在识别期间无法处理任何其他请求
     loop = asyncio.get_event_loop()
     with ThreadPoolExecutor() as executor:
-        asr_words = await loop.run_in_executor(executor, call_tencent_asr, abs_path)
+        asr_words = await loop.run_in_executor(executor, call_tencent_asr, abs_path, audio_url)
 
     aligned = align_paragraphs_to_asr(paragraphs, asr_words)
     duration = _get_audio_duration_seconds(abs_path)
