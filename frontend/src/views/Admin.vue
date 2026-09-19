@@ -1715,6 +1715,10 @@ const listeningConfig = reactive({
 
 const previewAudioEl = ref<HTMLAudioElement>()
 const previewAudioSrc = ref('')
+// 记录当前挂在previewAudioEl上的timeupdate监听器，切换试听段落时先移除上一个，
+// 避免多个监听器同时叠加、互相打断播放（旧bug：点了A句还没播完又点B句，两个
+// "播到结尾就暂停"的判断会一起生效，导致播放行为完全乱套）
+let previewTimeUpdateHandler: (() => void) | null = null
 
 // 听力课按单个换行分段（不是双换行/空行），换行本身决定原文翻译对应关系和时间戳切分
 const listeningParagraphs = computed(() => {
@@ -1944,14 +1948,23 @@ const previewSegment = (idx: number) => {
   const seg = listeningConfig.alignmentPreview[idx]
   const el = previewAudioEl.value
   if (!seg || !el || !previewAudioSrc.value) return
+
+  // 先移除上一次试听残留的监听器，避免多段的"播到结尾就暂停"逻辑同时生效
+  if (previewTimeUpdateHandler) {
+    el.removeEventListener('timeupdate', previewTimeUpdateHandler)
+    previewTimeUpdateHandler = null
+  }
+
   el.currentTime = seg.start
   el.play()
   const onTimeUpdate = () => {
     if (el.currentTime >= seg.end) {
       el.pause()
       el.removeEventListener('timeupdate', onTimeUpdate)
+      if (previewTimeUpdateHandler === onTimeUpdate) previewTimeUpdateHandler = null
     }
   }
+  previewTimeUpdateHandler = onTimeUpdate
   el.addEventListener('timeupdate', onTimeUpdate)
 }
 
