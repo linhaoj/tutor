@@ -67,7 +67,10 @@ async def root():
 if __name__ == "__main__":
     uvicorn.run(
         "main:app", host="0.0.0.0", port=8000, reload=True,
-        # 排除 venv（几千个包文件）和 uploads（音频文件）目录，
-        # 避免文件监听器持续扫描这些大目录，拖慢后台线程池任务（如腾讯云ASR轮询）
-        reload_excludes=["venv/*", "uploads/*"],
+        # 排除 venv（几千个包文件）、uploads（音频文件）目录，避免文件监听器
+        # 持续扫描这些大目录，拖慢后台线程池任务（如腾讯云ASR轮询）；
+        # 还必须排除 logs/*、数据库文件和 .env.local——这几个是app自己运行时会
+        # 持续写入的文件，如果被监听，每次写入都会被当成"代码改了"触发重启，
+        # 而重启过程本身又会写日志/连数据库，导致自己触发自己的死循环重启
+        reload_excludes=["venv/*", "uploads/*", "logs/*", "*.db", "*.db-journal", ".env.local"],
     )
