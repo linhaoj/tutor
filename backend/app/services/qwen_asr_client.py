@@ -26,10 +26,11 @@ QWEN_ASR_MODEL = os.getenv("QWEN_ASR_MODEL", "qwen-audio-3.0-asr-flash-filetrans
 DASHSCOPE_SUBMIT_URL = "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription"
 DASHSCOPE_TASK_URL_TMPL = "https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}"
 
-# 轮询设置：查询接口官方文档标注默认20QPS，建议轮询间隔2-5秒；
-# 最多等待5分钟（100次 x 3秒），跟之前腾讯云的超时预算保持一致
+# 轮询设置：查询接口官方文档标注默认20QPS，建议轮询间隔2-5秒。
+# 最多等待10分钟（200次 x 3秒）——之前给5分钟预算时，实测有真实的听力音频
+# 处理时间超过5分钟导致504超时（用户反馈+服务器日志核实过），加长一倍留足余量
 POLL_INTERVAL_SECONDS = 3
-MAX_POLL_ATTEMPTS = 100
+MAX_POLL_ATTEMPTS = 200
 
 
 def _ensure_credentials():
